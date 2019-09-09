@@ -58,7 +58,7 @@
  *   poisson_dev_(0.0),
  *  ...
  * {
- *   calibrate(network()->get_resolution());
+ *   calibrate(Time::get_resolution());
  * }
  * void nest::poisson_generator::calibrate(Time const & dt)
  * {
@@ -68,9 +68,9 @@
  * void nest::poisson_generator::update(thread thrd, Time const & T)
  * {
  *   ...
- *   librandom::RngPtr rng=Node::network()->get_rng(thrd);
+ *   librandom::RngPtr rng=kernel().rng_manager.get_rng(thrd);
  *   ...
- *     long_t n_spikes = poisson_dev_.ldev(rng);
+ *     long n_spikes = poisson_dev_.ldev(rng);
  *   ...
  * }
  * @endcode
@@ -82,7 +82,7 @@
  * If one wanted just uniformly distributed numbers in [0, 1), one could
  * obtain them with
  * @code
- *   librandom::RngPtr rng=Node::network()->get_rng(thrd);
+ *   librandom::RngPtr rng=Network::get_network().get_rng(thrd);
  *   double r = rng();
  * @endcode
  *
@@ -111,9 +111,9 @@
  * double drand()              [0, 1)
  *        ()                   [0, 1)
  * double drandpos()           (0, 1)
- * ulong  ulrand(N)            [0, N-1]
+ * unsigned long  ulrand(N)            [0, N-1]
  *
- * void   seed(N)              seed the RNG, N: ulong
+ * void   seed(N)              seed the RNG, N: unsigned long
  * -------------------------------------------------------
  * @endverbatim
  *
@@ -191,10 +191,15 @@
  *         small simulations anyway) (WS, 01.05.15; see #947).
  */
 
-#include <vector>
+// C++ includes:
 #include <cmath>
+#include <vector>
 
+// Includes from libnestutil:
 #include "lockptr.h"
+
+// Includes from librandom:
+#include "librandom_names.h"
 
 /**
  * Namespace for random number generators.
@@ -284,7 +289,7 @@ private:
 
 /**
  * Factory class for random generators.
- * @ingroup RandomNumberGenerators
+ * @ingroup RandomNumberGenerators
  */
 class GenericRNGFactory
 {
@@ -306,7 +311,7 @@ public:
 /**
  * Concrete template for factories for built-in
  * (non GSL) random generators.
- * @ingroup RandomNumberGenerators
+ * @ingroup RandomNumberGenerators
  */
 template < typename Generator >
 class BuiltinRNGFactory : public GenericRNGFactory
@@ -345,7 +350,7 @@ RandomGen::drandpos( void )
 inline unsigned long
 RandomGen::ulrand( const unsigned long n )
 {
-  // no check for size of n required, since n is ulong
+  // no check for size of n required, since n is unsigned long
   return static_cast< unsigned long >( std::floor( n * drand() ) );
 }
 }

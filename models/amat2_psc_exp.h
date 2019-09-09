@@ -24,121 +24,138 @@
 #ifndef AMAT2_PSC_EXP_H
 #define AMAT2_PSC_EXP_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
-#include "universal_data_logger.h"
+#include "event.h"
+#include "nest_types.h"
 #include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup psc
 
-class Network;
+Name: amat2_psc_exp - Non-resetting leaky integrate-and-fire neuron model
+                      with exponential PSCs and adaptive threshold.
 
-/* BeginDocumentation
-   Name: amat2_psc_exp - Non-resetting leaky integrate-and-fire neuron model with
-   exponential PSCs and adaptive threshold.
+Description:
 
-   Description:
-   amat2_psc_exp is an implementation of a leaky integrate-and-fire model
-   with exponential shaped postsynaptic currents (PSCs). Thus, postsynaptic currents
-   have an infinitely short rise time.
+amat2_psc_exp is an implementation of a leaky integrate-and-fire model
+with exponential shaped postsynaptic currents (PSCs). Thus, postsynaptic
+currents have an infinitely short rise time.
 
-   The threshold is lifted when the neuron is fired and then decreases in a fixed
-   time scale toward a fixed level [3].
+The threshold is lifted when the neuron is fired and then decreases in a
+fixed time scale toward a fixed level [3].
 
-   The threshold crossing is followed by a total refractory period
-   during which the neuron is not allowed to fire, even if the membrane
-   potential exceeds the threshold. The membrane potential is NOT reset,
-   but continuously integrated.
+The threshold crossing is followed by a total refractory period
+during which the neuron is not allowed to fire, even if the membrane
+potential exceeds the threshold. The membrane potential is NOT reset,
+but continuously integrated.
 
-   The linear subthresold dynamics is integrated by the Exact
-   Integration scheme [1]. The neuron dynamics is solved on the time
-   grid given by the computation step size. Incoming as well as emitted
-   spikes are forced to that grid.
+The linear subthresold dynamics is integrated by the Exact
+Integration scheme [1]. The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
 
-   An additional state variable and the corresponding differential
-   equation represents a piecewise constant external current.
+An additional state variable and the corresponding differential
+equation represents a piecewise constant external current.
 
-   The general framework for the consistent formulation of systems with
-   neuron like dynamics interacting by point events is described in
-   [1]. A flow chart can be found in [2].
+The general framework for the consistent formulation of systems with
+neuron like dynamics interacting by point events is described in
+[1]. A flow chart can be found in [2].
 
-   Remarks:
-       - The default parameter values for this model are different from the
-         corresponding parameter values for mat2_psc_exp.
-       - If identical parameters are used, and beta==0, then this model shall
-         behave exactly as mat2_psc_exp.
-       - The time constants in the model must fullfill the following conditions:
-         - tau_m != {tau_syn_ex, tau_syn_in}
-         - tau_v != {tau_syn_ex, tau_syn_in}
-         - tau_m != tau_v
-         This is required to avoid singularities in the numerics. This is a problem
-         of implementation only, not a principal problem of the model.
-       - Expect unstable numerics if time constants that are required to be different
-         are very close.
+Remarks:
 
-   Parameters:
-   The following parameters can be set in the status dictionary:
+- The default parameter values for this model are different from the
+  corresponding parameter values for mat2_psc_exp.
+- If identical parameters are used, and beta==0, then this model shall
+  behave exactly as mat2_psc_exp.
+- The time constants in the model must fullfill the following conditions:
+  - \f$ \tau_m != {\tau_{syn_{ex}}, \tau_{syn_{in}}} \f$
+  - \f$ \tau_v != {\tau_{syn_{ex}}, \tau_{syn_{in}}} \f$
+  - \f$ \tau_m != \tau_v \f$
+  This is required to avoid singularities in the numerics. This is a
+  problem of implementation only, not a principal problem of the model.
+- Expect unstable numerics if time constants that are required to be
+  different are very close.
 
-   C_m          double - Capacity of the membrane in pF
-   E_L          double - Resting potential in mV
-   tau_m        double - Membrane time constant in ms
-   tau_syn_ex   double - Time constant of postsynaptic excitatory currents in ms
-   tau_syn_in   double - Time constant of postsynaptic inhibitory currents in ms
-   t_ref        double - Duration of absolute refractory period (no spiking) in ms
-   V_m          double - Membrane potential in mV
-   I_e          double - Constant input current in pA
-   t_spike      double - Point in time of last spike in ms
-   tau_1        double - Short time constant of adaptive threshold in ms [3, eqs 2-3]
-   tau_2        double - Long time constant of adaptive threshold in ms [3, eqs 2-3]
-   alpha_1      double - Amplitude of short time threshold adaption in mV [3, eqs 2-3]
-   alpha_2      double - Amplitude of long time threshold adaption in mV [3, eqs 2-3]
-   tau_v        double - Time constant of kernel for voltage-dependent threshold component in ms [3,
-   eqs 16-17]
-   beta         double - Scaling coefficient for voltage-dependent threshold component in 1/ms [3,
-   eqs 16-17]
-   omega        double - Resting spike threshold in mV (absolute value, not relative to E_L as in
-   [3])
+Parameters:
 
-   The following state variables can be read out with the multimeter device:
+The following parameters can be set in the status dictionary:
 
-   V_m          Non-resetting membrane potential
-   V_th         Two-timescale adaptive threshold
+\verbatim embed:rst
+=========== ======= ===========================================================
+ C_m        pF      Capacity of the membrane
+ E_L        mV      Resting potential
+ tau_m      ms      Membrane time constant
+ tau_syn_ex ms      Time constant of postsynaptic excitatory currents
+ tau_syn_in ms      Time constant of postsynaptic inhibitory currents
+ t_ref      ms      Duration of absolute refractory period (no spiking)
+ V_m        mV      Membrane potential
+ I_e        pA      Constant input current
+ t_spike    ms      Point in time of last spike
+ tau_1      ms      Short time constant of adaptive threshold [3, eqs 2-3]
+ tau_2      ms      Long time constant of adaptive threshold [3, eqs 2-3]
+ alpha_1    mV      Amplitude of short time threshold adaption [3, eqs 2-3]
+ alpha_2    mV      Amplitude of long time threshold adaption [3, eqs 2-3]
+ tau_v      ms      Time constant of kernel for voltage-dependent threshold
+                    component [3, eqs 16-17]
+ beta       1/ms    Scaling coefficient for voltage-dependent threshold
+                    component [3, eqs 16-17]
+ omega      mV      Resting spike threshold (absolute value, not
+                    relative to E_L as in [3])
+=========== ======= ===========================================================
 
-   Remarks:
-   tau_m != tau_syn_{ex,in} is required by the current implementation to avoid a
-   degenerate case of the ODE describing the model [1]. For very similar values,
-   numerics will be unstable.
 
-   References:
-   [1] Rotter S & Diesmann M (1999) Exact simulation of
+=========== ==== =======================================================
+**State variables that can be read out with the multimeter device**
+------------------------------------------------------------------------
+ V_m        mV   Non-resetting membrane potential
+ V_th       mV   Two-timescale adaptive threshold
+=========== ==== =======================================================
+\endverbatim
+
+Remarks:
+
+\f$ \tau_m != \tau_{syn_{ex,in}} \f$ is required by the current implementation to
+avoid a degenerate case of the ODE describing the model [1].
+For very similar values, numerics will be unstable.
+
+References:
+
+\verbatim embed:rst
+.. [1] Rotter S, Diesmann M (1999). Exact simulation of
        time-invariant linear systems with applications to neuronal
        modeling. Biologial Cybernetics 81:381-402.
-   [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001) State
+       DOI: https://doi.org/10.1007/s004220050570
+.. [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001). State
        space analysis of synchronous spiking in cortical neural
        networks. Neurocomputing 38-40:565-571.
-   [3] Kobayashi R, Tsubo Y and Shinomoto S (2009) Made-to-order
+       DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
+.. [3] Kobayashi R, Tsubo Y and Shinomoto S (2009). Made-to-order
        spiking neuron model equipped with a multi-timescale adaptive
-       threshold. Front. Comput. Neurosci. 3:9. doi:10.3389/neuro.10.009.2009
-   [4] Yamauchi S, Kim H and Shinomoto S (2011) Elemental spiking neuron model
-               for reproducing diverse firing patterns and predicting precise firing
-               times. Front. Comput. Neurosci. 5:42. doi: 10.3389/fncom.2011.00042
+       threshold. Frontiers in Computational Neuroscience, 3:9.
+       DOI: https://dx.doi.org/10.3389%2Fneuro.10.009.2009
+.. [4] Yamauchi S, Kim H, Shinomoto S (2011). Elemental spiking neuron model
+       for reproducing diverse firing patterns and predicting precise
+       firing times. Frontiers in Computational Neuroscience, 5:42.
+       DOI: https://doi.org/10.3389/fncom.2011.00042
+\endverbatim
 
-   Sends: SpikeEvent
+Sends: SpikeEvent
 
-   Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
 
-   FirstVersion: April 2013
-   Author: Thomas Heiberg & Hans E. Plesser (modified mat2_psc_exp model of Thomas Pfeil)
+FirstVersion: April 2013
+
+Author: Thomas Heiberg & Hans E. Plesser (modified mat2_psc_exp model of
+Thomas Pfeil)
 */
-
-/**
- * Non-resetting leaky integrate-and-fire neuron model with
-   exponential PSCs and adaptive threshold.
- */
 class amat2_psc_exp : public Archiving_Node
 {
 
@@ -148,7 +165,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -170,7 +188,7 @@ private:
   void init_state_( const Node& proto );
   void init_buffers_();
   void calibrate();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // The next two classes need to be friends to access private members
   friend class RecordablesMap< amat2_psc_exp >;
@@ -185,45 +203,45 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t Tau_;
+    double Tau_;
 
     /** Membrane capacitance in pF. */
-    double_t C_;
+    double C_;
 
     /** Refractory period in ms. */
-    double_t tau_ref_;
+    double tau_ref_;
 
     /** Resting potential in mV. */
-    double_t U0_;
+    double E_L_;
 
     /** External current in pA */
-    double_t I_e_;
+    double I_e_;
 
     /** Time constant of excitatory synaptic current in ms. */
-    double_t tau_ex_;
+    double tau_ex_;
 
     /** Time constant of inhibitory synaptic current in ms. */
-    double_t tau_in_;
+    double tau_in_;
 
     /** Short and long time constant of adaptive threshold in ms. */
-    double_t tau_1_;
-    double_t tau_2_;
+    double tau_1_;
+    double tau_2_;
 
     /** Amplitudes of threshold adaption in mV. */
-    double_t alpha_1_;
-    double_t alpha_2_;
+    double alpha_1_;
+    double alpha_2_;
 
-    /** Scaling coefficient for voltage-dependent threshold component in 1/ms. */
-    double_t beta_;
+    //! Scaling coefficient for voltage-dependent threshold component in 1/ms.
+    double beta_;
 
     /** Time-constant for voltage-dependent threshold component in ms. */
-    double_t tau_v_;
+    double tau_v_;
 
     /** Resting threshold in mV
         (relative to resting potential).
-        The real resting threshold is (U0_+omega_).
+        The real resting threshold is (E_L_+omega_).
         Called omega in [3]. */
-    double_t omega_;
+    double omega_;
 
     Parameters_(); //!< Sets default parameter values
 
@@ -243,16 +261,19 @@ private:
   struct State_
   {
     // state variables
-    double_t i_0_;      // synaptic dc input current, variable 0
-    double_t i_syn_ex_; // postsynaptic current for exc. inputs, variable 1
-    double_t i_syn_in_; // postsynaptic current for inh. inputs, variable 2
-    double_t V_m_;      // membrane potential, variable 3
-    double_t V_th_1_;   // short time adaptive threshold (related to tau_1_), variable 4
-    double_t V_th_2_;   // long time adaptive threshold (related to tau_2_), variable 5
-    double_t V_th_dv_;  // derivative of voltage dependent threshold variable 6
-    double_t V_th_v_;   // voltage dependent threshold, variable 7
+    double i_0_;      //!< synaptic dc input current, variable 0
+    double I_syn_ex_; //!< postsynaptic current for exc. inputs, variable 1
+    double I_syn_in_; //!< postsynaptic current for inh. inputs, variable 2
+    double V_m_;      //!< membrane potential, variable 3
+    double V_th_1_;   //!< short time adaptive threshold (related to tau_1_),
+                      //!< variable 4
+    double V_th_2_;   //!< long time adaptive threshold (related to tau_2_),
+                      //!< variable 5
+    double V_th_dv_;  //!< derivative of voltage dependent threshold,
+                      //!< variable 6
+    double V_th_v_;   //!< voltage dependent threshold, variable 7
 
-    int_t r_; // total refractory counter (no spikes can be generated)
+    int r_; //!< total refractory counter (no spikes can be generated)
 
     State_(); //!< Default initialization
 
@@ -298,48 +319,62 @@ private:
     weight one has an amplitude of 1 mV.
     @note mog - I assume this, not checked.
     */
-    //    double_t PSCInitialValue_;
+    //    double PSCInitialValue_;
 
-    double_t P00_; // constant currents
-    double_t P11_;
-    double_t P22_;
-    double_t P30_;
-    double_t P31_;
-    double_t P32_;
-    double_t P33_;
-    double_t P44_;
-    double_t P55_;
-    double_t P60_;
-    double_t P61_;
-    double_t P62_;
-    double_t P63_;
-    double_t P66_;
-    double_t P70_;
-    double_t P71_;
-    double_t P72_;
-    double_t P73_;
-    double_t P76_;
-    double_t P77_;
+    double P00_; // constant currents
+    double P11_;
+    double P22_;
+    double P30_;
+    double P31_;
+    double P32_;
+    double P33_;
+    double P44_;
+    double P55_;
+    double P60_;
+    double P61_;
+    double P62_;
+    double P63_;
+    double P66_;
+    double P70_;
+    double P71_;
+    double P72_;
+    double P73_;
+    double P76_;
+    double P77_;
 
-    int_t RefractoryCountsTot_;
+    int RefractoryCountsTot_;
   };
   // ----------------------------------------------------------------
 
   //! Read out state variables, used by UniversalDataLogger
-  double_t
+  inline double
   get_V_m_() const
   {
-    return S_.V_m_ + P_.U0_;
+    return S_.V_m_ + P_.E_L_;
   }
-  double_t
+
+  inline double
   get_V_th_() const
   {
-    return P_.U0_ + P_.omega_ + S_.V_th_1_ + S_.V_th_2_ + S_.V_th_v_;
+    return P_.E_L_ + P_.omega_ + S_.V_th_1_ + S_.V_th_2_ + S_.V_th_v_;
   }
-  double_t
+
+  inline double
   get_V_th_v_() const
   {
     return S_.V_th_v_;
+  }
+
+  inline double
+  get_I_syn_ex_() const
+  {
+    return S_.I_syn_ex_;
+  }
+
+  inline double
+  get_I_syn_in_() const
+  {
+    return S_.I_syn_in_;
   }
 
   // ----------------------------------------------------------------
@@ -375,7 +410,9 @@ inline port
 amat2_psc_exp::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -383,7 +420,9 @@ inline port
 amat2_psc_exp::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -391,7 +430,9 @@ inline port
 amat2_psc_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

@@ -23,113 +23,125 @@
 #ifndef IAF_PSC_ALPHA_H
 #define IAF_PSC_ALPHA_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
-#include "universal_data_logger.h"
+#include "event.h"
+#include "nest_types.h"
 #include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
-/* BeginDocumentation
+namespace nest
+{
+
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup psc
+
 Name: iaf_psc_alpha - Leaky integrate-and-fire neuron model.
 
 Description:
 
-  iaf_psc_alpha is an implementation of a leaky integrate-and-fire model
-  with alpha-function shaped synaptic currents. Thus, synaptic currents
-  and the resulting post-synaptic potentials have a finite rise time.
+iaf_psc_alpha is an implementation of a leaky integrate-and-fire model
+with alpha-function shaped synaptic currents. Thus, synaptic currents
+and the resulting post-synaptic potentials have a finite rise time.
 
-  The threshold crossing is followed by an absolute refractory period
-  during which the membrane potential is clamped to the resting potential.
+The threshold crossing is followed by an absolute refractory period
+during which the membrane potential is clamped to the resting potential.
 
-  The linear subthresold dynamics is integrated by the Exact
-  Integration scheme [1]. The neuron dynamics is solved on the time
-  grid given by the computation step size. Incoming as well as emitted
-  spikes are forced to that grid.
+The linear subthresold dynamics is integrated by the Exact
+Integration scheme [][1]. The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
 
-  An additional state variable and the corresponding differential
-  equation represents a piecewise constant external current.
+An additional state variable and the corresponding differential
+equation represents a piecewise constant external current.
 
-  The general framework for the consistent formulation of systems with
-  neuron like dynamics interacting by point events is described in
-  [1].  A flow chart can be found in [2].
+The general framework for the consistent formulation of systems with
+neuron like dynamics interacting by point events is described in
+[1].  A flow chart can be found in [2].
 
-  Critical tests for the formulation of the neuron model are the
-  comparisons of simulation results for different computation step
-  sizes. sli/testsuite/nest contains a number of such tests.
+Critical tests for the formulation of the neuron model are the
+comparisons of simulation results for different computation step
+sizes. sli/testsuite/nest contains a number of such tests.
 
-  The iaf_psc_alpha is the standard model used to check the consistency
-  of the nest simulation kernel because it is at the same time complex
-  enough to exhibit non-trivial dynamics and simple enough compute
-  relevant measures analytically.
+The iaf_psc_alpha is the standard model used to check the consistency
+of the nest simulation kernel because it is at the same time complex
+enough to exhibit non-trivial dynamics and simple enough compute
+relevant measures analytically.
 
 Remarks:
 
-  The present implementation uses individual variables for the
-  components of the state vector and the non-zero matrix elements of
-  the propagator.  Because the propagator is a lower triangular matrix
-  no full matrix multiplication needs to be carried out and the
-  computation can be done "in place" i.e. no temporary state vector
-  object is required.
+The present implementation uses individual variables for the
+components of the state vector and the non-zero matrix elements of
+the propagator.  Because the propagator is a lower triangular matrix
+no full matrix multiplication needs to be carried out and the
+computation can be done "in place" i.e. no temporary state vector
+object is required.
 
-  The template support of recent C++ compilers enables a more succinct
-  formulation without loss of runtime performance already at minimal
-  optimization levels. A future version of iaf_psc_alpha will probably
-  address the problem of efficient usage of appropriate vector and
-  matrix objects.
+The template support of recent C++ compilers enables a more succinct
+formulation without loss of runtime performance already at minimal
+optimization levels. A future version of iaf_psc_alpha will probably
+address the problem of efficient usage of appropriate vector and
+matrix objects.
 
 
 Parameters:
 
-  The following parameters can be set in the status dictionary.
+The following parameters can be set in the status dictionary.
 
-  V_m        double - Membrane potential in mV
-  E_L        double - Resting membrane potential in mV.
-  C_m        double - Capacity of the membrane in pF
-  tau_m      double - Membrane time constant in ms.
-  t_ref      double - Duration of refractory period in ms.
-  V_th       double - Spike threshold in mV.
-  V_reset    double - Reset potential of the membrane in mV.
-  tau_syn_ex double - Rise time of the excitatory synaptic alpha function in ms.
-  tau_syn_in double - Rise time of the inhibitory synaptic alpha function in ms.
-  I_e        double - Constant external input current in pA.
-  V_min      double - Absolute lower value for the membrane potential.
-
+\verbatim embed:rst
+=========== ======  ==========================================================
+ V_m        mV      Membrane potential
+ E_L        mV      Resting membrane potenial
+ C_m        pF      Capacity of the membrane
+ tau_m      ms      Membrane time constant
+ t_ref      ms      Duration of refractory period
+ V_th       mV      Spike threshold
+ V_reset    mV      Reset potential of the membrane
+ tau_syn_ex ms      Rise time of the excitatory synaptic alpha function
+ tau_syn_in ms      Rise time of the inhibitory synaptic alpha function
+ I_e        pA      Constant input current
+ V_min      mV      Absolute lower value for the membrane potenial
+=========== ======  ==========================================================
+\endverbatim
 Remarks:
 
-  If tau_m is very close to tau_syn_ex or tau_syn_in, the model
-  will numerically behave as if tau_m is equal to tau_syn_ex or
-  tau_syn_in, respectively, to avoid numerical instabilities.
-  For details, please see IAF_Neruons_Singularity.ipynb in
-  the NEST source code (docs/model_details).
+If tau_m is very close to tau_syn_ex or tau_syn_in, the model
+will numerically behave as if tau_m is equal to tau_syn_ex or
+tau_syn_in, respectively, to avoid numerical instabilities.
+For details, please see IAF_neurons_singularity.ipynb in
+the NEST source code (docs/model_details).
 
 References:
-  [1] Rotter S & Diesmann M (1999) Exact simulation of time-invariant linear
-      systems with applications to neuronal modeling. Biologial Cybernetics
-      81:381-402.
-  [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001) State space
-      analysis of synchronous spiking in cortical neural networks.
-      Neurocomputing 38-40:565-571.
-  [3] Morrison A, Straube S, Plesser H E, & Diesmann M (2006) Exact subthreshold
-      integration with continuous spike times in discrete time neural network
-      simulations. Neural Computation, in press
+
+\verbatim embed:rst
+.. [1] Rotter S,  Diesmann M (1999). Exact simulation of
+       time-invariant linear systems with applications to neuronal
+       modeling. Biologial Cybernetics 81:381-402.
+       DOI: https://doi.org/10.1007/s004220050570
+.. [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001). State
+       space analysis of synchronous spiking in cortical neural
+       networks. Neurocomputing 38-40:565-571.
+       DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
+.. [3] Morrison A, Straube S, Plesser H E, Diesmann M (2006). Exact
+       subthreshold integration with continuous spike times in discrete time
+       neural network simulations. Neural Computation, in press
+       DOI: https://doi.org/10.1162/neco.2007.19.1.47
+\endverbatim
 
 Sends: SpikeEvent
 
 Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
 FirstVersion: September 1999
+
 Author:  Diesmann, Gewaltig
+
 SeeAlso: iaf_psc_delta, iaf_psc_exp, iaf_cond_exp
 */
-
-namespace nest
-{
-class Network;
-
-/**
- * Leaky integrate-and-fire neuron with alpha-shaped PSCs.
- */
 class iaf_psc_alpha : public Archiving_Node
 {
 
@@ -139,7 +151,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -162,7 +175,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // The next two classes need to be friends to access the State_ class/member
   friend class RecordablesMap< iaf_psc_alpha >;
@@ -174,36 +187,36 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t Tau_;
+    double Tau_;
 
     /** Membrane capacitance in pF. */
-    double_t C_;
+    double C_;
 
     /** Refractory period in ms. */
-    double_t TauR_;
+    double TauR_;
 
     /** Resting potential in mV. */
-    double_t U0_;
+    double E_L_;
 
     /** External current in pA */
-    double_t I_e_;
+    double I_e_;
 
     /** Reset value of the membrane potential */
-    double_t V_reset_;
+    double V_reset_;
 
     /** Threshold, RELATIVE TO RESTING POTENTIAL(!).
-        I.e. the real threshold is (U0_+Theta_). */
-    double_t Theta_;
+        I.e. the real threshold is (E_L_+Theta_). */
+    double Theta_;
 
     /** Lower bound, RELATIVE TO RESTING POTENTIAL(!).
-        I.e. the real lower bound is (LowerBound_+U0_). */
-    double_t LowerBound_;
+        I.e. the real lower bound is (LowerBound_+E_L_). */
+    double LowerBound_;
 
     /** Time constant of excitatory synaptic current in ms. */
-    double_t tau_ex_;
+    double tau_ex_;
 
     /** Time constant of inhibitory synaptic current in ms. */
-    double_t tau_in_;
+    double tau_in_;
 
     Parameters_(); //!< Sets default parameter values
 
@@ -220,14 +233,15 @@ private:
   struct State_
   {
 
-    double_t y0_; //!< Constant current
-    double_t y1_ex_;
-    double_t y2_ex_;
-    double_t y1_in_;
-    double_t y2_in_;
-    double_t y3_; //!< This is the membrane potential RELATIVE TO RESTING POTENTIAL.
+    double y0_; //!< Constant current
+    double dI_ex_;
+    double I_ex_;
+    double dI_in_;
+    double I_in_;
+    //! This is the membrane potential RELATIVE TO RESTING POTENTIAL.
+    double y3_;
 
-    int_t r_; //!< Number of refractory steps remaining
+    int r_; //!< Number of refractory steps remaining
 
     State_(); //!< Default initialization
 
@@ -267,56 +281,59 @@ private:
         This value is chosen such that a post-synaptic potential with
         weight one has an amplitude of 1 mV.
      */
-    double_t EPSCInitialValue_;
-    double_t IPSCInitialValue_;
-    int_t RefractoryCounts_;
+    double EPSCInitialValue_;
+    double IPSCInitialValue_;
+    int RefractoryCounts_;
 
-    double_t P11_ex_;
-    double_t P21_ex_;
-    double_t P22_ex_;
-    double_t P31_ex_;
-    double_t P32_ex_;
-    double_t P11_in_;
-    double_t P21_in_;
-    double_t P22_in_;
-    double_t P31_in_;
-    double_t P32_in_;
-    double_t P30_;
-    double_t P33_;
-    double_t expm1_tau_m_;
+    double P11_ex_;
+    double P21_ex_;
+    double P22_ex_;
+    double P31_ex_;
+    double P32_ex_;
+    double P11_in_;
+    double P21_in_;
+    double P22_in_;
+    double P31_in_;
+    double P32_in_;
+    double P30_;
+    double P33_;
+    double expm1_tau_m_;
 
-    double_t weighted_spikes_ex_;
-    double_t weighted_spikes_in_;
+    double weighted_spikes_ex_;
+    double weighted_spikes_in_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out the real membrane potential
-  double_t
+  inline double
   get_V_m_() const
   {
-    return S_.y3_ + P_.U0_;
+    return S_.y3_ + P_.E_L_;
   }
 
-  double_t
+  inline double
   get_weighted_spikes_ex_() const
   {
     return V_.weighted_spikes_ex_;
   }
-  double_t
+
+  inline double
   get_weighted_spikes_in_() const
   {
     return V_.weighted_spikes_in_;
   }
-  double_t
-  get_input_currents_ex_() const
+
+  inline double
+  get_I_syn_ex_() const
   {
-    return S_.y1_ex_;
+    return S_.I_ex_;
   }
-  double_t
-  get_input_currents_in_() const
+
+  inline double
+  get_I_syn_in_() const
   {
-    return S_.y1_in_;
+    return S_.I_in_;
   }
 
   // Data members -----------------------------------------------------------
@@ -350,7 +367,9 @@ inline port
 iaf_psc_alpha::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -358,7 +377,9 @@ inline port
 iaf_psc_alpha::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -366,7 +387,9 @@ inline port
 iaf_psc_alpha::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

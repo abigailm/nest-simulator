@@ -22,9 +22,15 @@
 
 #ifndef AGGREGATEDATUM_H
 #define AGGREGATEDATUM_H
-#include "datum.h"
-#include "allocator.h"
+
+// Generated includes:
 #include "config.h"
+
+// Includes from libnestutil:
+#include "allocator.h"
+
+// Includes from sli:
+#include "datum.h"
 
 /*
     Datum template for aggregate data types.
@@ -89,11 +95,11 @@ public:
     // a direct dynamic_cast<const GenericDatum<D> * > does not seem
     // to work.
 
-    const AggregateDatum< C, slt >* ddc =
-      dynamic_cast< AggregateDatum< C, slt >* >( const_cast< Datum* >( dat ) );
-
+    const AggregateDatum< C, slt >* ddc = dynamic_cast< AggregateDatum< C, slt >* >( const_cast< Datum* >( dat ) );
     if ( ddc == NULL )
+    {
       return false;
+    }
 
     return static_cast< C >( *ddc ) == static_cast< C >( *this );
   }
@@ -101,14 +107,18 @@ public:
   static void* operator new( size_t size )
   {
     if ( size != memory.size_of() )
+    {
       return ::operator new( size );
+    }
     return memory.alloc();
   }
 
   static void operator delete( void* p, size_t size )
   {
     if ( p == NULL )
+    {
       return;
+    }
     if ( size != memory.size_of() )
     {
       ::operator delete( p );
@@ -119,7 +129,7 @@ public:
 
   virtual void print( std::ostream& out ) const;
   virtual void pprint( std::ostream& out ) const;
-  virtual void list( std::ostream& out, std::string prefix, int l ) const;
+  virtual void list( std::ostream& out, std::string prefix, int length ) const;
 
   virtual void
   input_form( std::ostream& out ) const
@@ -150,12 +160,16 @@ AggregateDatum< C, slt >::pprint( std::ostream& out ) const
 
 template < class C, SLIType* slt >
 void
-AggregateDatum< C, slt >::list( std::ostream& out, std::string prefix, int l ) const
+AggregateDatum< C, slt >::list( std::ostream& out, std::string prefix, int length ) const
 {
-  if ( l == 0 )
+  if ( length == 0 )
+  {
     prefix = "-->" + prefix;
+  }
   else
+  {
     prefix = "   " + prefix;
+  }
 
   out << prefix;
   print( out );

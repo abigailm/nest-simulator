@@ -19,23 +19,36 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
-import matplotlib
-# matplotlib.use("macosx")
+"""Two neurons
+----------------
+
+References
+~~~~~~~~~~~~
+
+See Also
+~~~~~~~~~~
+
+:Authors:
+
+KEYWORDS:
+"""
+
+
 import pylab
 
 import nest
 import nest.voltage_trace
 
-weight=20.0
-delay=1.0
-stim=1000.0
+weight = 20.0
+delay = 1.0
+stim = 1000.0
 
-neuron1 = nest.Create("iaf_neuron")
-neuron2 = nest.Create("iaf_neuron")
+neuron1 = nest.Create("iaf_psc_alpha")
+neuron2 = nest.Create("iaf_psc_alpha")
 voltmeter = nest.Create("voltmeter")
 
 nest.SetStatus(neuron1, {"I_e": stim})
-nest.Connect(neuron1, neuron2, syn_spec={'weight':weight, 'delay':delay})
+nest.Connect(neuron1, neuron2, syn_spec={'weight': weight, 'delay': delay})
 nest.Connect(voltmeter, neuron2)
 
 nest.Simulate(100.0)

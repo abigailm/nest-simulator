@@ -29,10 +29,15 @@
 
 // this file is based on numericdatum.h and integerdatum.h
 
-#include "genericdatum.h"
-#include "allocator.h"
-#include "interpret.h"
+// C++ includes:
 #include <iostream>
+
+// Includes from libnestutil:
+#include "allocator.h"
+
+// Includes from sli:
+#include "genericdatum.h"
+#include "interpret.h"
 
 
 // prefixed all references to members of GenericDatum with this->,
@@ -141,14 +146,18 @@ public:
   static void* operator new( size_t size )
   {
     if ( size != memory.size_of() )
+    {
       return ::operator new( size );
+    }
     return memory.alloc();
   }
 
   static void operator delete( void* p, size_t size )
   {
     if ( p == NULL )
+    {
       return;
+    }
     if ( size != memory.size_of() )
     {
       ::operator delete( p );

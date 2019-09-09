@@ -46,8 +46,8 @@ template < class D, SLIType* slt >
 void
 lockPTRDatum< D, slt >::pprint( std::ostream& out ) const
 {
-  out << "<lockPTR[" << this->references() << "]->" << this->gettypename() << '('
-      << static_cast< void* >( this->get() ) << ")>";
+  out << "<lockPTR[" << this->references() << "]->" << this->gettypename() << '(' << static_cast< void* >( this->get() )
+      << ")>";
   this->unlock();
 }
 

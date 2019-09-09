@@ -23,9 +23,12 @@
 #ifndef MULTIRANGE_H
 #define MULTIRANGE_H
 
-#include <vector>
+// C++ includes:
 #include <utility>
-#include "nest.h"
+#include <vector>
+
+// Includes from nestkernel:
+#include "nest_types.h"
 
 namespace nest
 {
@@ -55,6 +58,8 @@ public:
 
   Multirange();
   void push_back( index x );
+  void add_range( index start, index end );
+  bool contains( index x );
   void clear();
   index operator[]( index n ) const;
   index size() const;
@@ -76,7 +81,12 @@ inline Multirange::Multirange()
 inline void
 Multirange::push_back( index x )
 {
-  if ( ( not ranges_.empty() ) && ( ranges_.back().second + 1 == x ) )
+  if ( contains( x ) )
+  {
+    return;
+  }
+
+  if ( ( not ranges_.empty() ) and ( ranges_.back().second + 1 == x ) )
   {
     ++ranges_.back().second;
   }
@@ -85,6 +95,26 @@ Multirange::push_back( index x )
     ranges_.push_back( Range( x, x ) );
   }
   ++size_;
+}
+
+inline void
+Multirange::add_range( index start, index end )
+{
+  ranges_.push_back( Range( start, end ) );
+  size_ += end - start + 1;
+}
+
+inline bool
+Multirange::contains( index x )
+{
+  for ( size_t i = 0; i < ranges_.size(); i++ )
+  {
+    if ( ranges_[ i ].first <= x and x <= ranges_[ i ].second )
+    {
+      return true;
+    }
+  }
+  return false;
 }
 
 inline void
@@ -114,7 +144,7 @@ inline Multirange::iterator::iterator( RangeVector::const_iterator iter, index n
 
 inline bool Multirange::iterator::operator!=( const iterator& other ) const
 {
-  return ( other.pair_iter_ != pair_iter_ ) || ( other.n_ != n_ );
+  return ( other.pair_iter_ != pair_iter_ ) or ( other.n_ != n_ );
 }
 
 inline index Multirange::iterator::operator*() const

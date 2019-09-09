@@ -23,18 +23,25 @@
 #ifndef CLIPPED_RANDOMDEV_H
 #define CLIPPED_RANDOMDEV_H
 
+// C++ includes:
 #include <cmath>
 #include <limits>
-#include "randomgen.h"
+
+// Generated includes:
+#include "config.h"
+
+// Includes from librandom:
 #include "randomdev.h"
+#include "randomgen.h"
+
+// Includes from sli:
 #include "dictutils.h"
 #include "sliexceptions.h"
-#include "config.h"
 
 namespace librandom
 {
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::*_clipped - clipped random deviate generators.
 
 Description: Generate random numbers from an underlying distribution,
@@ -73,6 +80,7 @@ drawn. These versions are mainly provided to allow reproduction of
 publications that used this strategy.
 
 SeeAlso: CreateRDV, rdevdict
+
 Author: Hans Ekkehard Plesser
 */
 
@@ -93,7 +101,7 @@ public:
   ClippedRedrawContinuousRandomDev( RngPtr );
   ClippedRedrawContinuousRandomDev(); // threaded
 
-#if not defined( HAVE_XLC_ICE_ON_USING )
+#if not defined( HAVE_XLC_ICE_ON_USING ) and not defined( IS_K )
   using RandomDev::operator();
 #endif
 
@@ -138,11 +146,12 @@ ClippedRedrawContinuousRandomDev< BaseRDV >::set_status( const DictionaryDatum& 
   double new_min = min_;
   double new_max = max_;
 
-  updateValue< double >( d, "low", new_min );
-  updateValue< double >( d, "high", new_max );
-
+  updateValue< double >( d, names::low, new_min );
+  updateValue< double >( d, names::high, new_max );
   if ( new_min >= new_max )
+  {
     throw BadParameterValue( "Clipped RDVs require low < high." );
+  }
 
   min_ = new_min;
   max_ = new_max;
@@ -154,8 +163,8 @@ ClippedRedrawContinuousRandomDev< BaseRDV >::get_status( DictionaryDatum& d ) co
 {
   BaseRDV::get_status( d );
 
-  def< double >( d, "low", min_ );
-  def< double >( d, "high", max_ );
+  def< double >( d, names::low, min_ );
+  def< double >( d, names::high, max_ );
 }
 
 template < typename BaseRDV >
@@ -200,7 +209,7 @@ public:
 // to ensure that they forward to the clipped generator.
 // Null-pointer checking is done in the underlying generator.
 
-#if not defined( HAVE_XLC_ICE_ON_USING )
+#if not defined( HAVE_XLC_ICE_ON_USING ) and not defined( IS_K )
   using RandomDev::operator();
   using RandomDev::ldev;
 #endif
@@ -250,11 +259,12 @@ ClippedRedrawDiscreteRandomDev< BaseRDV >::set_status( const DictionaryDatum& d 
   long new_min = min_;
   long new_max = max_;
 
-  updateValue< long >( d, "low", new_min );
-  updateValue< long >( d, "high", new_max );
-
+  updateValue< long >( d, names::low, new_min );
+  updateValue< long >( d, names::high, new_max );
   if ( new_min >= new_max )
+  {
     throw BadParameterValue( "Clipped RDVs require low < high." );
+  }
 
   min_ = new_min;
   max_ = new_max;
@@ -266,8 +276,8 @@ ClippedRedrawDiscreteRandomDev< BaseRDV >::get_status( DictionaryDatum& d ) cons
 {
   BaseRDV::get_status( d );
 
-  def< long >( d, "low", min_ );
-  def< long >( d, "high", max_ );
+  def< long >( d, names::low, min_ );
+  def< long >( d, names::high, max_ );
 }
 
 template < typename BaseRDV >
@@ -333,7 +343,7 @@ public:
   ClippedToBoundaryContinuousRandomDev( RngPtr );
   ClippedToBoundaryContinuousRandomDev(); // threaded
 
-#if not defined( HAVE_XLC_ICE_ON_USING )
+#if not defined( HAVE_XLC_ICE_ON_USING ) and not defined( IS_K )
   using RandomDev::operator();
 #endif
 
@@ -378,11 +388,12 @@ ClippedToBoundaryContinuousRandomDev< BaseRDV >::set_status( const DictionaryDat
   double new_min = min_;
   double new_max = max_;
 
-  updateValue< double >( d, "low", new_min );
-  updateValue< double >( d, "high", new_max );
-
+  updateValue< double >( d, names::low, new_min );
+  updateValue< double >( d, names::high, new_max );
   if ( new_min >= new_max )
+  {
     throw BadParameterValue( "Clipped RDVs require low < high." );
+  }
 
   min_ = new_min;
   max_ = new_max;
@@ -394,8 +405,8 @@ ClippedToBoundaryContinuousRandomDev< BaseRDV >::get_status( DictionaryDatum& d 
 {
   BaseRDV::get_status( d );
 
-  def< double >( d, "low", min_ );
-  def< double >( d, "high", max_ );
+  def< double >( d, names::low, min_ );
+  def< double >( d, names::high, max_ );
 }
 
 template < typename BaseRDV >
@@ -409,9 +420,13 @@ inline double ClippedToBoundaryContinuousRandomDev< BaseRDV >::operator()( RngPt
 {
   const double value = BaseRDV::operator()( r );
   if ( value < min_ )
+  {
     return min_;
+  }
   if ( value > max_ )
+  {
     return max_;
+  }
   return value;
 }
 
@@ -442,7 +457,7 @@ public:
 // to ensure that they forward to the clipped generator.
 // Null-pointer checking is done in the underlying generator.
 
-#if not defined( HAVE_XLC_ICE_ON_USING )
+#if not defined( HAVE_XLC_ICE_ON_USING ) and not defined( IS_K )
   using RandomDev::operator();
   using RandomDev::ldev;
 #endif
@@ -492,11 +507,12 @@ ClippedToBoundaryDiscreteRandomDev< BaseRDV >::set_status( const DictionaryDatum
   long new_min = min_;
   long new_max = max_;
 
-  updateValue< long >( d, "low", new_min );
-  updateValue< long >( d, "high", new_max );
-
+  updateValue< long >( d, names::low, new_min );
+  updateValue< long >( d, names::high, new_max );
   if ( new_min >= new_max )
+  {
     throw BadParameterValue( "Clipped RDVs require low < high." );
+  }
 
   min_ = new_min;
   max_ = new_max;
@@ -508,8 +524,8 @@ ClippedToBoundaryDiscreteRandomDev< BaseRDV >::get_status( DictionaryDatum& d ) 
 {
   BaseRDV::get_status( d );
 
-  def< long >( d, "low", min_ );
-  def< long >( d, "high", max_ );
+  def< long >( d, names::low, min_ );
+  def< long >( d, names::high, max_ );
 }
 
 template < typename BaseRDV >
@@ -523,9 +539,13 @@ inline double ClippedToBoundaryDiscreteRandomDev< BaseRDV >::operator()( RngPtr 
 {
   const double value = BaseRDV::operator()( r );
   if ( value < min_ )
+  {
     return min_;
+  }
   if ( value > max_ )
+  {
     return max_;
+  }
   return value;
 }
 
@@ -542,9 +562,13 @@ ClippedToBoundaryDiscreteRandomDev< BaseRDV >::ldev( RngPtr r ) const
 {
   const long value = BaseRDV::ldev( r );
   if ( value < min_ )
+  {
     return min_;
+  }
   if ( value > max_ )
+  {
     return max_;
+  }
   return value;
 }
 

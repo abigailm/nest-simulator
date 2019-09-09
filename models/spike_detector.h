@@ -23,19 +23,27 @@
 #ifndef SPIKE_DETECTOR_H
 #define SPIKE_DETECTOR_H
 
-
+// C++ includes:
 #include <vector>
-#include "nest.h"
-#include "event.h"
-#include "node.h"
-#include "recording_device.h"
-#include "exceptions.h"
 
-/* BeginDocumentation
+// Includes from nestkernel:
+#include "device_node.h"
+#include "event.h"
+#include "exceptions.h"
+#include "nest_types.h"
+#include "recording_device.h"
+
+namespace nest
+{
+
+/** @BeginDocumentation
+@ingroup Devices
+@ingroup detector
 
 Name: spike_detector - Device for detecting single spikes.
 
 Description:
+
 The spike_detector device is a recording device. It is used to record
 spikes from a single neuron, or from multiple neurons at once. Data
 is recorded in memory or to file as for all RecordingDevices.
@@ -43,7 +51,9 @@ By default, GID and time of each spike is recorded.
 
 The spike detector can also record spike times with full precision
 from neurons emitting precisely timed spikes. Set /precise_times to
-achieve this.
+achieve this. If there are precise models and /precise_times is not
+set, it will be set to True at the start of the simulation and
+/precision will be increased to 15 from its default value of 3.
 
 Any node from which spikes are to be recorded, must be connected to
 the spike detector using a normal connect command. Any connection weight
@@ -52,82 +62,68 @@ and delay will be ignored for that connection.
 Simulations progress in cycles defined by the minimum delay. During each
 cycle, the spike detector records (stores in memory or writes to screen/file)
 the spikes generated during the previous cycle. As a consequence, any
-spikes generated during the cycle immediately preceding the end of the simulation
-time will not be recorded. Setting the /stop parameter to at the latest one
-min_delay period before the end of the simulation time ensures that all spikes
-desired to be recorded, are recorded.
+spikes generated during the cycle immediately preceding the end of the
+simulation time will not be recorded. Setting the /stop parameter to at the
+latest one min_delay period before the end of the simulation time ensures that
+all spikes desired to be recorded, are recorded.
 
 Spike are not necessarily written to file in chronological order.
+
+Note:
+
+Spikes are buffered in a two-segment buffer. We need to distinguish between
+two types of spikes: those delivered from the global event queue (almost all
+spikes) and spikes delivered locally from devices that are replicated on VPs
+(has_proxies() == false).
+- Spikes from the global queue are delivered by deliver_events() at the
+  beginning of each update cycle and are stored only until update() is called
+  during the same update cycle. Global queue spikes are thus written to the
+  read_toggle() segment of the buffer, from which update() reads.
+- Spikes delivered locally may be delivered before or after
+  spike_detector::update() is executed. These spikes are therefore buffered
+  in the write_toggle() segment of the buffer and output during the next
+  cycle.
+- After all spikes are recorded, update() clears the read_toggle() segment
+  of the buffer.
+
 
 Receives: SpikeEvent
 
 SeeAlso: spike_detector, Device, RecordingDevice
 */
-
-
-namespace nest
-{
-
-class Network;
-
-/**
- * Spike detector class.
- *
- * This class manages spike recording for normal and precise spikes. It
- * receives spikes via its handle(SpikeEvent&) method, buffers them, and
- * stores them via its RecordingDevice in the update() method.
- *
- * Spikes are buffered in a two-segment buffer. We need to distinguish between
- * two types of spikes: those delivered from the global event queue (almost all
- * spikes) and spikes delivered locally from devices that are replicated on VPs
- * (has_proxies() == false).
- * - Spikes from the global queue are delivered by deliver_events() at the
- *   beginning of each update cycle and are stored only until update() is called
- *   during the same update cycle. Global queue spikes are thus written to the
- *   read_toggle() segment of the buffer, from which update() reads.
- * - Spikes delivered locally may be delivered before or after
- *   spike_detector::update() is executed. These spikes are therefore buffered in
- *   the write_toggle() segment of the buffer and output during the next cycle.
- * - After all spikes are recorded, update() clears the read_toggle() segment
- *   of the buffer.
- *
- * @ingroup Devices
- */
-class spike_detector : public Node
+class spike_detector : public DeviceNode
 {
 
 public:
   spike_detector();
   spike_detector( const spike_detector& );
 
-  void set_has_proxies( const bool hp );
   bool
   has_proxies() const
   {
-    return has_proxies_;
+    return false;
   }
-  bool
-  potential_global_receiver() const
-  {
-    return true;
-  }
-  void set_local_receiver( const bool lr );
+
   bool
   local_receiver() const
   {
-    return local_receiver_;
+    return true;
   }
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
+  using Node::receives_signal;
 
   void handle( SpikeEvent& );
 
   port handles_test_event( SpikeEvent&, rport );
+
+  SignalType receives_signal() const;
 
   void get_status( DictionaryDatum& ) const;
   void set_status( const DictionaryDatum& );
@@ -136,6 +132,7 @@ private:
   void init_state_( Node const& );
   void init_buffers_();
   void calibrate();
+  void post_run_cleanup();
   void finalize();
 
   /**
@@ -147,23 +144,24 @@ private:
    *
    * @see RecordingDevice
    */
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   /**
    * Buffer for incoming spikes.
    *
    * This data structure buffers all incoming spikes until they are
    * passed to the RecordingDevice for storage or output during update().
-   * update() always reads from spikes_[network()->read_toggle()] and
-   * deletes all events that have been read.
+   * update() always reads from spikes_[Network::get_network().read_toggle()]
+   * and deletes all events that have been read.
    *
    * Events arriving from locally sending nodes, i.e., devices without
-   * proxies, are stored in spikes_[network()->write_toggle()], to ensure
-   * order-independent results.
+   * proxies, are stored in spikes_[Network::get_network().write_toggle()], to
+   * ensure order-independent results.
    *
    * Events arriving from globally sending nodes are delivered from the
-   * global event queue by Scheduler::deliver_events() at the beginning
-   * of the time slice. They are therefore written to spikes_[network()->read_toggle()]
+   * global event queue by Network::deliver_events() at the beginning
+   * of the time slice. They are therefore written to
+   * spikes_[Network::get_network().read_toggle()]
    * so that they can be recorded by the subsequent call to update().
    * This does not violate order-independence, since all spikes are delivered
    * from the global queue before any node is updated.
@@ -175,36 +173,28 @@ private:
 
   RecordingDevice device_;
   Buffers_ B_;
-
-  bool user_set_precise_times_;
-  bool has_proxies_;
-  bool local_receiver_;
 };
-
-inline void
-spike_detector::set_has_proxies( const bool hp )
-{
-  has_proxies_ = hp;
-}
-
-inline void
-spike_detector::set_local_receiver( const bool lr )
-{
-  local_receiver_ = lr;
-}
 
 inline port
 spike_detector::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
 inline void
-spike_detector::finalize()
+spike_detector::post_run_cleanup()
 {
-  device_.finalize();
+  device_.post_run_cleanup();
+}
+
+inline SignalType
+spike_detector::receives_signal() const
+{
+  return ALL;
 }
 
 } // namespace

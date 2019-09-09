@@ -23,30 +23,42 @@
 #ifndef SPIKE_DILUTOR_H
 #define SPIKE_DILUTOR_H
 
-#include "nest.h"
-#include "event.h"
-#include "node.h"
-#include "stimulating_device.h"
+// Includes from nestkernel:
 #include "connection.h"
+#include "device_node.h"
+#include "event.h"
+#include "nest_types.h"
 #include "ring_buffer.h"
+#include "stimulating_device.h"
 
 namespace nest
 {
 
-/* BeginDocumentation
+/** @BeginDocumentation
+@ingroup Devices
+@ingroup generator
+
 Name: spike_dilutor - repeats incoming spikes with a certain probability.
 
 Description:
-  The device repeats incoming spikes with a certain probability.
-  Targets will receive diffenrent spike trains.
+
+The device repeats incoming spikes with a certain probability.
+Targets will receive diffenrent spike trains.
 
 Remarks:
-  In parallel simulations, a copy of the device is present on each process
-  and spikes are collected only from local sources.
+
+In parallel simulations, a copy of the device is present on each process
+and spikes are collected only from local sources.
 
 Parameters:
-   The following parameters appear in the element's status dictionary:
-   p_copy double - Copy probability
+
+The following parameters appear in the element's status dictionary:
+
+\verbatim embed:rst
+======== ======  ================
+ p_copy  real    Copy probability
+======== ======  ================
+ \endverbatim
 
 Sends: SpikeEvent
 
@@ -55,8 +67,7 @@ ported to Nest 2.6 by: Setareh, April 2015
 
 SeeAlso: mip_generator
 */
-
-class spike_dilutor : public Node
+class spike_dilutor : public DeviceNode
 {
 
 public:
@@ -90,7 +101,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   void event_hook( DSSpikeEvent& );
 
@@ -101,7 +112,7 @@ private:
    */
   struct Parameters_
   {
-    double_t p_copy_; //!< copy probability for each incoming spike
+    double p_copy_; //!< copy probability for each incoming spike
 
     Parameters_(); //!< Sets default parameter values
     Parameters_( const Parameters_& );
@@ -137,7 +148,9 @@ inline port
 spike_dilutor::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 

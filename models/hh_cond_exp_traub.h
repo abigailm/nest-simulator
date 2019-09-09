@@ -23,19 +23,22 @@
 #ifndef HH_COND_EXP_TRAUB_H
 #define HH_COND_EXP_TRAUB_H
 
+// Generated includes:
 #include "config.h"
 
 #ifdef HAVE_GSL
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
-
+// C includes:
 #include <gsl/gsl_odeiv.h>
+
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
@@ -52,51 +55,82 @@ namespace nest
  */
 extern "C" int hh_cond_exp_traub_dynamics( double, const double*, double*, void* );
 
-/* BeginDocumentation
-Name: hh_cond_exp_traub - Hodgin Huxley based model, Traub modified.
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup hh
+@ingroup cond
+
+Name: hh_cond_exp_traub - Hodgkin-Huxley model for Brette et al (2007) review
 
 Description:
 
- hh_cond_exp_traub is an implementation of a modified Hodkin-Huxley model
+hh_cond_exp_traub is an implementation of a modified Hodgkin-Huxley model
 
- (1) Post-syaptic currents
- Incoming spike events induce a post-synaptic change of conductance modelled
- by an exponential function. The exponential function is normalised such that an event of
- weight 1.0 results in a peak current of 1 nS.
+This model was specifically developed for a major review of simulators [1],
+based on a model of hippocampal pyramidal cells by Traub and Miles[2].
+The key differences between the current model and the model in [2] are:
 
- (2) Spike Detection
- Spike detection is done by a combined threshold-and-local-maximum search: if there
- is a local maximum above a certain threshold of the membrane potential, it is considered a spike.
+- This model is a point neuron, not a compartmental model.
+- This model includes only I_Na and I_K, with simpler I_K dynamics than
+  in [2], so it has only three instead of eight gating variables;
+  in particular, all Ca dynamics have been removed.
+- Incoming spikes induce an instantaneous conductance change followed by
+  exponential decay instead of activation over time.
 
-Problems/Todo:
-Only the channel variables m,h,n are implemented. The original
-contains variables called y,s,r,q and \chi.
+This model is primarily provided as reference implementation for hh_coba
+example of the Brette et al (2007) review. Default parameter values are chosen
+to match those used with NEST 1.9.10 when preparing data for [1]. Code for all
+simulators covered is available from ModelDB [3].
+
+Note:
+In this model, a spike is emitted if
+
+@f[ V_m >= V_T + 30 mV and V_m has fallen during the current time step @f]
+
+To avoid that this leads to multiple spikes during the falling flank of a
+spike, it is essential to chose a sufficiently long refractory period.
+Traub and Miles used \f$ t_ref = 3 ms \f$ [2, p 118], while we used
+\f$ t_ref = 2 ms \f$ in [2].
 
 Parameters:
 
- The following parameters can be set in the status dictionary.
+The following parameters can be set in the status dictionary.
 
- V_m        double - Membrane potential in mV
- V_T        double - Voltage offset that controls dynamics. For default
-                     parameters, V_T = -63mV results in a threshold around -50mV.
- E_L        double - Leak reversal potential in mV.
- C_m        double - Capacity of the membrane in pF.
- g_L        double - Leak conductance in nS.
- tau_syn_ex double - Time constant of the excitatory synaptic exponential function in ms.
- tau_syn_in double - Time constant of the inhibitory synaptic exponential function in ms.
- E_ex       double - Excitatory synaptic reversal potential in mV.
- E_in       double - Inhibitory synaptic reversal potential in mV.
- E_Na       double - Sodium reversal potential in mV.
- g_Na       double - Sodium peak conductance in nS.
- E_K        double - Potassium reversal potential in mV.
- g_K        double - Potassium peak conductance in nS.
- I_e        double - External input current in pA.
+\verbatim embed:rst
+=========== ======  =========================================================
+V_m          mV     Membrane potential
+V_T          mV     Voltage offset that controls dynamics. For default
+                    parameters, V_T = -63mV results in a threshold around
+                    -50mV.
+E_L          mV     Leak reversal potential
+C_m          pF     Capacity of the membrane
+g_L          nS     Leak conductance
+tau_syn_ex   ms     Time constant of the excitatory synaptic exponential
+                    function
+tau_syn_in   ms     Time constant of the inhibitory synaptic exponential
+                    function
+t_ref        ms     Duration of refractory period (see Note).
+E_ex         mV     Excitatory synaptic reversal potential
+E_in         mV     Inhibitory synaptic reversal potential
+E_Na         mV     Sodium reversal potential
+g_Na         nS     Sodium peak conductance
+E_K          mV     Potassium reversal potential
+g_K          nS     Potassium peak conductance
+I_e          pA     External input current
+=========== ======  =========================================================
+\endverbatim
+
 
 References:
 
-Traub, R.D. and Miles, R. (1991)
-Neuronal Networks of the Hippocampus. Cambridge University Press,
-Cambridge UK.
+\verbatim embed:rst
+.. [1] Brette R et al. (2007). Simulation of networks of spiking neurons: A
+       review of tools and strategies. Journal of Computational Neuroscience
+       23:349-98. DOI: https://doi.org/10.1007/s10827-007-0038-6
+.. [2] Traub RD and Miles R (1991). Neuronal networks of the hippocampus.
+       Cambridge University Press, Cambridge UK.
+.. [3] http://modeldb.yale.edu/83319
+\envverbatim
 
 Sends: SpikeEvent
 
@@ -106,7 +140,6 @@ Author: Schrader
 
 SeeAlso: hh_psc_alpha
 */
-
 class hh_cond_exp_traub : public Archiving_Node
 {
 
@@ -117,7 +150,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -140,7 +174,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // END Boilerplate function declarations ----------------------------
 
@@ -170,12 +204,14 @@ private:
     double E_K;  //!< Potassium Reversal Potential in mV
     double E_L;  //!< Leak Reversal Potential in mV
 
-    double V_T; //!< Voltage offset for dynamics (adjusts threshold to around -50 mV)
+    //! Voltage offset for dynamics (adjusts threshold to around -50 mV)
+    double V_T;
 
     double E_ex;     //!< Excitatory reversal Potential in mV
     double E_in;     //!< Inhibitory reversal Potential in mV
     double tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
     double tau_synI; //!< Synaptic Time Constant Inhibitory Synapse in ms
+    double t_ref_;   //!< Refractory time in ms
     double I_e;      //!< External Current in pA
 
     Parameters_();
@@ -205,8 +241,9 @@ public:
       STATE_VEC_SIZE
     };
 
-    double y_[ STATE_VEC_SIZE ]; //!< neuron state, must be C-array for GSL solver
-    int_t r_;                    //!< number of refractory steps remaining
+    //! neuron state, must be C-array for GSL solver
+    double y_[ STATE_VEC_SIZE ];
+    int r_; //!< number of refractory steps remaining
 
     State_( const Parameters_& p );
     State_( const State_& s );
@@ -224,7 +261,7 @@ public:
    */
   struct Variables_
   {
-    int_t RefractoryCounts_;
+    int refractory_counts_;
     double U_old_; // for spike-detection
   };
 
@@ -235,8 +272,9 @@ public:
    */
   struct Buffers_
   {
-    Buffers_( hh_cond_exp_traub& );                  //!<Sets buffer pointers to 0
-    Buffers_( const Buffers_&, hh_cond_exp_traub& ); //!<Sets buffer pointers to 0
+    Buffers_( hh_cond_exp_traub& ); //!<Sets buffer pointers to 0
+    //! Sets buffer pointers to 0
+    Buffers_( const Buffers_&, hh_cond_exp_traub& );
 
     //! Logger for all analog data
     UniversalDataLogger< hh_cond_exp_traub > logger_;
@@ -256,7 +294,7 @@ public:
     // but remain unchanged during calibration. Since it is initialized with
     // step_, and the resolution cannot change after nodes have been created,
     // it is safe to place both here.
-    double_t step_;          //!< step size in ms
+    double step_;            //!< step size in ms
     double IntegrationStep_; //!< current integration time step, updated by GSL
 
     /**
@@ -266,14 +304,14 @@ public:
      * It must be a part of Buffers_, since it is initialized once before
      * the first simulation, but not modified before later Simulate calls.
      */
-    double_t I_stim_;
+    double I_stim_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out state vector elements, used by UniversalDataLogger
   template < State_::StateVecElems elem >
-  double_t
+  double
   get_y_elem_() const
   {
     return S_.y_[ elem ];
@@ -302,7 +340,9 @@ inline port
 hh_cond_exp_traub::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -310,7 +350,9 @@ inline port
 hh_cond_exp_traub::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -318,7 +360,9 @@ inline port
 hh_cond_exp_traub::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 
@@ -331,7 +375,7 @@ hh_cond_exp_traub::get_status( DictionaryDatum& d ) const
 
   ( *d )[ names::recordables ] = recordablesMap_.get_list();
 
-  def< double_t >( d, names::t_spike, get_spiketime_ms() );
+  def< double >( d, names::t_spike, get_spiketime_ms() );
 }
 
 inline void

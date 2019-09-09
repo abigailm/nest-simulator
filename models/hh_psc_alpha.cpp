@@ -25,19 +25,26 @@
 
 #ifdef HAVE_GSL
 
-#include "exceptions.h"
-#include "network.h"
-#include "dict.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-#include "dictutils.h"
-#include "numerics.h"
-#include <limits>
-#include "universal_data_logger_impl.h"
-
+// C++ includes:
+#include <cstdio>
 #include <iomanip>
 #include <iostream>
-#include <cstdio>
+#include <limits>
+
+// Includes from libnestutil:
+#include "numerics.h"
+
+// Includes from nestkernel:
+#include "event_delivery_manager_impl.h"
+#include "exceptions.h"
+#include "kernel_manager.h"
+#include "universal_data_logger_impl.h"
+
+// Includes from sli:
+#include "dict.h"
+#include "dictutils.h"
+#include "doubledatum.h"
+#include "integerdatum.h"
 
 
 nest::RecordablesMap< nest::hh_psc_alpha > nest::hh_psc_alpha::recordablesMap_;
@@ -52,11 +59,11 @@ RecordablesMap< hh_psc_alpha >::create()
 {
   // use standard names whereever you can for consistency!
   insert_( names::V_m, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::V_M > );
-  insert_( names::I_ex, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::I_EXC > );
-  insert_( names::I_in, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::I_INH > );
+  insert_( names::I_syn_ex, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::I_EXC > );
+  insert_( names::I_syn_in, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::I_INH > );
   insert_( names::Act_m, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::HH_M > );
-  insert_( names::Act_h, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::HH_H > );
-  insert_( names::Inact_n, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::HH_N > );
+  insert_( names::Inact_h, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::HH_H > );
+  insert_( names::Act_n, &hh_psc_alpha::get_y_elem_< hh_psc_alpha::State_::HH_N > );
 }
 
 extern "C" int
@@ -76,29 +83,28 @@ hh_psc_alpha_dynamics( double, const double y[], double f[], void* pnode )
   // good compiler will optimize the verbosity away ...
 
   // shorthand for state variables
-  const double_t& V = y[ S::V_M ];
-  const double_t& m = y[ S::HH_M ];
-  const double_t& h = y[ S::HH_H ];
-  const double_t& n = y[ S::HH_N ];
-  const double_t& dI_ex = y[ S::DI_EXC ];
-  const double_t& I_ex = y[ S::I_EXC ];
-  const double_t& dI_in = y[ S::DI_INH ];
-  const double_t& I_in = y[ S::I_INH ];
+  const double& V = y[ S::V_M ];
+  const double& m = y[ S::HH_M ];
+  const double& h = y[ S::HH_H ];
+  const double& n = y[ S::HH_N ];
+  const double& dI_ex = y[ S::DI_EXC ];
+  const double& I_ex = y[ S::I_EXC ];
+  const double& dI_in = y[ S::DI_INH ];
+  const double& I_in = y[ S::I_INH ];
 
-  const double_t alpha_n = ( 0.01 * ( V + 55. ) ) / ( 1. - std::exp( -( V + 55. ) / 10. ) );
-  const double_t beta_n = 0.125 * std::exp( -( V + 65. ) / 80. );
-  const double_t alpha_m = ( 0.1 * ( V + 40. ) ) / ( 1. - std::exp( -( V + 40. ) / 10. ) );
-  const double_t beta_m = 4. * std::exp( -( V + 65. ) / 18. );
-  const double_t alpha_h = 0.07 * std::exp( -( V + 65. ) / 20. );
-  const double_t beta_h = 1. / ( 1. + std::exp( -( V + 35. ) / 10. ) );
+  const double alpha_n = ( 0.01 * ( V + 55. ) ) / ( 1. - std::exp( -( V + 55. ) / 10. ) );
+  const double beta_n = 0.125 * std::exp( -( V + 65. ) / 80. );
+  const double alpha_m = ( 0.1 * ( V + 40. ) ) / ( 1. - std::exp( -( V + 40. ) / 10. ) );
+  const double beta_m = 4. * std::exp( -( V + 65. ) / 18. );
+  const double alpha_h = 0.07 * std::exp( -( V + 65. ) / 20. );
+  const double beta_h = 1. / ( 1. + std::exp( -( V + 35. ) / 10. ) );
 
-  const double_t I_Na = node.P_.g_Na * m * m * m * h * ( V - node.P_.E_Na );
-  const double_t I_K = node.P_.g_K * n * n * n * n * ( V - node.P_.E_K );
-  const double_t I_L = node.P_.g_L * ( V - node.P_.E_L );
+  const double I_Na = node.P_.g_Na * m * m * m * h * ( V - node.P_.E_Na );
+  const double I_K = node.P_.g_K * n * n * n * n * ( V - node.P_.E_K );
+  const double I_L = node.P_.g_L * ( V - node.P_.E_L );
 
   // V dot -- synaptic input are currents, inhib current is negative
-  f[ S::V_M ] =
-    ( -( I_Na + I_K + I_L ) + node.B_.I_stim_ + node.P_.I_e + I_ex + I_in ) / node.P_.C_m;
+  f[ S::V_M ] = ( -( I_Na + I_K + I_L ) + node.B_.I_stim_ + node.P_.I_e + I_ex + I_in ) / node.P_.C_m;
 
   // channel dynamics
   f[ S::HH_M ] = alpha_m * ( 1 - y[ S::HH_M ] ) - beta_m * y[ S::HH_M ]; // m-variable
@@ -139,17 +145,17 @@ nest::hh_psc_alpha::State_::State_( const Parameters_& )
 {
   y_[ 0 ] = -65; // p.E_L;
   for ( size_t i = 1; i < STATE_VEC_SIZE; ++i )
+  {
     y_[ i ] = 0;
+  }
 
   // equilibrium values for (in)activation variables
-  const double_t alpha_n =
-    ( 0.01 * ( y_[ 0 ] + 55. ) ) / ( 1. - std::exp( -( y_[ 0 ] + 55. ) / 10. ) );
-  const double_t beta_n = 0.125 * std::exp( -( y_[ 0 ] + 65. ) / 80. );
-  const double_t alpha_m =
-    ( 0.1 * ( y_[ 0 ] + 40. ) ) / ( 1. - std::exp( -( y_[ 0 ] + 40. ) / 10. ) );
-  const double_t beta_m = 4. * std::exp( -( y_[ 0 ] + 65. ) / 18. );
-  const double_t alpha_h = 0.07 * std::exp( -( y_[ 0 ] + 65. ) / 20. );
-  const double_t beta_h = 1. / ( 1. + std::exp( -( y_[ 0 ] + 35. ) / 10. ) );
+  const double alpha_n = ( 0.01 * ( y_[ 0 ] + 55. ) ) / ( 1. - std::exp( -( y_[ 0 ] + 55. ) / 10. ) );
+  const double beta_n = 0.125 * std::exp( -( y_[ 0 ] + 65. ) / 80. );
+  const double alpha_m = ( 0.1 * ( y_[ 0 ] + 40. ) ) / ( 1. - std::exp( -( y_[ 0 ] + 40. ) / 10. ) );
+  const double beta_m = 4. * std::exp( -( y_[ 0 ] + 65. ) / 18. );
+  const double alpha_h = 0.07 * std::exp( -( y_[ 0 ] + 65. ) / 20. );
+  const double beta_h = 1. / ( 1. + std::exp( -( y_[ 0 ] + 35. ) / 10. ) );
 
   y_[ HH_H ] = alpha_h / ( alpha_h + beta_h );
   y_[ HH_N ] = alpha_n / ( alpha_n + beta_n );
@@ -160,15 +166,18 @@ nest::hh_psc_alpha::State_::State_( const State_& s )
   : r_( s.r_ )
 {
   for ( size_t i = 0; i < STATE_VEC_SIZE; ++i )
+  {
     y_[ i ] = s.y_[ i ];
+  }
 }
 
 nest::hh_psc_alpha::State_& nest::hh_psc_alpha::State_::operator=( const State_& s )
 {
   assert( this != &s ); // would be bad logical error in program
-
   for ( size_t i = 0; i < STATE_VEC_SIZE; ++i )
+  {
     y_[ i ] = s.y_[ i ];
+  }
   r_ = s.r_;
   return *this;
 }
@@ -209,18 +218,22 @@ nest::hh_psc_alpha::Parameters_::set( const DictionaryDatum& d )
   updateValue< double >( d, names::tau_syn_in, tau_synI );
 
   updateValue< double >( d, names::I_e, I_e );
-
   if ( C_m <= 0 )
+  {
     throw BadProperty( "Capacitance must be strictly positive." );
-
+  }
   if ( t_ref_ < 0 )
+  {
     throw BadProperty( "Refractory time cannot be negative." );
-
+  }
   if ( tau_synE <= 0 || tau_synI <= 0 )
+  {
     throw BadProperty( "All time constants must be strictly positive." );
-
+  }
   if ( g_K < 0 || g_Na < 0 || g_L < 0 )
+  {
     throw BadProperty( "All conductances must be non-negative." );
+  }
 }
 
 void
@@ -228,8 +241,8 @@ nest::hh_psc_alpha::State_::get( DictionaryDatum& d ) const
 {
   def< double >( d, names::V_m, y_[ V_M ] );
   def< double >( d, names::Act_m, y_[ HH_M ] );
-  def< double >( d, names::Act_h, y_[ HH_H ] );
-  def< double >( d, names::Inact_n, y_[ HH_N ] );
+  def< double >( d, names::Inact_h, y_[ HH_H ] );
+  def< double >( d, names::Act_n, y_[ HH_N ] );
 }
 
 void
@@ -237,11 +250,12 @@ nest::hh_psc_alpha::State_::set( const DictionaryDatum& d )
 {
   updateValue< double >( d, names::V_m, y_[ V_M ] );
   updateValue< double >( d, names::Act_m, y_[ HH_M ] );
-  updateValue< double >( d, names::Act_h, y_[ HH_H ] );
-  updateValue< double >( d, names::Inact_n, y_[ HH_N ] );
-
+  updateValue< double >( d, names::Inact_h, y_[ HH_H ] );
+  updateValue< double >( d, names::Act_n, y_[ HH_N ] );
   if ( y_[ HH_M ] < 0 || y_[ HH_H ] < 0 || y_[ HH_N ] < 0 )
+  {
     throw BadProperty( "All (in)activation variables must be non-negative." );
+  }
 }
 
 nest::hh_psc_alpha::Buffers_::Buffers_( hh_psc_alpha& n )
@@ -289,11 +303,17 @@ nest::hh_psc_alpha::~hh_psc_alpha()
 {
   // GSL structs may not have been allocated, so we need to protect destruction
   if ( B_.s_ )
+  {
     gsl_odeiv_step_free( B_.s_ );
+  }
   if ( B_.c_ )
+  {
     gsl_odeiv_control_free( B_.c_ );
+  }
   if ( B_.e_ )
+  {
     gsl_odeiv_evolve_free( B_.e_ );
+  }
 }
 
 /* ----------------------------------------------------------------
@@ -321,19 +341,31 @@ nest::hh_psc_alpha::init_buffers_()
   B_.IntegrationStep_ = B_.step_;
 
   if ( B_.s_ == 0 )
+  {
     B_.s_ = gsl_odeiv_step_alloc( gsl_odeiv_step_rkf45, State_::STATE_VEC_SIZE );
+  }
   else
+  {
     gsl_odeiv_step_reset( B_.s_ );
+  }
 
   if ( B_.c_ == 0 )
+  {
     B_.c_ = gsl_odeiv_control_y_new( 1e-3, 0.0 );
+  }
   else
+  {
     gsl_odeiv_control_init( B_.c_, 1e-3, 0.0, 1.0, 0.0 );
+  }
 
   if ( B_.e_ == 0 )
+  {
     B_.e_ = gsl_odeiv_evolve_alloc( State_::STATE_VEC_SIZE );
+  }
   else
+  {
     gsl_odeiv_evolve_reset( B_.e_ );
+  }
 
   B_.sys_.function = hh_psc_alpha_dynamics;
   B_.sys_.jacobian = NULL;
@@ -346,12 +378,14 @@ nest::hh_psc_alpha::init_buffers_()
 void
 nest::hh_psc_alpha::calibrate()
 {
-  B_.logger_.init(); // ensures initialization in case mm connected after Simulate
+  // ensures initialization in case mm connected after Simulate
+  B_.logger_.init();
 
   V_.PSCurrInit_E_ = 1.0 * numerics::e / P_.tau_synE;
   V_.PSCurrInit_I_ = 1.0 * numerics::e / P_.tau_synI;
   V_.RefractoryCounts_ = Time( Time::ms( P_.t_ref_ ) ).get_steps();
-  assert( V_.RefractoryCounts_ >= 0 ); // since t_ref_ >= 0, this can only fail in error
+  // since t_ref_ >= 0, this can only fail in error
+  assert( V_.RefractoryCounts_ >= 0 );
 }
 
 /* ----------------------------------------------------------------
@@ -359,17 +393,17 @@ nest::hh_psc_alpha::calibrate()
  * ---------------------------------------------------------------- */
 
 void
-nest::hh_psc_alpha::update( Time const& origin, const long_t from, const long_t to )
+nest::hh_psc_alpha::update( Time const& origin, const long from, const long to )
 {
 
-  assert( to >= 0 && ( delay ) from < Scheduler::get_min_delay() );
+  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
   assert( from < to );
 
-  for ( long_t lag = from; lag < to; ++lag )
+  for ( long lag = from; lag < to; ++lag )
   {
 
-    double_t t = 0.0;
-    const double_t U_old = S_.y_[ State_::V_M ];
+    double t = 0.0;
+    const double U_old = S_.y_[ State_::V_M ];
 
     // numerical integration with adaptive step size control:
     // ------------------------------------------------------
@@ -393,9 +427,10 @@ nest::hh_psc_alpha::update( Time const& origin, const long_t from, const long_t 
         B_.step_,             // to t <= step
         &B_.IntegrationStep_, // integration step size
         S_.y_ );              // neuronal state
-
       if ( status != GSL_SUCCESS )
+      {
         throw GSLSolverFailure( get_name(), status );
+      }
     }
 
     S_.y_[ State_::DI_EXC ] += B_.spike_exc_.get_value( lag ) * V_.PSCurrInit_E_;
@@ -404,7 +439,9 @@ nest::hh_psc_alpha::update( Time const& origin, const long_t from, const long_t 
     // sending spikes: crossing 0 mV, pseudo-refractoriness and local maximum...
     // refractory?
     if ( S_.r_ > 0 )
+    {
       --S_.r_;
+    }
     else
       // (    threshold    &&     maximum       )
       if ( S_.y_[ State_::V_M ] >= 0 && U_old > S_.y_[ State_::V_M ] )
@@ -414,7 +451,7 @@ nest::hh_psc_alpha::update( Time const& origin, const long_t from, const long_t 
       set_spiketime( Time::step( origin.get_steps() + lag + 1 ) );
 
       SpikeEvent se;
-      network()->send( *this, se, lag );
+      kernel().event_delivery_manager.send( *this, se, lag );
     }
 
     // log state data
@@ -428,26 +465,30 @@ nest::hh_psc_alpha::update( Time const& origin, const long_t from, const long_t 
 void
 nest::hh_psc_alpha::handle( SpikeEvent& e )
 {
-  assert( e.get_delay() > 0 );
+  assert( e.get_delay_steps() > 0 );
 
   if ( e.get_weight() > 0.0 )
-    B_.spike_exc_.add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ),
+  {
+    B_.spike_exc_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
       e.get_weight() * e.get_multiplicity() );
+  }
   else
-    B_.spike_inh_.add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ),
-      e.get_weight() * e.get_multiplicity() ); // current input, keep negative weight
+  {
+    B_.spike_inh_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
+      e.get_weight() * e.get_multiplicity() );
+  } // current input, keep negative weight
 }
 
 void
 nest::hh_psc_alpha::handle( CurrentEvent& e )
 {
-  assert( e.get_delay() > 0 );
+  assert( e.get_delay_steps() > 0 );
 
-  const double_t c = e.get_current();
-  const double_t w = e.get_weight();
+  const double c = e.get_current();
+  const double w = e.get_weight();
 
   // add weighted current; HEP 2002-10-04
-  B_.currents_.add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ), w * c );
+  B_.currents_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), w * c );
 }
 
 void

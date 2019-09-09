@@ -20,12 +20,15 @@
  *
  */
 
-#include "network.h"
-#include "dictdatum.h"
-#include "connector_model.h"
-#include "common_synapse_properties.h"
 #include "stdp_connection_hom.h"
+
+// Includes from nestkernel:
+#include "common_synapse_properties.h"
+#include "connector_model.h"
 #include "event.h"
+
+// Includes from sli:
+#include "dictdatum.h"
 
 namespace nest
 {
@@ -49,12 +52,12 @@ STDPHomCommonProperties::get_status( DictionaryDatum& d ) const
 {
   CommonSynapseProperties::get_status( d );
 
-  def< double_t >( d, "tau_plus", tau_plus_ );
-  def< double_t >( d, "lambda", lambda_ );
-  def< double_t >( d, "alpha", alpha_ );
-  def< double_t >( d, "mu_plus", mu_plus_ );
-  def< double_t >( d, "mu_minus", mu_minus_ );
-  def< double_t >( d, "Wmax", Wmax_ );
+  def< double >( d, names::tau_plus, tau_plus_ );
+  def< double >( d, names::lambda, lambda_ );
+  def< double >( d, names::alpha, alpha_ );
+  def< double >( d, names::mu_plus, mu_plus_ );
+  def< double >( d, names::mu_minus, mu_minus_ );
+  def< double >( d, names::Wmax, Wmax_ );
 }
 
 void
@@ -62,12 +65,12 @@ STDPHomCommonProperties::set_status( const DictionaryDatum& d, ConnectorModel& c
 {
   CommonSynapseProperties::set_status( d, cm );
 
-  updateValue< double_t >( d, "tau_plus", tau_plus_ );
-  updateValue< double_t >( d, "lambda", lambda_ );
-  updateValue< double_t >( d, "alpha", alpha_ );
-  updateValue< double_t >( d, "mu_plus", mu_plus_ );
-  updateValue< double_t >( d, "mu_minus", mu_minus_ );
-  updateValue< double_t >( d, "Wmax", Wmax_ );
+  updateValue< double >( d, names::tau_plus, tau_plus_ );
+  updateValue< double >( d, names::lambda, lambda_ );
+  updateValue< double >( d, names::alpha, alpha_ );
+  updateValue< double >( d, names::mu_plus, mu_plus_ );
+  updateValue< double >( d, names::mu_minus, mu_minus_ );
+  updateValue< double >( d, names::Wmax, Wmax_ );
 }
 
 } // of namespace nest

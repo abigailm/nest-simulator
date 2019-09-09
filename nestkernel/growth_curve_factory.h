@@ -23,10 +23,7 @@
 #ifndef GROWTH_CURVE_FACTORY_H
 #define GROWTH_CURVE_FACTORY_H
 
-#include <map>
-#include "name.h"
-#include "dictdatum.h"
-#include "lockptrdatum.h"
+// Includes from nestkernel:
 #include "growth_curve.h"
 
 namespace nest
@@ -34,6 +31,7 @@ namespace nest
 
 class GrowthCurveGaussian;
 class GrowthCurveLinear;
+class GrowthCurveSigmoid;
 
 /**
  * Generic factory class for GrowthCurve objects.

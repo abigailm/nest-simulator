@@ -20,30 +20,26 @@
  *
  */
 
-#include "config.h"
 #include "conngenmodule.h"
 
-#include "network.h"
-#include "communicator.h"
-#include "modelrange.h"
+// Generated includes:
+#include "config.h"
 
-#include "cg_connect.h"
+// Includes from conngen:
+#include "conngen.h"
 
-#include "stringdatum.h"
+// Includes from sli:
 #include "lockptrdatum_impl.h"
+#include "stringdatum.h"
+#include "tokenutils.h"
 
-template class lockPTRDatum< ConnectionGenerator,
-  &nest::ConnectionGeneratorModule::ConnectionGeneratorType >;
+template class lockPTRDatum< ConnectionGenerator, &nest::ConnectionGeneratorType >;
 
 namespace nest
 {
-SLIType ConnectionGeneratorModule::ConnectionGeneratorType;
 
-Network* ConnectionGeneratorModule::net_ = 0;
-
-ConnectionGeneratorModule::ConnectionGeneratorModule( Network& net )
+ConnectionGeneratorModule::ConnectionGeneratorModule()
 {
-  net_ = &net;
 }
 
 ConnectionGeneratorModule::~ConnectionGeneratorModule()
@@ -70,173 +66,87 @@ ConnectionGeneratorModule::init( SLIInterpreter* i )
   ConnectionGeneratorType.setdefaultaction( SLIInterpreter::datatypefunction );
 
   // Register the user functions of the connection generator interface
-  i->createcommand( "CGConnect_cg_i_i_D_l", &cgconnect_cg_i_i_D_lfunction );
-  i->createcommand( "CGConnect_cg_iV_iV_D_l", &cgconnect_cg_iV_iV_D_lfunction );
+  i->createcommand( "CGConnect_cg_g_g_D_l", &cgconnect_cg_g_g_D_lfunction );
   i->createcommand( "CGParse", &cgparse_sfunction );
   i->createcommand( "CGParseFile", &cgparsefile_sfunction );
   i->createcommand( "CGSelectImplementation", &cgselectimplementation_s_sfunction );
 
   // Register the low level functions of the connection generator interface
-  i->createcommand( "cgsetmask_cg_iV_iV", &cgsetmask_cg_iV_iVfunction );
-  i->createcommand( "cgstart", &cgstart_cgfunction );
-  i->createcommand( "cgnext", &cgnext_cgfunction );
+  i->createcommand( ":cgsetmask", &cgsetmask_cg_g_gfunction );
+  i->createcommand( ":cgstart", &cgstart_cgfunction );
+  i->createcommand( ":cgnext", &cgnext_cgfunction );
 }
 
-/* BeginDocumentation
-   Name: CGConnect - Establish connections contained in a ConnectionGenerator
+/** @BeginDocumentation
+Name: CGConnect - Establish connections contained in a ConnectionGenerator
 
-   Synopsis:
-   cg sources targets                  ->  -
-   cg sources targets params           ->  -
-   cg sources targets        syn_model ->  -
-   cg sources targets params syn_model ->  -
+Synopsis:
+cg sources targets                  ->  -
+cg sources targets params           ->  -
+cg sources targets        syn_model ->  -
+cg sources targets params syn_model ->  -
 
-   Parameters:
-   cg        - ConnectionGenerator
-   sources   - The sources. Either a subnet or a list of nodes
-   targets   - The targets. Either a subnet or a list of nodes
-   params    - A dict specifying the index of /weight and /delay
-               in the value set of the connection generator
-   syn_model - A literal specifying te synapse model to be used
+Parameters:
+cg         connectiongenerator            - ConnectionGenerator
+sources    gidcollection/array/intvector  - the GIDs of the sources
+targets    gidcollection/array/intvector  - the GIDs of the targets
+params     dict (optional)    - A map that translates the names /weight and
+                               /delay to indices in the value set
+syn_model  literal (optional) - A literal specifying the synapse model
 
-   Description:
-   CGConnect connects a source and a target population according to
-   the rules defined in the given connection generator. params is an
-   optional dictionary, that maps the names /weight and/or /delay to
-   their integer index in the value set in the connection generator.
-   If not specified, the synapse model is taken from the Options of
-   the Connect command.
+Description:
+CGConnect connects a source and a target population according to
+the rules defined in the given connection generator. params is an
+optional dictionary, that maps the names /weight and/or /delay to
+their integer index in the value set in the connection generator.
+If not specified, the synapse model is taken from the Options of
+the Connect command.
 
-   Author: Jochen Martin Eppler
-   FirstVersion: August 2012
-   SeeAlso: Connect, synapsedict, GetOptions, CGParse, CGParseFile, CGSelectImplementation, cgstart,
-   cgsetmask, cgnext
+Availability: Only if compiled with libneurosim support
+Author: Jochen Martin Eppler
+FirstVersion: August 2012
+SeeAlso: Connect, synapsedict, GetOptions, CGParse, CGParseFile,
+CGSelectImplementation
 */
 
-// Connect for conn_generator subnet subnet dict synapsetype
+// CGConnect for conngen gidcollection gidcollection dict literal
 void
-ConnectionGeneratorModule::CGConnect_cg_i_i_D_lFunction::execute( SLIInterpreter* i ) const
+ConnectionGeneratorModule::CGConnect_cg_g_g_D_lFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 5 );
 
   ConnectionGeneratorDatum cg = getValue< ConnectionGeneratorDatum >( i->OStack.pick( 4 ) );
-  index source_id = getValue< long >( i->OStack.pick( 3 ) );
-  index target_id = getValue< long >( i->OStack.pick( 2 ) );
+  GIDCollectionDatum sources = getValue< GIDCollectionDatum >( i->OStack.pick( 3 ) );
+  GIDCollectionDatum targets = getValue< GIDCollectionDatum >( i->OStack.pick( 2 ) );
   DictionaryDatum params_map = getValue< DictionaryDatum >( i->OStack.pick( 1 ) );
-  const Name synmodel_name = getValue< std::string >( i->OStack.pick( 0 ) );
+  const Name synmodel_name = getValue< Name >( i->OStack.pick( 0 ) );
 
-  Subnet* sources = dynamic_cast< Subnet* >( get_network().get_node( source_id ) );
-  if ( sources == NULL )
-  {
-    i->message( SLIInterpreter::M_ERROR, "CGConnect_cg_i_i_D_l", "sources must be a subnet." );
-    throw SubnetExpected();
-  }
-  if ( !sources->is_homogeneous() )
-  {
-    i->message(
-      SLIInterpreter::M_ERROR, "CGConnect_cg_i_i_D_l", "sources must be a homogeneous subnet." );
-    throw BadProperty();
-  }
-  if ( dynamic_cast< Subnet* >( *sources->local_begin() ) )
-  {
-    i->message( SLIInterpreter::M_ERROR,
-      "CGConnect_cg_i_i_D_l",
-      "Only 1-dim subnets are supported as sources." );
-    throw BadProperty();
-  }
-
-  Subnet* targets = dynamic_cast< Subnet* >( get_network().get_node( target_id ) );
-  if ( targets == NULL )
-  {
-    i->message( SLIInterpreter::M_ERROR, "CGConnect_cg_i_i_D_l", "targets must be a subnet." );
-    throw SubnetExpected();
-  }
-  if ( !targets->is_homogeneous() )
-  {
-    i->message(
-      SLIInterpreter::M_ERROR, "CGConnect_cg_i_i_D_l", "targets must be a homogeneous subnet." );
-    throw BadProperty();
-  }
-  if ( dynamic_cast< Subnet* >( *targets->local_begin() ) )
-  {
-    i->message( SLIInterpreter::M_ERROR,
-      "CGConnect_cg_i_i_D_l",
-      "Only 1-dim subnets are supported as targets." );
-    throw BadProperty();
-  }
-
-  const Token synmodel = get_network().get_synapsedict().lookup( synmodel_name );
-  if ( synmodel.empty() )
-    throw UnknownSynapseType( synmodel_name.toString() );
-  const index synmodel_id = static_cast< index >( synmodel );
-
-  const modelrange source_range =
-    get_network().get_contiguous_gid_range( ( *sources->local_begin() )->get_gid() );
-  index source_offset = source_range.get_first_gid();
-  RangeSet source_ranges;
-  source_ranges.push_back( Range( source_range.get_first_gid(), source_range.get_last_gid() ) );
-
-  const modelrange target_range =
-    get_network().get_contiguous_gid_range( ( *targets->local_begin() )->get_gid() );
-  index target_offset = target_range.get_first_gid();
-  RangeSet target_ranges;
-  target_ranges.push_back( Range( target_range.get_first_gid(), target_range.get_last_gid() ) );
-
-  cg_connect(
-    cg, source_ranges, source_offset, target_ranges, target_offset, params_map, synmodel_id );
-
-  i->OStack.pop( 5 );
-  i->EStack.pop();
-}
-
-// Connect for conn_generator array array dict synapsetype
-void
-ConnectionGeneratorModule::CGConnect_cg_iV_iV_D_lFunction::execute( SLIInterpreter* i ) const
-{
-  i->assert_stack_load( 5 );
-
-  ConnectionGeneratorDatum cg = getValue< ConnectionGeneratorDatum >( i->OStack.pick( 4 ) );
-  IntVectorDatum sources = getValue< IntVectorDatum >( i->OStack.pick( 3 ) );
-  IntVectorDatum targets = getValue< IntVectorDatum >( i->OStack.pick( 2 ) );
-  DictionaryDatum params_map = getValue< DictionaryDatum >( i->OStack.pick( 1 ) );
-  const Name synmodel_name = getValue< std::string >( i->OStack.pick( 0 ) );
-
-  const Token synmodel = get_network().get_synapsedict().lookup( synmodel_name );
-  if ( synmodel.empty() )
-    throw UnknownSynapseType( synmodel_name.toString() );
-  const index synmodel_id = static_cast< index >( synmodel );
-
-  RangeSet source_ranges;
-  cg_get_ranges( source_ranges, ( *sources ) );
-
-  RangeSet target_ranges;
-  cg_get_ranges( target_ranges, ( *targets ) );
-
-  cg_connect(
-    cg, source_ranges, ( *sources ), target_ranges, ( *targets ), params_map, synmodel_id );
+  cg_connect( cg, sources, targets, params_map, synmodel_name );
 
   i->OStack.pop( 5 );
   i->EStack.pop();
 }
 
 
-/* BeginDocumentation
-   Name: CGParse - Call ConnectionGenerator::fromXML() and return a ConnectionGenerator
+/** @BeginDocumentation
+Name: CGParse - Call ConnectionGenerator::fromXML() and return a
+ConnectionGenerator
 
-   Synopsis:
-   xml_string CGParse -> cg
+Synopsis:
+xml_string CGParse -> cg
 
-   Parameters:
-   xml_string - The XML string to parse.
+Parameters:
+xml_string - The XML string to parse.
 
-   Description:
-   Return a ConnectionGenerator created by deserializing the given
-   XML string. The library to parse the XML string can be selected using
-   CGSelectImplementation
+Description:
+Return a ConnectionGenerator created by deserializing the given
+XML string. The library to parse the XML string can be selected using
+CGSelectImplementation
 
-   Author: Jochen Martin Eppler
-   FirstVersion: September 2013
-   SeeAlso: CGParseFile, CGConnect, CGSelectImplementation, cgstart, cgsetmask, cgnext
+Availability: Only if compiled with libneurosim support
+Author: Jochen Martin Eppler
+FirstVersion: September 2013
+SeeAlso: CGParseFile, CGConnect, CGSelectImplementation
 */
 void
 ConnectionGeneratorModule::CGParse_sFunction::execute( SLIInterpreter* i ) const
@@ -252,23 +162,25 @@ ConnectionGeneratorModule::CGParse_sFunction::execute( SLIInterpreter* i ) const
 }
 
 
-/* BeginDocumentation
-   Name: CGParseFile - Call ConnectionGenerator::fromXMLFile() and return a ConnectionGenerator
+/** @BeginDocumentation
+Name: CGParseFile - Call ConnectionGenerator::fromXMLFile() and return a
+ConnectionGenerator
 
-   Synopsis:
-   xml_filename CGParseFile -> cg
+Synopsis:
+xml_filename CGParseFile -> cg
 
-   Parameters:
-   xml_filename - The XML file to read.
+Parameters:
+xml_filename - The XML file to read.
 
-   Description:
-   Return a ConnectionGenerator created by deserializing the given
-   XML file. The library to parse the XML file can be selected using
-   CGSelectImplementation
+Description:
+Return a ConnectionGenerator created by deserializing the given
+XML file. The library to parse the XML file can be selected using
+CGSelectImplementation
 
-   Author: Jochen Martin Eppler
-   FirstVersion: February 2014
-   SeeAlso: CGParse, CGConnect, CGSelectImplementation, cgstart, cgsetmask, cgnext
+Availability: Only if compiled with libneurosim support
+Author: Jochen Martin Eppler
+FirstVersion: February 2014
+SeeAlso: CGParse, CGConnect, CGSelectImplementation
 */
 void
 ConnectionGeneratorModule::CGParseFile_sFunction::execute( SLIInterpreter* i ) const
@@ -284,23 +196,25 @@ ConnectionGeneratorModule::CGParseFile_sFunction::execute( SLIInterpreter* i ) c
 }
 
 
-/* BeginDocumentation
-   Name: CGSelectImplementation - Call ConnectionGenerator::selectCGImplementation()
+/** @BeginDocumentation
+Name: CGSelectImplementation - Call
+ConnectionGenerator::selectCGImplementation()
 
-   Synopsis:
-   tag library CGParse -> -
+Synopsis:
+tag library CGParse -> -
 
-   Parameters:
-   tag     - The XML tag to associate with a library.
-   library - The library to provide the parsing for CGParse
+Parameters:
+tag     - The XML tag to associate with a library.
+library - The library to provide the parsing for CGParse
 
-   Description:
-   Select a library to provide a parser for XML files and associate
-   an XML tag with the library.
+Description:
+Select a library to provide a parser for XML files and associate
+an XML tag with the library.
 
-   Author: Jochen Martin Eppler
-   FirstVersion: September 2013
-   SeeAlso: CGParse, CGParseFile, CGConnect, cgstart, cgsetmask, cgnext
+Availability: Only if compiled with libneurosim support
+Author: Jochen Martin Eppler
+FirstVersion: September 2013
+SeeAlso: CGParse, CGParseFile, CGConnect
 */
 void
 ConnectionGeneratorModule::CGSelectImplementation_s_sFunction::execute( SLIInterpreter* i ) const
@@ -309,6 +223,7 @@ ConnectionGeneratorModule::CGSelectImplementation_s_sFunction::execute( SLIInter
 
   StringDatum library = getValue< StringDatum >( i->OStack.pick( 0 ) );
   StringDatum tag = getValue< StringDatum >( i->OStack.pick( 1 ) );
+
   ConnectionGenerator::selectCGImplementation( tag, library );
 
   i->OStack.pop( 1 );
@@ -316,74 +231,70 @@ ConnectionGeneratorModule::CGSelectImplementation_s_sFunction::execute( SLIInter
 }
 
 
-/* BeginDocumentation
-   Name: cgsetmask - Call setMasks() on a ConnectionGenerator
+/** @BeginDocumentation
+Name: :cgsetmask - Call setMasks() on a ConnectionGenerator
 
-   Synopsis:
-   cg sources targets cgsetmask -> -
+Synopsis:
+cg sources targets :cgsetmask -> -
 
-   Parameters:
-   cg      - ConnectionGenerator
-   sources - A list of nodes used as source masks
-   targets - A list of nodes used as target masks
+Parameters:
+cg      - ConnectionGenerator
+sources - A gidcollection of nodes used as source masks
+targets - A gidcollection of nodes used as target masks
 
-   Description:
-   Set masks for sources and targets on a given ConnectionGenerator
-   cg. This is calling the setMasks() function on cg internally.
+Description:
+Set masks for sources and targets on a given ConnectionGenerator
+cg. This is calling the setMasks() function on cg internally.
 
-   Remarks:
-   This function is part of the low-level access API for the
-   ConnectionGenerator module. It is mainly used for debugging
-   purposes. Usually, connections are created from a
-   ConnectionGenerator using CGConnect.
+Remarks:
+This function is part of the low-level access API for the
+ConnectionGenerator module. It is mainly used for debugging
+purposes. Usually, connections are created from a
+ConnectionGenerator using CGConnect.
 
-   Author: Mikael Djurfeldt
-   FirstVersion: March 2011
-   SeeAlso: CGParse, CGParseFile, CGConnect, CGSelectImplementation, cgstart, cgnext
+Availability: Only if compiled with libneurosim support
+Author: Mikael Djurfeldt
+FirstVersion: March 2011
+SeeAlso: CGParse, CGParseFile, CGConnect, CGSelectImplementation
 */
 void
-ConnectionGeneratorModule::CGSetMask_cg_iV_iVFunction::execute( SLIInterpreter* i ) const
+ConnectionGeneratorModule::CGSetMask_cg_g_gFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 3 );
 
   ConnectionGeneratorDatum cg = getValue< ConnectionGeneratorDatum >( i->OStack.pick( 2 ) );
-  IntVectorDatum sources = getValue< IntVectorDatum >( i->OStack.pick( 1 ) );
-  IntVectorDatum targets = getValue< IntVectorDatum >( i->OStack.pick( 0 ) );
+  GIDCollectionDatum sources = getValue< GIDCollectionDatum >( i->OStack.pick( 1 ) );
+  GIDCollectionDatum targets = getValue< GIDCollectionDatum >( i->OStack.pick( 0 ) );
 
-  RangeSet source_ranges;
-  cg_get_ranges( source_ranges, ( *sources ) );
-
-  RangeSet target_ranges;
-  cg_get_ranges( target_ranges, ( *targets ) );
-
-  cg_set_masks( cg, source_ranges, target_ranges );
+  cg_set_masks( cg, sources, targets );
 
   i->OStack.pop( 3 );
   i->EStack.pop();
 }
 
 
-/* BeginDocumentation
-   Name: cgstart - Call start() on a ConnectionGenerator
+/** @BeginDocumentation
+Name: :cgstart - Call start() on a ConnectionGenerator
 
-   Synopsis:
-   cg cgstart -> -
+Synopsis:
+cg :cgstart -> -
 
-   Parameters:
-   cg - ConnectionGenerator
+Parameters:
+cg - ConnectionGenerator
 
-   Description:
-   Call the start() function on a given ConnectionGenerator cg.
+Description:
+Call the start() function on a given ConnectionGenerator cg.
 
-   Remarks:
-   This function is part of the low-level access API for the
-   ConnectionGenerator module. It is mainly used for debugging
-   purposes. Usually, connections are created from a
-   ConnectionGenerator using CGConnect.
+Remarks:
+This function is part of the low-level access API for the
+ConnectionGenerator module. It is mainly used for debugging
+purposes. Usually, connections are created from a
+ConnectionGenerator using CGConnect.
 
-   Author: Mikael Djurfeldt
-   FirstVersion: March 2011
-   SeeAlso: CGParse, CGParseFile, CGConnect, CGSelectImplementation, cgsetmask, cgnext
+Availability: Only if compiled with libneurosim support
+Author: Mikael Djurfeldt
+FirstVersion: March 2011
+SeeAlso: CGParse, CGParseFile, CGConnect, CGSelectImplementation
 */
 void
 ConnectionGeneratorModule::CGStart_cgFunction::execute( SLIInterpreter* i ) const
@@ -399,31 +310,32 @@ ConnectionGeneratorModule::CGStart_cgFunction::execute( SLIInterpreter* i ) cons
 }
 
 
-/* BeginDocumentation
-   Name: cgnext - Call next() on a ConnectionGenerator
+/** @BeginDocumentation
+Name: :cgnext - Call next() on a ConnectionGenerator
 
-   Synopsis:
-   cg cgnext -> source target v[0] ... true | false
+Synopsis:
+cg :cgnext -> source target v[0] ... true | false
 
-   Parameters:
-   cg - ConnectionGenerator
+Parameters:
+cg - ConnectionGenerator
 
-   Description:
-   Call the next() function on a given ConnectionGenerator cg
-   to iterate cg's connections on the SLI level. This function
-   will return the source and the target of the connection, a
-   list containing the values for the connection (if there are
-   any), and true, or false, if cg cannot be iterated further.
+Description:
+Call the next() function on a given ConnectionGenerator cg
+to iterate cg's connections on the SLI level. This function
+will return the source and the target of the connection, the
+values for the connection (if there are any), and true, or
+false, if cg cannot be iterated further.
 
-   Remarks:
-   This function is part of the low-level access API for the
-   ConnectionGenerator module. It is mainly used for debugging
-   purposes. Usually, connections are created from a
-   ConnectionGenerator using CGConnect.
+Remarks:
+This function is part of the low-level access API for the
+ConnectionGenerator module. It is mainly used for debugging
+purposes. Usually, connections are created from a
+ConnectionGenerator using CGConnect.
 
-   Author: Mikael Djurfeldt
-   FirstVersion: December 2012
-   SeeAlso: CGParse, CGParseFile, CGConnect, CGSelectImplementation, cgstart, cgsetmask
+Availability: Only if compiled with libneurosim support
+Author: Mikael Djurfeldt, Jochen Martin Eppler
+FirstVersion: December 2012
+SeeAlso: CGParse, CGParseFile, CGConnect, CGSelectImplementation
 */
 void
 ConnectionGeneratorModule::CGNext_cgFunction::execute( SLIInterpreter* i ) const
@@ -431,26 +343,35 @@ ConnectionGeneratorModule::CGNext_cgFunction::execute( SLIInterpreter* i ) const
   i->assert_stack_load( 1 );
 
   ConnectionGeneratorDatum cgd = getValue< ConnectionGeneratorDatum >( i->OStack.pick( 0 ) );
-  ConnectionGenerator* generator = cgd.get();
 
-  int j, k;
-  int arity = generator->arity();
+  const int arity = cgd->arity();
   double* values = new double[ arity ];
+
   i->OStack.pop( 1 );
-  i->EStack.pop();
-  if ( generator->next( j, k, values ) )
+
+  int source_id;
+  int target_id;
+  if ( cgd->next( source_id, target_id, values ) )
   {
-    i->OStack.push( j );
-    i->OStack.push( k );
-    for ( int m = 0; m < arity; ++m )
-      i->OStack.push( values[ m ] );
+    i->OStack.push( source_id );
+    i->OStack.push( target_id );
+    for ( int n = 0; n < arity; ++n )
+    {
+      i->OStack.push( values[ n ] );
+    }
+
     delete[] values;
+    cgd.unlock();
+
     i->OStack.push( true );
   }
   else
+  {
+    cgd.unlock();
     i->OStack.push( false );
+  }
 
-  cgd.unlock();
+  i->EStack.pop();
 }
 
 

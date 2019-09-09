@@ -22,19 +22,21 @@
 
 /*
   This file is part of the NEST topology module.
-  Author: Kittel Austvoll
 */
 
 #include "topology_names.h"
 
 namespace nest
 {
+
 namespace names
 {
+
 const Name allow_autapses( "allow_autapses" );
 const Name allow_multapses( "allow_multapses" );
 const Name allow_oversized_mask( "allow_oversized_mask" );
 const Name anchor( "anchor" );
+const Name azimuth_angle( "azimuth_angle" );
 const Name box( "box" );
 const Name center( "center" );
 const Name circular( "circular" );
@@ -45,44 +47,44 @@ const Name convergent( "convergent" );
 const Name cutoff( "cutoff" );
 const Name depth( "depth" );
 const Name divergent( "divergent" );
-const Name doughnut( "doughnut" );
 const Name edge_wrap( "edge_wrap" );
 const Name elements( "elements" );
+const Name ellipsoidal( "ellipsoidal" );
+const Name elliptical( "elliptical" );
 const Name extent( "extent" );
 const Name grid( "grid" );
 const Name grid3d( "grid3d" );
 const Name inner_radius( "inner_radius" );
+const Name kappa( "kappa" );
 const Name kernel( "kernel" );
 const Name layer( "layer" );
 const Name layers( "layers" );
 const Name lid( "lid" );
 const Name lower_left( "lower_left" );
+const Name major_axis( "major_axis" );
 const Name mask( "mask" );
 const Name max( "max" );
 const Name mean_x( "mean_x" );
 const Name mean_y( "mean_y" );
 const Name min( "min" );
-const Name mu( "mu" );
+const Name minor_axis( "minor_axis" );
 const Name number_of_connections( "number_of_connections" );
 const Name outer_radius( "outer_radius" );
 const Name p_center( "p_center" );
-const Name points( "points" );
+const Name polar_angle( "polar_angle" );
+const Name polar_axis( "polar_axis" );
 const Name positions( "positions" );
 const Name radius( "radius" );
 const Name rectangular( "rectangular" );
-const Name rho( "rho" );
 const Name row( "row" );
 const Name rows( "rows" );
-const Name sigma( "sigma" );
 const Name sigma_x( "sigma_x" );
 const Name sigma_y( "sigma_y" );
 const Name sources( "sources" );
 const Name spherical( "spherical" );
-const Name tau( "tau" );
 const Name topology( "topology" );
 const Name upper_right( "upper_right" );
-const Name volume( "volume" );
-// const Name x("x");
-const Name y( "y" );
-}
-}
+
+} // namespace names
+
+} // namespace nest

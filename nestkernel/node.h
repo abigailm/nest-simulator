@@ -22,18 +22,24 @@
 
 #ifndef NODE_H
 #define NODE_H
+
+// C++ includes:
 #include <bitset>
-#include <string>
-#include <sstream>
-#include <vector>
 #include <deque>
+#include <sstream>
+#include <string>
 #include <utility>
-#include "nest.h"
-#include "nest_time.h"
-#include "nest_names.h"
-#include "dictdatum.h"
-#include "histentry.h"
+#include <vector>
+
+// Includes from nestkernel:
 #include "event.h"
+#include "histentry.h"
+#include "nest_names.h"
+#include "nest_time.h"
+#include "nest_types.h"
+
+// Includes from sli:
+#include "dictdatum.h"
 
 /** @file node.h
  * Declarations for base class Node
@@ -41,14 +47,9 @@
 
 namespace nest
 {
-
-class Scheduler;
 class Model;
-
 class Subnet;
-class Network;
 class Archiving_Node;
-class histentry;
 
 
 /**
@@ -71,15 +72,17 @@ class histentry;
  * A new type of Node must be derived from this base class and
  * implement its interface.
  * In order to keep the inheritance hierarchy flat, it is encouraged
- * to direcly subclass from base class Node.
+ * to directly subclass from base class Node.
  *
  * @see class Event
  * @see Subnet
  * @ingroup user_interface
  */
 
-/* BeginDocumentation
+/** @BeginDocumentation
+
    Name: Node - General properties of all nodes.
+
    Parameters:
    frozen     booltype    - Whether the node is updated during simulation
    global_id  integertype - The global id of the node (cf. local_id)
@@ -87,21 +90,24 @@ class histentry;
    local_id   integertype - The id of the node in the current  (cf. global_id)
    model      literaltype - The model type the node was created from
    parent     integertype - The global id of the parent subnet
-   state      integertype - The state of the node (see the help on elementstates for details)
-   thread     integertype - The id of the thread the node is assigned to (valid locally)
-   vp         integertype - The id of the virtual process the node is assigned to (valid globally)
+   state      integertype - The state of the node (see the help on elementstates
+                            for details)
+   thread     integertype - The id of the thread the node is assigned to (valid
+                            locally)
+   vp         integertype - The id of the virtual process the node is assigned
+                            to (valid globally)
+
    SeeAlso: GetStatus, SetStatus, elementstates
  */
 
-
 class Node
 {
-  friend class Network;
-  friend class Scheduler;
+  friend class NodeManager;
   friend class Subnet;
   friend class proxynode;
   friend class Synapse;
   friend class Model;
+  friend class SimulationManager;
 
   Node& operator=( const Node& ); //!< not implemented
 
@@ -130,21 +136,6 @@ public:
   virtual bool has_proxies() const;
 
   /**
-   * Returns true for potential global receivers (e.g. spike_detector) and false otherwise
-   */
-  virtual bool potential_global_receiver() const;
-
-  /**
-   * Sets has_proxies_ member variable (to switch to global spike detection mode)
-   */
-  virtual void set_has_proxies( const bool );
-
-  /**
-   * Sets local_receiver_ member variable (to switch to global spike detection mode)
-   */
-  virtual void set_local_receiver( const bool );
-
-  /**
    * Returns true if the node only receives events from nodes/devices
    * on the same thread.
    */
@@ -155,6 +146,8 @@ public:
    * not have proxies on remote threads. This is used to
    * discriminate between different types of nodes, when adding new
    * nodes to the network.
+   *
+   * TODO: Is this true for *any* model at all? Maybe MUSIC related?
    */
   virtual bool one_node_per_process() const;
 
@@ -175,7 +168,7 @@ public:
 
   /**
    * Return class name.
-   * Returns name of node model (e.g. "iaf_neuron") as string.
+   * Returns name of node model (e.g. "iaf_psc_alpha") as string.
    * This name is identical to the name that is used to identify
    * the model in the interpreter's model dictionary.
    */
@@ -237,10 +230,15 @@ public:
   bool is_frozen() const;
 
   /**
-   * Return pointer to network driver class.
-   * @todo This member should return a reference, not a pointer.
+   * Returns true if the node uses the waveform relaxation method
    */
-  static Network* network();
+  bool node_uses_wfr() const;
+
+  /**
+   * Sets node_uses_wfr_ member variable
+   * (to be able to set it to "true" for any class derived from Node)
+   */
+  void set_node_uses_wfr( const bool );
 
   /**
    * Returns true if the node is allocated in the local process.
@@ -270,8 +268,9 @@ public:
    * for incoming events, buffers for logging potentials.
    * This function is called before Simulate is called for the first time
    * on a node, but not upon resumption of a simulation.
-   * This is a wrapper function, which calls the overloaded Node::init_buffers_()
-   * worker only if the buffers of the node have not been initialized yet.
+   * This is a wrapper function, which calls the overloaded
+   * Node::init_buffers_() worker only if the buffers of the node have not been
+   * initialized yet.
    */
   void init_buffers();
 
@@ -285,10 +284,21 @@ public:
   virtual void calibrate() = 0;
 
   /**
+   * Cleanup node after Run. Override this function if a node needs to
+   * "wrap up" things after a call to Run, i.e., before
+   * SimulationManager::run() returns. Typical use-cases are devices
+   * that need to flush buffers.
+   */
+  virtual void
+  post_run_cleanup()
+  {
+  }
+
+  /**
    * Finalize node.
-   * Override this function if a node needs to "wrap up" things after a simulation,
-   * i.e., before Scheduler::resume() returns. Typical use-cases are devices
-   * that need to flush buffers or disconnect from external files or pipes.
+   * Override this function if a node needs to "wrap up" things after a
+   * full simulation, i.e., a cycle of Prepare, Run, Cleanup. Typical
+   * use-cases are devices that need to close files.
    */
   virtual void
   finalize()
@@ -303,12 +313,29 @@ public:
    * T+from+1 .. T+to.
    *
    * @param Time   network time at beginning of time slice.
-   * @param long_t initial step inside time slice
-   * @param long_t post-final step inside time slice
+   * @param long initial step inside time slice
+   * @param long post-final step inside time slice
    *
    */
-  virtual void update( Time const&, const long_t, const long_t ) = 0;
+  virtual void update( Time const&, const long, const long ) = 0;
 
+  /**
+   * Bring the node from state $t$ to $t+n*dt$, sends SecondaryEvents
+   * (e.g. GapJunctionEvent) and resets state variables to values at $t$.
+   *
+   * n->wfr_update(T, from, to) performs the update steps beginning
+   * at T+from .. T+to-1.
+   *
+   * Does not emit spikes, does not log state variables.
+   *
+   * throws UnexpectedEvent if not reimplemented in derived class
+   *
+   * @param Time   network time at beginning of time slice.
+   * @param long initial step inside time slice
+   * @param long post-final step inside time slice
+   *
+   */
+  virtual bool wfr_update( Time const&, const long, const long );
 
   /**
    * @defgroup status_interface Configuration interface.
@@ -369,8 +396,7 @@ public:
    * DS*Events when called with the dummy target, and *Events when called with
    * the real target, see #478.
    */
-  virtual port
-  send_test_event( Node& receiving_node, rport receptor_type, synindex syn_id, bool dummy_target );
+  virtual port send_test_event( Node& receiving_node, rport receptor_type, synindex syn_id, bool dummy_target );
 
   /**
    * Check if the node can handle a particular event and receptor type.
@@ -385,11 +411,13 @@ public:
    *
    * See Kunkel et al, Front Neuroinform 8:78 (2014), Sec 3.
    *
-   * @note The semantics of all other handles_test_event() functions is identical.
+   * @note The semantics of all other handles_test_event() functions is
+   * identical.
    * @ingroup event_interface
    * @throws IllegalConnection
    */
   virtual port handles_test_event( SpikeEvent&, rport receptor_type );
+  virtual port handles_test_event( WeightRecorderEvent&, rport receptor_type );
   virtual port handles_test_event( RateEvent&, rport receptor_type );
   virtual port handles_test_event( DataLoggingRequest&, rport receptor_type );
   virtual port handles_test_event( CurrentEvent&, rport receptor_type );
@@ -397,6 +425,46 @@ public:
   virtual port handles_test_event( DoubleDataEvent&, rport receptor_type );
   virtual port handles_test_event( DSSpikeEvent&, rport receptor_type );
   virtual port handles_test_event( DSCurrentEvent&, rport receptor_type );
+  virtual port handles_test_event( GapJunctionEvent&, rport receptor_type );
+  virtual port handles_test_event( InstantaneousRateConnectionEvent&, rport receptor_type );
+  virtual port handles_test_event( DiffusionConnectionEvent&, rport receptor_type );
+  virtual port handles_test_event( DelayedRateConnectionEvent&, rport receptor_type );
+
+  /**
+   * Required to check, if source neuron may send a SecondaryEvent.
+   * This base class implementation throws IllegalConnection
+   * and needs to be overwritten in the derived class.
+   * @ingroup event_interface
+   * @throws IllegalConnection
+   */
+  virtual void sends_secondary_event( GapJunctionEvent& ge );
+
+  /**
+   * Required to check, if source neuron may send a SecondaryEvent.
+   * This base class implementation throws IllegalConnection
+   * and needs to be overwritten in the derived class.
+   * @ingroup event_interface
+   * @throws IllegalConnection
+   */
+  virtual void sends_secondary_event( InstantaneousRateConnectionEvent& re );
+
+  /**
+   * Required to check, if source neuron may send a SecondaryEvent.
+   * This base class implementation throws IllegalConnection
+   * and needs to be overwritten in the derived class.
+   * @ingroup event_interface
+   * @throws IllegalConnection
+   */
+  virtual void sends_secondary_event( DiffusionConnectionEvent& de );
+
+  /**
+   * Required to check, if source neuron may send a SecondaryEvent.
+   * This base class implementation throws IllegalConnection
+   * and needs to be overwritten in the derived class.
+   * @ingroup event_interface
+   * @throws IllegalConnection
+   */
+  virtual void sends_secondary_event( DelayedRateConnectionEvent& re );
 
   /**
    * Register a STDP connection
@@ -404,7 +472,7 @@ public:
    * @throws IllegalConnection
    *
    */
-  virtual void register_stdp_connection( double_t );
+  virtual void register_stdp_connection( double, double );
 
   /**
    * Handle incoming spike events.
@@ -417,6 +485,18 @@ public:
    * @ingroup event_interface
    */
   virtual void handle( SpikeEvent& e );
+
+  /**
+   * Handle incoming weight recording events.
+   * @param thrd Id of the calling thread.
+   * @param e Event object.
+   *
+   * This handler has to be implemented if a Node should
+   * accept weight recording events.
+   * @see class WeightRecordingEvent
+   * @ingroup event_interface
+   */
+  virtual void handle( WeightRecorderEvent& e );
 
   /**
    * Handler for rate events.
@@ -469,9 +549,41 @@ public:
   virtual void handle( DoubleDataEvent& e );
 
   /**
-   * @defgroup MSP_functions Model of Structural Plasticity in NEST.
+   * Handler for gap junction events.
+   * @see handle(thread, GapJunctionEvent&)
+   * @ingroup event_interface
+   * @throws UnexpectedEvent
+   */
+  virtual void handle( GapJunctionEvent& e );
+
+  /**
+   * Handler for rate neuron events.
+   * @see handle(thread, InstantaneousRateConnectionEvent&)
+   * @ingroup event_interface
+   * @throws UnexpectedEvent
+   */
+  virtual void handle( InstantaneousRateConnectionEvent& e );
+
+  /**
+   * Handler for rate neuron events.
+   * @see handle(thread, InstantaneousRateConnectionEvent&)
+   * @ingroup event_interface
+   * @throws UnexpectedEvent
+   */
+  virtual void handle( DiffusionConnectionEvent& e );
+
+  /**
+   * Handler for delay rate neuron events.
+   * @see handle(thread, DelayedRateConnectionEvent&)
+   * @ingroup event_interface
+   * @throws UnexpectedEvent
+   */
+  virtual void handle( DelayedRateConnectionEvent& e );
+
+  /**
+   * @defgroup SP_functions Structural Plasticity in NEST.
    * Functions related to accessibility and setup of variables required for
-   * the implementation of MSP in NEST.
+   * the implementation of a model of Structural Plasticity in NEST.
    *
    */
 
@@ -480,9 +592,9 @@ public:
    * the last update in Calcium concentration which is performed each time
    * a Node spikes.
    * Return 0.0 if not overridden
-   * @ingroup MSP_functions
+   * @ingroup SP_functions
    */
-  virtual double_t
+  virtual double
   get_Ca_minus() const
   {
     return 0.0;
@@ -492,9 +604,9 @@ public:
    * Get the number of synaptic element for the current Node at Ca_t which
    * corresponds to the time of the last spike.
    * Return 0.0 if not overridden
-   * @ingroup MSP_functions
+   * @ingroup SP_functions
    */
-  virtual double_t get_synaptic_elements( Name ) const
+  virtual double get_synaptic_elements( Name ) const
   {
     return 0.0;
   }
@@ -502,9 +614,9 @@ public:
   /**
    * Get the number of vacant synaptic element for the current Node
    * Return 0 if not overridden
-   * @ingroup MSP_functions
+   * @ingroup SP_functions
    */
-  virtual int_t get_synaptic_elements_vacant( Name ) const
+  virtual int get_synaptic_elements_vacant( Name ) const
   {
     return 0;
   }
@@ -512,9 +624,9 @@ public:
   /**
    * Get the number of connected synaptic element for the current Node
    * Return 0 if not overridden
-   * @ingroup MSP_functions
+   * @ingroup SP_functions
    */
-  virtual int_t get_synaptic_elements_connected( Name ) const
+  virtual int get_synaptic_elements_connected( Name ) const
   {
     return 0;
   }
@@ -522,62 +634,68 @@ public:
   /**
    * Get the number of all synaptic elements for the current Node at time t
    * Return an empty map if not overridden
-   * @ingroup MSP_functions
+   * @ingroup SP_functions
    */
-  virtual std::map< Name, double_t >
-  get_synaptic_elements()
+  virtual std::map< Name, double >
+  get_synaptic_elements() const
   {
     return std::map< Name, double >();
   }
 
   /**
    * Triggers the update of all SynapticElements
-   * stored in the synaptic_element_map_. It also updates the calcium concentration.
-   * @param t double_t time when the update is being performed
-   * @ingroup MSP_functions
+   * stored in the synaptic_element_map_. It also updates the calcium
+   * concentration.
+   * @param t double time when the update is being performed
+   * @ingroup SP_functions
    */
-  virtual void update_synaptic_elements( double_t ){};
+  virtual void update_synaptic_elements( double ){};
 
   /**
    * Is used to reduce the number of synaptic elements in the node through
-   * time.
-   * @param p double_t correspond the the proportion of synaptic elements
-   * to be removed.
-   * @ingroup MSP_functions
+   * time. This amount is defined by tau_vacant.
+   * @ingroup SP_functions
    */
-  virtual void decay_synaptic_elements_vacant( double_t ){};
+  virtual void decay_synaptic_elements_vacant(){};
 
   /**
    * Is used to update the number of connected
    * synaptic elements (SynapticElement::z_connected_) when a synapse
    * is formed or deleted.
    * @param type Name, name of the synaptic element to connect
-   * @param n int_t number of new connections of the given type
-   * @ingroup MSP_functions
+   * @param n int number of new connections of the given type
+   * @ingroup SP_functions
    */
-  virtual void connect_synaptic_element( Name, int_t ){};
+  virtual void connect_synaptic_element( Name, int ){};
 
   /**
    * return the Kminus value at t (in ms).
    * @throws UnexpectedEvent
    */
-  virtual double_t get_K_value( double_t t );
+  virtual double get_K_value( double t );
+
+  virtual double get_LTD_value( double t );
 
   /**
    * write the Kminus and triplet_Kminus values at t (in ms) to
    * the provided locations.
    * @throws UnexpectedEvent
    */
-  virtual void get_K_values( double_t t, double_t& Kminus, double_t& triplet_Kminus );
+  virtual void get_K_values( double t, double& Kminus, double& triplet_Kminus );
 
   /**
   * return the spike history for (t1,t2].
   * @throws UnexpectedEvent
   */
-  virtual void get_history( double_t t1,
-    double_t t2,
+  virtual void get_history( double t1,
+    double t2,
     std::deque< histentry >::iterator* start,
     std::deque< histentry >::iterator* finish );
+
+  virtual void get_LTP_history( double t1,
+    double t2,
+    std::deque< histentry_cl >::iterator* start,
+    std::deque< histentry_cl >::iterator* finish );
 
   /**
    * Modify Event object parameters during event delivery.
@@ -599,7 +717,7 @@ public:
   /**
    * Store the number of the thread to which the node is assigned.
    * The assignment is done after node creation by the Network class.
-   * @see: Network::add_node().
+   * @see: NodeManager::add_node().
    */
   void set_thread( thread );
 
@@ -610,7 +728,7 @@ public:
 
   /**
    * Store the number of the virtual process to which the node is assigned.
-   * This is assigned to the node in network::add_node().
+   * This is assigned to the node in NodeManager::add_node().
    */
   void set_vp( thread );
 
@@ -620,7 +738,7 @@ public:
   thread get_vp() const;
 
   /** Set the model id.
-   * This method is called by Network::add_node() when a node is created.
+   * This method is called by NodeManager::add_node() when a node is created.
    * @see get_model_id()
    */
   void set_model_id( int );
@@ -629,6 +747,29 @@ public:
    * @returns true if node is a subnet.
    */
   virtual bool is_subnet() const;
+
+  /**
+   * @returns type of signal this node produces
+   * used in check_connection to only connect neurons which send / receive
+   * compatible information
+   */
+  virtual SignalType
+  sends_signal() const
+  {
+    return SPIKE;
+  }
+
+  /**
+   * @returns type of signal this node consumes
+   * used in check_connection to only connect neurons which send / receive
+   * compatible information
+   */
+  virtual SignalType
+  receives_signal() const
+  {
+    return SPIKE;
+  }
+
 
   /**
    *  Return a dictionary with the node's properties.
@@ -677,6 +818,49 @@ public:
     buffers_initialized_ = initialized;
   }
 
+  /**
+   * Sets the local device id.
+   * Throws an error if used on a non-device node.
+   * @see get_local_device_id
+   */
+  virtual void set_local_device_id( const index lsdid );
+
+  /**
+   * Gets the local device id.
+   * Throws an error if used on a non-device node.
+   * @see set_local_device_id
+   */
+  virtual index get_local_device_id() const;
+
+  /**
+   * Return the number of thread siblings in SiblingContainer.
+   *
+   * This method is meaningful only for SiblingContainer, for which it
+   * returns the number of siblings in the container.
+   * For all other models (including Subnet), it returns 0, which is not
+   * wrong. By defining the method in this way, we avoid many dynamic casts.
+   */
+  virtual size_t
+  num_thread_siblings() const
+  {
+    return 0;
+  }
+
+  /**
+   * Return the specified member of a SiblingContainer.
+   *
+   * This method is meaningful only for SiblingContainer, for which it
+   * returns the pointer to the indexed node in the container.
+   * For all other models (including Subnet), it returns a null pointer
+   * and throws and assertion.By defining the method in this way, we avoid
+   * many dynamic casts.
+   */
+  virtual Node* get_thread_sibling( index ) const
+  {
+    assert( false );
+    return 0;
+  }
+
 private:
   void set_lid_( index );          //!< Set local id, relative to the parent subnet
   void set_parent_( Subnet* );     //!< Set pointer to parent subnet.
@@ -694,52 +878,15 @@ private:
 
 protected:
   /**
-   * Return the number of thread siblings in SiblingContainer.
-   *
-   * This method is meaningful only for SiblingContainer, for which it
-   * returns the number of siblings in the container.
-   * For all other models (including Subnet), it returns 0, which is not
-   * wrong. By defining the method in this way, we avoid many dynamic casts.
-   */
-  virtual size_t
-  num_thread_siblings_() const
-  {
-    return 0;
-  }
-
-  /**
-   * Return the specified member of a SiblingContainer.
-   *
-   * This method is meaningful only for SiblingContainer, for which it
-   * returns the pointer to the indexed node in the container.
-   * For all other models (including Subnet), it returns a null pointer
-   * and throws and assertion.By defining the method in this way, we avoid
-   * many dynamic casts.
-   */
-  virtual Node* get_thread_sibling_( index ) const
-  {
-    assert( false );
-    return 0;
-  }
-
-  /**
-   * Return specified member of a SiblingContainer, with access control.
-   */
-  virtual Node* get_thread_sibling_safe_( index ) const
-  {
-    assert( false );
-    return 0;
-  }
-
-  /**
    * Private function to initialize the state of a node to model defaults.
    * This function, which must be overloaded by all derived classes, provides
-   * the implementation for initializing the state of a node to the model defaults;
-   * the state is the set of observable dynamic variables.
+   * the implementation for initializing the state of a node to the model
+   * defaults; the state is the set of observable dynamic variables.
    * @param Reference to model prototype object.
    * @see Node::init_state()
-   * @note To provide a reasonable behavior during the transition to the new scheme,
-   *       init_state_() has a default implementation calling init_dynamic_state_().
+   * @note To provide a reasonable behavior during the transition to the new
+   *       scheme, init_state_() has a default implementation calling
+   *       init_dynamic_state_().
    */
   virtual void init_state_( Node const& ) = 0;
 
@@ -761,7 +908,8 @@ protected:
   }
 
   /**
-   * Auxiliary function to downcast a Node to a concrete class derived from Node.
+   * Auxiliary function to downcast a Node to a concrete class derived from
+   * Node.
    * @note This function is used to convert generic Node references to specific
    *       ones when intializing parameters or state from a prototype.
    */
@@ -790,9 +938,7 @@ private:
   thread vp_;                //!< virtual process node is assigned to
   bool frozen_;              //!< node shall not be updated if true
   bool buffers_initialized_; //!< Buffers have been initialized
-
-protected:
-  static Network* net_; //!< Pointer to global network driver.
+  bool node_uses_wfr_;       //!< node uses waveform relaxation method
 };
 
 inline bool
@@ -802,15 +948,21 @@ Node::is_frozen() const
 }
 
 inline bool
-Node::has_proxies() const
+Node::node_uses_wfr() const
 {
-  return true;
+  return node_uses_wfr_;
+}
+
+inline void
+Node::set_node_uses_wfr( const bool uwfr )
+{
+  node_uses_wfr_ = uwfr;
 }
 
 inline bool
-Node::potential_global_receiver() const
+Node::has_proxies() const
 {
-  return false;
+  return true;
 }
 
 inline bool
@@ -901,12 +1053,6 @@ inline void
 Node::set_parent_( Subnet* c )
 {
   parent_ = c;
-}
-
-inline Network*
-Node::network()
-{
-  return net_;
 }
 
 inline void

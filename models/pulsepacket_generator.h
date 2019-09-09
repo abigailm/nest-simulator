@@ -23,51 +23,60 @@
 #ifndef PULSEPACKET_GENERATOR_H
 #define PULSEPACKET_GENERATOR_H
 
-#include <vector>
+// C++ includes:
 #include <deque>
+#include <vector>
 
-#include "nest.h"
+// Includes from librandom:
+#include "normal_randomdev.h"
+
+// Includes from nestkernel:
+#include "connection.h"
 #include "event.h"
+#include "nest_types.h"
 #include "node.h"
 #include "stimulating_device.h"
-#include "connection.h"
-#include "normal_randomdev.h"
 
 namespace nest
 {
-//! class pulsepacket_generator
-/*! Class pulsepacket_generator produces a spike train with
-    a gaussian distribution of spike times.
-*/
 
+/** @BeginDocumentation
+@ingroup Devices
+@ingroup generator
 
-/*BeginDocumentation
 Name: pulsepacket_generator - Generate sequence of Gaussian pulse packets.
+
 Description:
-  The pulsepacket_generator produces a spike train contains Gaussian pulse
-  packets centered about given  times.  A Gaussian pulse packet is
-  a given number of spikes with normal distributed random displacements
-  from the center time of the pulse.
-  It resembles the output of synfire groups of neurons.
+
+The pulsepacket_generator produces a spike train contains Gaussian pulse
+packets centered about given  times.  A Gaussian pulse packet is
+a given number of spikes with normal distributed random displacements
+from the center time of the pulse.
+It resembles the output of synfire groups of neurons.
 
 Parameters:
-  pulse_times  double - Times of the centers of pulses in ms
-  activity     int    - Number of spikes per pulse
-  sdev         double - Standard deviation of spike times in each pulse in ms
+
+\verbatim embed:rst
+============  ======= =======================================================
+ pulse_times  ms      Times of the centers of pulses
+ activity     integer Number of spikes per pulse
+ sdev         ms      Standard deviation of spike times in each pulse
+============  ======= =======================================================
+\endverbatim
 
 Remarks:
-  - All targets receive identical spike trains.
-  - New pulse packets are generated when activity or sdev are changed.
-  - Gaussian pulse are independently generated for each given
-    pulse-center time.
-  - Both standard deviation and number of spikes may be set at any time.
-    Pulses are then re-generated with the new values.
+
+- All targets receive identical spike trains.
+- New pulse packets are generated when activity or sdev are changed.
+- Gaussian pulse are independently generated for each given
+  pulse-center time.
+- Both standard deviation and number of spikes may be set at any time.
+  Pulses are then re-generated with the new values.
 
 Sends: SpikeEvent
 
 SeeAlso: spike_generator, StimulatingDevice
 */
-
 class pulsepacket_generator : public Node
 {
 
@@ -94,7 +103,7 @@ private:
   void calibrate();
 
   void create_pulse();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   struct Buffers_;
 
@@ -103,11 +112,11 @@ private:
   struct Parameters_
   {
 
-    std::vector< double_t > pulse_times_; //!< times of pulses
-    long_t a_;                            //!< number of pulses in a packet
-    double_t sdev_;                       //!< standard deviation of the packet
+    std::vector< double > pulse_times_; //!< times of pulses
+    long a_;                            //!< number of pulses in a packet
+    double sdev_;                       //!< standard deviation of the packet
 
-    double_t sdev_tolerance_;
+    double sdev_tolerance_;
 
     Parameters_(); //!< Sets default parameter values
 
@@ -125,7 +134,7 @@ private:
 
   struct Buffers_
   {
-    std::deque< long_t > spiketimes_;
+    std::deque< long > spiketimes_;
   };
 
   // ------------------------------------------------------------
@@ -135,17 +144,17 @@ private:
 
     librandom::NormalRandomDev norm_dev_; //!< random deviate generator
 
-    /** Indices into sorted vector of sorted pulse-center times (P_.pulse_times_).
-     *  Spike times to be sent are calculated from pulse-center times
-     *  between 'start' and 'stop'. Times before 'start' are outdated,
-     *  times after 'stop' are not touched yet.
+    /** Indices into sorted vector of sorted pulse-center times
+     *  (P_.pulse_times_). Spike times to be sent are calculated from
+     *  pulse-center times between 'start' and 'stop'. Times before 'start' are
+     *  outdated, times after 'stop' are not touched yet.
      *
      *  Must be index, not iterator, since we copy pulse times
      *  out of temporary parameter set.
      */
     size_t start_center_idx_;
     size_t stop_center_idx_;
-    double_t tolerance;
+    double tolerance;
 
     Variables_();
   };

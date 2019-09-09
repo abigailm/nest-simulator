@@ -23,7 +23,10 @@
 /*
     class implementing SLI types.
 */
+
 #include "slitype.h"
+
+// C++ includes:
 #include <cstdlib>
 
 void
@@ -45,9 +48,10 @@ void
 SLIType::deletetypename( void )
 {
   assert( count > 0 );
-
   if ( count == 1 )
+  {
     delete name;
+  }
   --count;
 }
 
@@ -56,7 +60,11 @@ void
 SLIType::setdefaultaction( SLIFunction& c )
 {
   if ( defaultaction == NULL )
+  {
     defaultaction = &c;
+  }
   else
+  {
     assert( &c == defaultaction );
+  }
 }

@@ -20,13 +20,19 @@
  *
  */
 
-#include "event.h"
+
 #include "sibling_container.h"
-#include "dictdatum.h"
-#include "arraydatum.h"
-#include "dictutils.h"
-#include "network.h"
+
+// C++ includes:
 #include <string>
+
+// Includes from nestkernel:
+#include "event.h"
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "dictdatum.h"
+#include "dictutils.h"
 
 #ifdef N_DEBUG
 #undef N_DEBUG

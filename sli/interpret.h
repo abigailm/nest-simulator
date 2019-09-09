@@ -26,15 +26,17 @@
     interpret.h defines the SLI Interpreter class
 */
 
-#include <typeinfo>
+// C++ includes:
 #include <list>
+#include <typeinfo>
 
-#include "token.h"
-#include "slitype.h"
-#include "tokenstack.h"
+// Includes from sli:
 #include "sliactions.h"
 #include "slibuiltins.h"
 #include "slimodule.h"
+#include "slitype.h"
+#include "token.h"
+#include "tokenstack.h"
 
 /**
  * @defgroup SLIOutput How to notify the SLI user
@@ -56,11 +58,6 @@ class DictionaryStack;
 class Dictionary;
 class FunctionDatum;
 class BoolDatum;
-
-namespace nest
-{
-class Network;
-}
 
 extern "C" {
 void SLIthrowsignal( int s );
@@ -170,23 +167,28 @@ public:
    *  @name Predefined error levels
    *  @{
    */
-  static const int M_ALL;     //!< Predefined error level for turning on
-                              //!< the display of all messages; for use with verbosity(int).
-  static const int M_DEBUG;   //!< Predefined error level for debugging messages
-  static const int M_STATUS;  //!< Predefined error level for status messages
-  static const int M_INFO;    //!< Predefined error level for informational messages
-  static const int M_WARNING; //!< Predefined error level for warning messages
-  static const int M_ERROR;   //!< Predefined error level for error messages
-  static const int M_FATAL;   //!< Predefined error level for failure messages
-  static const int
-    M_QUIET; //!< An error level above all others. Use to turn off messages completely.
-             /** @} */
+  static const int M_ALL;    //!< Predefined error level for turning on
+                             //!< the display of all messages;
+                             //!< for use with verbosity(int).
+  static const int M_DEBUG;  //!< Predefined error level for debugging messages
+  static const int M_STATUS; //!< Predefined error level for status messages
+  //! Predefined error level for informational messages
+  static const int M_INFO;
+  static const int M_DEPRECATED; //!< Predefined error level for deprecation
+                                 //!< warnings
+  static const int M_WARNING;    //!< Predefined error level for warning messages
+  static const int M_ERROR;      //!< Predefined error level for error messages
+  static const int M_FATAL;      //!< Predefined error level for failure messages
+  static const int M_QUIET;      //!< An error level above all others. Use to turn
+                                 //!< off messages completely.
+  /** @} */
 
 private:
   static char const* const M_ALL_NAME;
   static char const* const M_DEBUG_NAME;
   static char const* const M_STATUS_NAME;
   static char const* const M_INFO_NAME;
+  static char const* const M_DEPRECATED_NAME;
   static char const* const M_WARNING_NAME;
   static char const* const M_ERROR_NAME;
   static char const* const M_FATAL_NAME;
@@ -252,7 +254,8 @@ public:
   SLIInterpreter( void );
   ~SLIInterpreter();
 
-  int startup(); //!< Initialise the interpreter by reading in the startup files.
+  //! Initialise the interpreter by reading in the startup files.
+  int startup();
 
   /**
    * Execute the supplied command string.
@@ -279,8 +282,7 @@ public:
   int execute_debug_( size_t exitlevel = 0 );
 
   void createdouble( Name const&, double );
-  void createcommand( Name const&, SLIFunction const* );
-  void createcommand( Name const&, Name const&, SLIFunction const* );
+  void createcommand( Name const&, SLIFunction const*, std::string deprecation_info = std::string() );
   void createconstant( Name const&, const Token& );
 
 
@@ -380,9 +382,9 @@ public:
    * calls during debugging.
    */
   void
-  set_call_depth( int l )
+  set_call_depth( int depth )
   {
-    call_depth_ = l;
+    call_depth_ = depth;
   }
 
   /**
@@ -668,8 +670,8 @@ public:
    *  state.
    *
    *  @param err  The argument is the name of the error.
-   *  For conveniency, there is also a variant of this function that takes a string as
-   *  the argument.
+   *  For conveniency, there is also a variant of this function that takes a
+   *  string as the argument.
    *
    *  @ingroup SLIError
    *  @see raiseerror(const char*),
@@ -745,8 +747,8 @@ public:
   /** Re-raise the last error.
    *  raiseagain re-raises a previously raised error. This is useful
    *  if an error handler cannot cope with a particular error (e.g. a signal)
-   *  and wants to pass it to an upper level handler. Thus, nestet error handlers
-   *  are possible.
+   *  and wants to pass it to an upper level handler. Thus, nestet error
+   *  handlers are possible.
    *
    *  @ingroup SLIError
    *  @see raiseerror(const char*), raiseerror(Name),
@@ -784,6 +786,7 @@ public:
    *  SLIInterpreter::M_DEBUG=5,  display debugging messages and above \n
    *  SLIInterpreter::M_DEBUG=7,  display status messages and above \n
    *  SLIInterpreter::M_INFO=10, display information messages and above \n
+   *  SLIInterpreter::M_DEPRECATED=18, display deprecation warnings and above \n
    *  SLIInterpreter::M_WARNING=20, display warning messages and above \n
    *  SLIInterpreter::M_ERROR=30, display error messages and above \n
    *  SLIInterpreter::M_FATAL=40, display failure messages and above \n
@@ -800,16 +803,18 @@ public:
 
   /** Display a message.
    *  @param level  The error level that shall be associated with the
-   *  message. You may use any poitive integer here. For conveniency,
-   *  there exist five predifined error levels:  \n
+   *  message. You may use any positive integer here. For convenience,
+   *  there exist five predefined error levels:  \n
    * (SLIInterpreter::M_ALL=0, for use with verbosity(int) only, see there), \n
    *  SLIInterpreter::M_DEBUG=5, a debugging message \n
    *  SLIInterpreter::M_DEBUG=7, a status message \n
    *  SLIInterpreter::M_INFO=10, an informational message \n
+   *  SLIInterpreter::M_DEPRECATED=18, a deprecation warning \n
    *  SLIInterpreter::M_WARNING=20, a warning message \n
    *  SLIInterpreter::M_ERROR=30, an error message \n
-   *  SLIInterpreter::M_FATAL=40, a failure message.
-   * (SLIInterpreter::M_QUIET=100, for use with verbosity(int) only, see there), \n
+   *  SLIInterpreter::M_FATAL=40, a failure message. \n
+   * (SLIInterpreter::M_QUIET=100, for use with verbosity(int) only, see there),
+   *
    *  @param from   A string specifying the name of the function that
    *  sends the message.
    *  @param test   A string specifying the message text.
@@ -819,13 +824,12 @@ public:
    *  \n
    *  If two or more messages are issued after each other, that have
    *  the same <I>from</I> and <I>level</I> argument, the messages will
-   *  be grouped toghether in the output.
+   *  be grouped together in the output.
    *
    *  @see verbosity(void), verbosity(int)
    *  @ingroup SLIMessaging
    */
-  void
-  message( int level, const char from[], const char text[], const char errorname[] = "" ) const;
+  void message( int level, const char from[], const char text[], const char errorname[] = "" ) const;
 
   /** Function used by the message(int, const char*, const char*) function.
    *  Prints a message to the specified output stream.
@@ -901,7 +905,9 @@ inline void
 SLIInterpreter::assert_stack_load( size_t n )
 {
   if ( OStack.load() < n )
+  {
     throw StackUnderflow( n, OStack.load() );
+  }
 }
 
 

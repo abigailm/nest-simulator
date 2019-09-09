@@ -23,23 +23,28 @@
 #ifndef STIMULATING_DEVICE_H
 #define STIMULATING_DEVICE_H
 
+// Includes from nestkernel:
 #include "device.h"
 
+// Includes from sli:
 #include "dictutils.h"
 
 class SpikeEvent;
 class CurrentEvent;
 class DoubleDataEvent;
+class DelayedRateConnectionEvent;
 
-/* BeginDocumentation
+/** @BeginDocumentation
+
    Name: StimulatingDevice - General properties of stimulating devices.
+
    Description:
 
    Stimulating devices inject signals into a network, either as analog signals
    such a currents or as spike trains. Most stimulating devices are implemented
-   so that they are replicated on each virtual process. Many, but not all devices
-   generating noise or stochastic spike trains provide different signals to each
-   of their recipients; see the documentation of the individual device.
+   so that they are replicated on each virtual process. Many, but not all
+   devices generating noise or stochastic spike trains provide different signals
+   to each of their recipients; see the documentation of the individual device.
 
    Stimulating devices share the start, stop, and origin parameters global to
    devices. Start and stop have the following meaning for stimulating devices
@@ -86,8 +91,8 @@ namespace nest
  * at time a, i.e., by the deliver_events() call prior to the update for
  * (a, a+h].
  *
- * Since stimulating devices are connected to their targets with a delay of one time
- * step, this means that analog stimulating devices need to emit the event
+ * Since stimulating devices are connected to their targets with a delay of one
+ * time step, this means that analog stimulating devices need to emit the event
  * during the update step for the interval (a-h, a]. Thus, the device needs
  * to be PRO-ACTIVE.
  *
@@ -98,16 +103,17 @@ namespace nest
  * that the last event should be emitted during the time step for which the
  * global clock has time b-2h.
  *
- * @note Any stimulating devices transmitting analog signals must NOT HAVE PROXIES.
+ * @note Any stimulating devices transmitting analog signals must NOT HAVE
+ * PROXIES.
  *
- * @note The distinction between analog and spike emitting devices is implemented
- *       by making StimulatingDevice a template class with the type of the Event
- *       sent as template parameter. Member is_active() is not implemented in
- *       general and is available only for those cases for which it is explicitly
- *       specialized.
+ * @note The distinction between analog and spike emitting devices is
+ *       implemented by making StimulatingDevice a template class with the type
+ *       of the Event sent as template parameter. Member is_active() is not
+ *       implemented in general and is available only for those cases for which
+ *       it is explicitly specialized.
  *
- * @note StimulatingDevice inherits protected from Device, so that implementations
- *       of is_active() can access t_min and t_max.
+ * @note StimulatingDevice inherits protected from Device, so that
+ *       implementations of is_active() can access t_min and t_max.
  *
  * @todo The timing of analog devices is correct only if they are transmitted
  *       using Network::send_local(), but we cannot enforce this currently.
@@ -171,7 +177,16 @@ StimulatingDevice< nest::CurrentEvent >::is_active( const Time& T ) const
      This is equivalent to checking
         t_min_ <= T.get_steps() + 1 < t_max_
    */
-  const long_t step = T.get_steps() + 1;
+  const long step = T.get_steps() + 1;
+  return get_t_min_() <= step and step < get_t_max_();
+}
+
+template <>
+inline bool
+StimulatingDevice< nest::DelayedRateConnectionEvent >::is_active( const Time& T ) const
+{
+  // same as for the CurrentEvent
+  const long step = T.get_steps() + 1;
   return get_t_min_() <= step && step < get_t_max_();
 }
 
@@ -180,8 +195,8 @@ inline bool
 StimulatingDevice< nest::DoubleDataEvent >::is_active( const Time& T ) const
 {
   // same as for the CurrentEvent
-  const long_t step = T.get_steps() + 1;
-  return get_t_min_() <= step && step < get_t_max_();
+  const long step = T.get_steps() + 1;
+  return get_t_min_() <= step and step < get_t_max_();
 }
 
 template <>
@@ -189,8 +204,8 @@ inline bool
 StimulatingDevice< nest::SpikeEvent >::is_active( const Time& T ) const
 {
   /* Input is the time stamp of the spike to be emitted. */
-  const long_t stamp = T.get_steps();
-  return get_t_min_() < stamp && stamp <= get_t_max_();
+  const long stamp = T.get_steps();
+  return get_t_min_() < stamp and stamp <= get_t_max_();
 }
 
 template < typename EmittedEvent >
@@ -206,11 +221,15 @@ inline void
 nest::StimulatingDevice< EmittedEvent >::enforce_single_syn_type( synindex syn_id )
 {
   if ( first_syn_id_ == invalid_synindex )
+  {
     first_syn_id_ = syn_id;
-
+  }
   if ( syn_id != first_syn_id_ )
+  {
     throw IllegalConnection(
-      "All outgoing connections from a device must use the same synapse type." );
+      "All outgoing connections from a device must use the same synapse "
+      "type." );
+  }
 }
 } // namespace nest
 

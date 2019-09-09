@@ -20,19 +20,28 @@
  *
  */
 
-#include "exceptions.h"
-#include "sinusoidal_poisson_generator.h"
-#include "network.h"
-#include "dict.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-#include "arraydatum.h"
-#include "dictutils.h"
-#include "numerics.h"
-#include "universal_data_logger_impl.h"
 
+#include "sinusoidal_poisson_generator.h"
+
+// C++ includes:
 #include <cmath>
 #include <limits>
+
+// Includes from libnestutil:
+#include "numerics.h"
+
+// Includes from nestkernel:
+#include "event_delivery_manager_impl.h"
+#include "exceptions.h"
+#include "kernel_manager.h"
+#include "universal_data_logger_impl.h"
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "dict.h"
+#include "dictutils.h"
+#include "doubledatum.h"
+#include "integerdatum.h"
 
 namespace nest
 {
@@ -69,11 +78,13 @@ nest::sinusoidal_poisson_generator::Parameters_::Parameters_( const Parameters_&
 {
 }
 
-nest::sinusoidal_poisson_generator::Parameters_& nest::sinusoidal_poisson_generator::Parameters_::
-operator=( const Parameters_& p )
+nest::sinusoidal_poisson_generator::Parameters_& nest::sinusoidal_poisson_generator::Parameters_::operator=(
+  const Parameters_& p )
 {
   if ( this == &p )
+  {
     return *this;
+  }
 
   rate_ = p.rate_;
   om_ = p.om_;
@@ -97,8 +108,7 @@ nest::sinusoidal_poisson_generator::Buffers_::Buffers_( sinusoidal_poisson_gener
 {
 }
 
-nest::sinusoidal_poisson_generator::Buffers_::Buffers_( const Buffers_&,
-  sinusoidal_poisson_generator& n )
+nest::sinusoidal_poisson_generator::Buffers_::Buffers_( const Buffers_&, sinusoidal_poisson_generator& n )
   : logger_( n )
 {
 }
@@ -124,27 +134,36 @@ nest::sinusoidal_poisson_generator::State_::get( DictionaryDatum& ) const
 }
 
 void
-nest::sinusoidal_poisson_generator::Parameters_::set( const DictionaryDatum& d,
-  const sinusoidal_poisson_generator& n )
+nest::sinusoidal_poisson_generator::Parameters_::set( const DictionaryDatum& d, const sinusoidal_poisson_generator& n )
 {
   if ( not n.is_model_prototype() && d->known( names::individual_spike_trains ) )
+  {
     throw BadProperty(
       "The individual_spike_trains property can only be set as"
       " a model default using SetDefaults or upon CopyModel." );
+  }
 
   updateValue< bool >( d, names::individual_spike_trains, individual_spike_trains_ );
 
-  if ( updateValue< double_t >( d, names::rate, rate_ ) )
+  if ( updateValue< double >( d, names::rate, rate_ ) )
+  {
     rate_ /= 1000.0; // scale to ms^-1
+  }
 
-  if ( updateValue< double_t >( d, names::frequency, om_ ) )
+  if ( updateValue< double >( d, names::frequency, om_ ) )
+  {
     om_ *= 2.0 * numerics::pi / 1000.0;
+  }
 
-  if ( updateValue< double_t >( d, names::phase, phi_ ) )
+  if ( updateValue< double >( d, names::phase, phi_ ) )
+  {
     phi_ *= numerics::pi / 180.0;
+  }
 
-  if ( updateValue< double_t >( d, names::amplitude, amplitude_ ) )
+  if ( updateValue< double >( d, names::amplitude, amplitude_ ) )
+  {
     amplitude_ /= 1000.0;
+  }
 }
 
 /* ----------------------------------------------------------------
@@ -152,7 +171,7 @@ nest::sinusoidal_poisson_generator::Parameters_::set( const DictionaryDatum& d,
  * ---------------------------------------------------------------- */
 
 nest::sinusoidal_poisson_generator::sinusoidal_poisson_generator()
-  : Node()
+  : DeviceNode()
   , device_()
   , P_()
   , S_()
@@ -161,9 +180,8 @@ nest::sinusoidal_poisson_generator::sinusoidal_poisson_generator()
   recordablesMap_.create();
 }
 
-nest::sinusoidal_poisson_generator::sinusoidal_poisson_generator(
-  const sinusoidal_poisson_generator& n )
-  : Node( n )
+nest::sinusoidal_poisson_generator::sinusoidal_poisson_generator( const sinusoidal_poisson_generator& n )
+  : DeviceNode( n )
   , device_( n.device_ )
   , P_( n.P_ )
   , S_( n.S_ )
@@ -194,13 +212,14 @@ nest::sinusoidal_poisson_generator::init_buffers_()
 void
 nest::sinusoidal_poisson_generator::calibrate()
 {
-  B_.logger_.init(); // ensures initialization in case mm connected after Simulate
+  // ensures initialization in case mm connected after Simulate
+  B_.logger_.init();
 
   device_.calibrate();
 
   // time resolution
   V_.h_ = Time::get_resolution().get_ms();
-  const double_t t = network()->get_time().get_ms();
+  const double t = kernel().simulation_manager.get_time().get_ms();
 
   // initial state
   S_.y_0_ = P_.amplitude_ * std::cos( P_.om_ * t + P_.phi_ );
@@ -213,15 +232,15 @@ nest::sinusoidal_poisson_generator::calibrate()
 }
 
 void
-nest::sinusoidal_poisson_generator::update( Time const& origin, const long_t from, const long_t to )
+nest::sinusoidal_poisson_generator::update( Time const& origin, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < Scheduler::get_min_delay() );
+  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
   assert( from < to );
 
-  const long_t start = origin.get_steps();
+  const long start = origin.get_steps();
 
   // random number generator
-  librandom::RngPtr rng = net_->get_rng( get_thread() );
+  librandom::RngPtr rng = kernel().rng_manager.get_rng( get_thread() );
 
   // We iterate the dynamics even when the device is turned off,
   // but do not issue spikes while it is off. In this way, the
@@ -229,23 +248,22 @@ nest::sinusoidal_poisson_generator::update( Time const& origin, const long_t fro
   // time-consuming, so it should be done only if the device is
   // on most of the time.
 
-  for ( long_t lag = from; lag < to; ++lag )
+  for ( long lag = from; lag < to; ++lag )
   {
-    // update oscillator blocks, accumulate rate as sum of DC and N_osc_ AC elements
-    // rate is instantaneous sum of state
+    // update oscillator blocks, accumulate rate as sum of DC and N_osc_ AC
+    // elements rate is instantaneous sum of state
     S_.rate_ = P_.rate_;
 
-    const double_t new_y_0 = V_.cos_ * S_.y_0_ - V_.sin_ * S_.y_1_;
+    const double new_y_0 = V_.cos_ * S_.y_0_ - V_.sin_ * S_.y_1_;
 
     S_.y_1_ = V_.sin_ * S_.y_0_ + V_.cos_ * S_.y_1_;
     S_.y_0_ = new_y_0;
     S_.rate_ += S_.y_1_;
 
     if ( S_.rate_ < 0 )
+    {
       S_.rate_ = 0;
-
-    // store rate in Hz
-    B_.logger_.record_data( origin.get_steps() + lag );
+    }
 
     // create spikes
     if ( S_.rate_ > 0 && device_.is_active( Time::step( start + lag ) ) )
@@ -253,26 +271,28 @@ nest::sinusoidal_poisson_generator::update( Time const& origin, const long_t fro
       if ( P_.individual_spike_trains_ )
       {
         DSSpikeEvent se;
-        network()->send( *this, se, lag );
+        kernel().event_delivery_manager.send( *this, se, lag );
       }
       else
       {
         V_.poisson_dev_.set_lambda( S_.rate_ * V_.h_ );
-        long_t n_spikes = V_.poisson_dev_.ldev( rng );
+        long n_spikes = V_.poisson_dev_.ldev( rng );
         SpikeEvent se;
         se.set_multiplicity( n_spikes );
-        network()->send( *this, se, lag );
+        kernel().event_delivery_manager.send( *this, se, lag );
       }
     }
+    // store rate in Hz
+    B_.logger_.record_data( origin.get_steps() + lag );
   }
 }
 
 void
 nest::sinusoidal_poisson_generator::event_hook( DSSpikeEvent& e )
 {
-  librandom::RngPtr rng = net_->get_rng( get_thread() );
+  librandom::RngPtr rng = kernel().rng_manager.get_rng( get_thread() );
   V_.poisson_dev_.set_lambda( S_.rate_ * V_.h_ );
-  long_t n_spikes = V_.poisson_dev_.ldev( rng );
+  long n_spikes = V_.poisson_dev_.ldev( rng );
 
   if ( n_spikes > 0 ) // we must not send events with multiplicity 0
   {

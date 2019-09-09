@@ -23,9 +23,12 @@
 #ifndef EXCEPTIONS_H
 #define EXCEPTIONS_H
 
-#include "sliexceptions.h"
+// Includes from nestkernel:
 #include "nest_time.h"
+
+// Includes from sli:
 #include "name.h"
+#include "sliexceptions.h"
 
 class SLIInterpreter;
 
@@ -65,12 +68,17 @@ public:
   {
   }
 
+  KernelException( const std::string& what )
+    : SLIException( what )
+  {
+  }
+
   virtual ~KernelException() throw()
   {
   }
 
   virtual std::string
-  message()
+  message() const
   {
     return std::string();
   }
@@ -96,7 +104,7 @@ public:
   ~UnknownModelName() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -117,7 +125,7 @@ public:
   ~NewModelNameExists() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -140,13 +148,14 @@ public:
   ~UnknownModelID() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
  * Exception to be thrown if a (neuron/synapse) model with the the specified ID
- * is used within the network and the providing module hence cannot be uninstalled.
- * This exception can occur if the user tries to uninstall a module.
+ * is used within the network and the providing module hence cannot be
+ * uninstalled. This exception can occur if the user tries to uninstall a
+ * module.
  * @see UnknownModelID
  * @ingroup KernelExceptions
  */
@@ -164,7 +173,7 @@ public:
   ~ModelInUse() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -196,7 +205,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -228,7 +237,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -260,7 +269,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 
@@ -279,7 +288,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 class NodeWithProxiesExpected : public KernelException
@@ -297,7 +306,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -321,7 +330,7 @@ public:
   ~UnknownReceptorType() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -347,7 +356,7 @@ public:
   ~IncompatibleReceptorType() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -371,7 +380,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -399,7 +408,39 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
+
+private:
+  std::string msg_;
+};
+
+/**
+ * To be thrown if a connection does not exists but something is to be done with
+ * it.
+ * This exception is e.g. thrown if a deletion was attempted with
+ * an inexistent connection.
+ * @ingroup KernelExceptions
+ */
+class InexistentConnection : public KernelException
+{
+public:
+  InexistentConnection()
+    : KernelException( "The connection does not exist" )
+    , msg_()
+  {
+  }
+
+  InexistentConnection( std::string msg )
+    : KernelException( "The connection does not exist" )
+    , msg_( msg )
+  {
+  }
+
+  ~InexistentConnection() throw()
+  {
+  }
+
+  std::string message() const;
 
 private:
   std::string msg_;
@@ -424,7 +465,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -449,7 +490,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -470,7 +511,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -490,7 +531,7 @@ public:
   ~UnsupportedEvent() throw()
   {
   }
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -520,7 +561,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -550,7 +591,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -563,12 +604,14 @@ class DimensionMismatch : public KernelException
 {
   int expected_;
   int provided_;
+  std::string msg_;
 
 public:
   DimensionMismatch()
     : KernelException( "DimensionMismatch" )
-    , expected_()
-    , provided_()
+    , expected_( -1 )
+    , provided_( -1 )
+    , msg_( "" )
   {
   }
 
@@ -576,14 +619,24 @@ public:
     : KernelException( "DimensionMismatch" )
     , expected_( expected )
     , provided_( provided )
+    , msg_( "" )
   {
   }
+
+  DimensionMismatch( const std::string& msg )
+    : KernelException( "DimensionMismatch" )
+    , expected_( -1 )
+    , provided_( -1 )
+    , msg_( msg )
+  {
+  }
+
 
   ~DimensionMismatch() throw()
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -602,7 +655,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -621,7 +674,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
@@ -640,13 +693,13 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
 
 /**
- * Exception to be thrown on prototype construction if Time objects incompatible.
- * This exception is to be thrown by the default constructor of nodes which
- * require that Time objects have properties wrt resolution.
+ * Exception to be thrown on prototype construction if Time objects
+ * incompatible. This exception is to be thrown by the default constructor of
+ * nodes which require that Time objects have properties wrt resolution.
  * @ingroup KernelExceptions
  * @see InvalidTimeInModel
  */
@@ -671,7 +724,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -707,7 +760,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -741,7 +794,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -783,7 +836,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -816,7 +869,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -836,7 +889,7 @@ public:
    * @param model name of model causing problem
    */
   NumericalInstability( const std::string& model )
-    : KernelException( "GSLSolverFailure" )
+    : KernelException( "NumericalInstability" )
     , model_( model )
   {
   }
@@ -844,15 +897,71 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
 };
 
+/**
+ * Exception to be thrown if when trying to delete an entry from
+ * DynamicRecordablesMap that does not exist.
+ * @ingroup KernelExceptions
+ */
+class KeyError : public KernelException
+{
+  const Name key_;
+  const std::string map_type_;
+  const std::string map_op_;
+
+public:
+  KeyError( const Name& key, const std::string& map_type, const std::string& map_op )
+    : KernelException( "KeyError" )
+    , key_( key )
+    , map_type_( map_type )
+    , map_op_( map_op )
+  {
+  }
+
+  ~KeyError() throw()
+  {
+  }
+  std::string message() const;
+};
+
+/**
+ * Exception to be thrown if an internal error occures.
+ * @ingroup KernelExceptions
+*/
+class InternalError : public KernelException
+{
+  std::string msg_;
+
+public:
+  //! @param detailed error message
+  InternalError()
+    : KernelException( "InternalError" )
+    , msg_()
+  {
+  }
+  InternalError( std::string msg )
+    : KernelException( "InternalError" )
+    , msg_( msg )
+  {
+  }
+
+  ~InternalError() throw()
+  {
+  }
+
+  std::string message() const;
+};
+
+
 #ifdef HAVE_MUSIC
 /**
- * Exception to be thrown if a music_event_out_proxy is generated, but the music port is unmapped.
+ * Exception to be thrown if a music_event_out_proxy is generated, but the music
+ * port is unmapped.
  * @ingroup KernelExceptions
  */
 class MUSICPortUnconnected : public KernelException
@@ -874,7 +983,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -882,9 +991,10 @@ private:
 };
 
 /**
-  * Exception to be thrown if a music_event_out_proxy is generated, but the music port has no width.
-  * @ingroup KernelExceptions
-  */
+ * Exception to be thrown if a music_event_out_proxy is generated, but the
+ * music port has no width.
+ * @ingroup KernelExceptions
+ */
 class MUSICPortHasNoWidth : public KernelException
 {
 public:
@@ -904,7 +1014,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -913,15 +1023,16 @@ private:
 
 
 /**
-* Exception to be thrown if the user tries to change the name of an already published port.
-* @ingroup KernelExceptions
-*/
+ * Exception to be thrown if the user tries to change the name of an already
+ * published port.
+ * @ingroup KernelExceptions
+ */
 class MUSICPortAlreadyPublished : public KernelException
 {
 public:
   /**
-  * @note model should be passed from get_name() to ensure that
-  *             names of copied models are reported correctly.
+   * @note model should be passed from get_name() to ensure that
+   *             names of copied models are reported correctly.
    * @param model     name of model causing problem
    */
   MUSICPortAlreadyPublished( const std::string& model, const std::string& portname )
@@ -934,7 +1045,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -942,7 +1053,8 @@ private:
 };
 
 /**
-* Exception to be thrown if the user tries to change the name of an already published port.
+* Exception to be thrown if the user tries to change the name of an already
+* published port.
 * @ingroup KernelExceptions
 */
 class MUSICSimulationHasRun : public KernelException
@@ -962,7 +1074,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string model_;
@@ -970,8 +1082,8 @@ private:
 
 
 /**
- * Exception to be thrown if the user tries to map a channel that exceeds the width of the MUSIC
- * port.
+ * Exception to be thrown if the user tries to map a channel that exceeds the
+ * width of the MUSIC port.
  * @ingroup KernelExceptions
  */
 class MUSICChannelUnknown : public KernelException
@@ -993,7 +1105,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string portname_;
@@ -1002,7 +1114,8 @@ private:
 };
 
 /**
- * Exception to be thrown if the user tries to use a port that is not known to NEST.
+ * Exception to be thrown if the user tries to use a port that is not known to
+ * NEST.
  * @ingroup KernelExceptions
  */
 class MUSICPortUnknown : public KernelException
@@ -1017,15 +1130,15 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string portname_;
 };
 
 /**
- * Exception to be thrown if the user tries to map a channel that exceeds the width of the MUSIC
- * port.
+ * Exception to be thrown if the user tries to map a channel that exceeds the
+ * width of the MUSIC port.
  * @ingroup KernelExceptions
  */
 class MUSICChannelAlreadyMapped : public KernelException
@@ -1047,7 +1160,7 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 
 private:
   const std::string portname_;

@@ -20,23 +20,44 @@
  *
  */
 
-#include "config.h"
+#include "processes.h"
 
-#include <climits>
-#include <cstdlib>
-#include <cassert>
-#include <cstdio>
-#include <cstring>
-
-
-#include <unistd.h>
+// C includes:
+#include <fcntl.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>
-#include <fcntl.h>
+#include <unistd.h>
+
+// C++ includes:
+#include <cassert>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
+#include <vector>
+
+// Generated includes:
+#include "config.h"
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "booldatum.h"
+#include "dict.h"      // for TokenMap
+#include "dictdatum.h" // for signaldict
+#include "dictutils.h"
+#include "fdstream.h"
+#include "integerdatum.h" // Include the data-types we use!
+#include "interpret.h"    // for SLI Interpreter and messaging mechanism
+#include "iostreamdatum.h"
+#include "namedatum.h"
+#include "sliexceptions.h"
+#include "stringdatum.h"
+#include "tokenutils.h"
+
 
 // sstream has functions std::?stringstream
 // strstream has functions std::?strstream
@@ -55,22 +76,6 @@
 #include <cerrno>
 #endif
 
-#include <vector>
-#include "processes.h"
-#include "integerdatum.h" // Include the data-types we use!
-#include "arraydatum.h"
-#include "stringdatum.h"
-#include "namedatum.h"
-#include "booldatum.h"
-#include "dictdatum.h" // for signaldict
-#include "iostreamdatum.h"
-#include "dictutils.h"
-#include "tokenutils.h"
-#include "interpret.h" // for SLI Interpreter and messaging mechanism
-#include "dict.h"      // for TokenMap
-#include "sliexceptions.h"
-#include "fdstream.h"
-
 #ifndef _POSIX_SOURCE
 #define _SYNOD__SET_POSIX_SOURCE
 #define _POSIX_SOURCE
@@ -84,10 +89,11 @@ extern "C" {
 // to non-virtual thunk" MH 12-02-22, redid fix by JME 12-01-27.
 long bg_get_heap_mem();
 long bg_get_stack_mem();
+long bg_get_mmap_mem();
 }
 #endif
 
-#if defined __APPLE__ && HAVE_MACH_MACH_H
+#if defined __APPLE__ && defined HAVE_MACH_MACH_H
 extern "C" {
 // Similar to the above prototype definitions for BG.
 unsigned long darwin_get_used_mem();
@@ -167,11 +173,12 @@ Processes::commandstring( void ) const
 void
 Processes::init( SLIInterpreter* i )
 {
-  // Create Dictionary "signaldict", which will contain the system's signal values:
+  // Create Dictionary "signaldict", which will contain the system's signal
+  // values:
   Dictionary* signaldict = new Dictionary; // get a new dictionary from the heap
 
-  signaldict->insert( SIGABRT_name,
-    new IntegerDatum( SIGABRT ) ); // There is a typeconversion operator Datum<->Token !
+  // There is a typeconversion operator Datum<->Token !
+  signaldict->insert( SIGABRT_name, new IntegerDatum( SIGABRT ) );
   signaldict->insert( SIGALRM_name, new IntegerDatum( SIGALRM ) );
   signaldict->insert( SIGFPE_name, new IntegerDatum( SIGFPE ) );
   signaldict->insert( SIGHUP_name, new IntegerDatum( SIGHUP ) );
@@ -194,7 +201,8 @@ Processes::init( SLIInterpreter* i )
 
   i->def( signaldict_name, new DictionaryDatum( signaldict ) );
   // DictionaryDatum(signaldict) makes a lockPTR from the ordinary pointer.
-  // The datum stored in the signaldict-token will thus be a lockPTR to a dictionary
+  // The datum stored in the signaldict-token will thus be a lockPTR to a
+  // dictionary
 
   // create variables "sys_errname" and "sys_errno"
   //  and all needed errornumbers in errordict
@@ -262,7 +270,7 @@ Processes::init( SLIInterpreter* i )
 #if defined IS_BLUEGENE_P || defined IS_BLUEGENE_Q
   i->createcommand( ":memory_thisjob_bg", &memorythisjobbgfunction );
 #endif
-#if defined __APPLE__ && HAVE_MACH_MACH_H
+#if defined __APPLE__ && defined HAVE_MACH_MACH_H
   i->createcommand( ":memory_thisjob_darwin", &memorythisjobdarwinfunction );
 #endif
   i->createcommand( "setNONBLOCK", &setnonblockfunction );
@@ -288,7 +296,9 @@ Processes::ForkFunction::execute( SLIInterpreter* i ) const
   pid_t pid;
   pid = fork();
   if ( pid < 0 )
-    i->raiseerror( systemerror( i ) ); // ehemals:i->raiseerror ("CannotFork");
+  {
+    i->raiseerror( systemerror( i ) );
+  }
   else
   {
     if ( pid != 0 )
@@ -300,7 +310,8 @@ Processes::ForkFunction::execute( SLIInterpreter* i ) const
 #endif
       //           if (Processes::children_group == 0)
       //             {
-      //               std::cerr << "Parent: Creating and putting child into new process group ";
+      //               std::cerr << "Parent: Creating and putting child into new
+      //               process group ";
       //               int result = setpgid(pid,pid);
       //               if (result < 0) i->raiseerror(systemerror(i));
       //               Processes::children_group = pid;
@@ -308,7 +319,8 @@ Processes::ForkFunction::execute( SLIInterpreter* i ) const
       //             }
       //           else
       //             {
-      //               std::cerr << "Parent: Putting child into process group " <<
+      //               std::cerr << "Parent: Putting child into process group "
+      //               <<
       //               Processes::children_group << std::endl;
       //               int result = setpgid(pid,Processes::children_group);
       //               if (result < 0) i->raiseerror(systemerror(i));
@@ -323,8 +335,9 @@ Processes::ForkFunction::execute( SLIInterpreter* i ) const
 
     i->EStack.pop(); // Don't forget to pop yourself...
 
-    Token result_token( new IntegerDatum(
-      pid ) ); // Make Token, containing IntegerDatum, which is initialized to pid;
+    Token result_token( new IntegerDatum( pid ) ); // Make Token, containing
+                                                   // IntegerDatum, which is
+                                                   // initialized to pid;
     i->OStack.push_move( result_token );
   }
 }
@@ -337,25 +350,28 @@ Processes::Sysexec_aFunction::execute( SLIInterpreter* i ) const
   Token array_token;
   i->OStack.pop_move( array_token ); // move topmost Token into namearray_token
 
-  ArrayDatum* array =
-    dynamic_cast< ArrayDatum* >( array_token.datum() ); // this is an array of tokens (to names)
+  // this is an array of tokens (to names)
+  ArrayDatum* array = dynamic_cast< ArrayDatum* >( array_token.datum() );
   assert( array != NULL );
 
   assert( array->size() > 0 ); // need at least the commandname
 
   // The following array is needed to supply the function execvp with a C
   // string array. Thus, the supplied array of SLI strings must be converted.
-  // argv is deleted right after the call to execvp(command, const_cast<char * const *> (argv) );
+  // argv is deleted right after the call to execvp(command, const_cast<char *
+  // const *> (argv) );
   //
   // **argv denotes an pointer to an array which is allocated dynamically
-  // the old formulation char *argv[array->size() + 1]; is no longer legal c++ (Ruediger!!)
+  // the old formulation char *argv[array->size() + 1]; is no longer legal c++
+  // (Ruediger!!)
   char** argv = new char* [ array->size() + 1 ];
 
   for ( unsigned int j = 0; j < array->size(); j++ ) // forall in array
   {
     StringDatum* nd = dynamic_cast< StringDatum* >( ( *array )[ j ].datum() );
     assert( nd != NULL );
-    argv[ j ] = const_cast< char* >( nd->c_str() ); // StringDatum is derived from class string.
+    // StringDatum is derived from class string.
+    argv[ j ] = const_cast< char* >( nd->c_str() );
   }
 
   char* command = argv[ 0 ];
@@ -389,9 +405,10 @@ Processes::WaitPIDFunction::execute( SLIInterpreter* i ) const
   // call waitpid()
   int stat_value;
   int options = 0;
-
   if ( *nohangflag_d )
+  {
     options = WNOHANG;
+  }
   pid_t pidout = waitpid( pidin_d->get(), &stat_value, options );
 
   // Check for error
@@ -409,12 +426,16 @@ Processes::WaitPIDFunction::execute( SLIInterpreter* i ) const
   else // child exited
   {
     // push result
-    Token pidout_t( new IntegerDatum(
-      pidout ) ); // Make Token, containing IntegerDatum, which is initialized to pidout;
-    i->OStack.push_move( pidout_t ); // Push on stack by moving the contents of this token.
+    Token pidout_t( new IntegerDatum( pidout ) ); // Make Token, containing
+                                                  // IntegerDatum, which is
+                                                  // initialized to pidout;
+    // Push on stack by moving the contents of this token.
+    i->OStack.push_move( pidout_t );
     // Ostack is now: pidin(int) nohangflag(bool) pidout(int)
-    // first 2 Tokens will be reused: status(int) normalexitflag(bool) pidout(int)
-    IntegerDatum* status_d = pidin_d;           // This is meant to produce clearity, not confusion!
+    // first 2 Tokens will be reused: status(int) normalexitflag(bool)
+    // pidout(int)
+    // This is meant to produce clearity, not confusion!
+    IntegerDatum* status_d = pidin_d;
     BoolDatum* normalexitflag_d = nohangflag_d; // just a renaming of variables!
 
     // check status
@@ -424,7 +445,8 @@ Processes::WaitPIDFunction::execute( SLIInterpreter* i ) const
       ( *normalexitflag_d ) = true;
       ( *status_d ) = WEXITSTATUS( stat_value ); // return exit status
     }
-    else if ( WIFSIGNALED( stat_value ) ) // child terminated due to a sgnal that was not caught
+    else if ( WIFSIGNALED( stat_value ) ) // child terminated due to a signal
+                                          // that was not caught
     {
       i->EStack.pop();
       ( *normalexitflag_d ) = false;
@@ -507,12 +529,14 @@ Processes::Dup2_is_isFunction::execute( SLIInterpreter* i ) const
   assert( s_d2 != NULL );
 
   // call dup2();
-  // int result = dup2( fd(s_d1->get()) , fd(s_d2->get()) );//using get() on a LockPTR will lock the
-  // PointerObject!
+  // int result = dup2( fd(s_d1->get()) , fd(s_d2->get()) );//using get() on a
+  // LockPTR will lock the PointerObject!
   // This would result in a failed assertion at the next operation on that Datum
-  // (if we don not unlock it explicitely again)
-  int result = dup2( fd( **s_d1 ), fd( **s_d2 ) ); // so we use operator* instead
-  // LockPTRs can be used like ordinary pointers!!! (*s_d1 is a LockPTR on an istream)
+  // (if we don not unlock it explicitly again)
+  // so we use operator* instead
+  int result = dup2( fd( **s_d1 ), fd( **s_d2 ) );
+  // LockPTRs can be used like ordinary pointers!!! (*s_d1 is a LockPTR on an
+  // istream)
 
   if ( result == -1 )
   { // an error occured!
@@ -539,11 +563,11 @@ Processes::Dup2_os_osFunction::execute( SLIInterpreter* i ) const
   assert( s_d2 != NULL );
 
   // call dup2();
-  int result =
-    dup2( fd( **s_d1 ), fd( **s_d2 ) ); // for comments on LockPTRs see Dup2_is_isFunction::execute
+  // for comments on LockPTRs see Dup2_is_isFunction::execute
+  int result = dup2( fd( **s_d1 ), fd( **s_d2 ) );
 
   if ( result == -1 )
-  { // an error occured!
+  { // an error occurred!
     i->raiseerror( systemerror( i ) );
   }
   else
@@ -567,15 +591,17 @@ Processes::Dup2_is_osFunction::execute( SLIInterpreter* i ) const
   assert( s_d2 != NULL );
 
   // call dup2();
-  // int result = dup2( fd(s_d1->get()) , fd(s_d2->get()) );//using get() on a LockPTR will lock the
-  // PointerObject!
+  // int result = dup2( fd(s_d1->get()) , fd(s_d2->get()) );//using get() on a
+  // LockPTR will lock the PointerObject!
   // This would result in a failed assertion at the next operation on that Datum
-  // (if we don not unlock it explicitely again)
-  int result = dup2( fd( **s_d1 ), fd( **s_d2 ) ); // so we use operator* instead
-  // LockPTRs can be used like ordinary pointers!!! (*s_d1 is a LockPTR on an istream)
+  // (if we don not unlock it explicitly again)
+  // so we use operator* instead
+  int result = dup2( fd( **s_d1 ), fd( **s_d2 ) );
+  // LockPTRs can be used like ordinary pointers!!! (*s_d1 is a LockPTR on an
+  // istream)
 
   if ( result == -1 )
-  { // an error occured!
+  { // an error occurred!
     i->raiseerror( systemerror( i ) );
   }
   else
@@ -599,11 +625,11 @@ Processes::Dup2_os_isFunction::execute( SLIInterpreter* i ) const
   assert( s_d2 != NULL );
 
   // call dup2();
-  int result =
-    dup2( fd( **s_d1 ), fd( **s_d2 ) ); // for comments on LockPTRs see Dup2_is_isFunction::execute
+  // for comments on LockPTRs see Dup2_is_isFunction::execute
+  int result = dup2( fd( **s_d1 ), fd( **s_d2 ) );
 
   if ( result == -1 )
-  { // an error occured!
+  { // an error occurred!
     i->raiseerror( systemerror( i ) );
   }
   else
@@ -624,7 +650,7 @@ Processes::AvailableFunction::execute( SLIInterpreter* i ) const
   assert( istreamdatum != 0 );
   assert( istreamdatum->valid() );
 
-  if ( !( **istreamdatum ).good() )
+  if ( not( **istreamdatum ).good() )
   { // istream not good. Do nothing. Return false.
     i->EStack.pop();
     i->OStack.push( false );
@@ -684,7 +710,8 @@ Processes::AvailableFunction::execute( SLIInterpreter* i ) const
     //     }
     // ----- End Version 1 ----
 
-    // ---- Version 2: Using .good() to detect errors. Pure C++ (apart from fcntl) ------
+    // ---- Version 2: Using .good() to detect errors. Pure C++ (apart from
+    // fcntl) ------
 
     ( **istreamdatum ).peek();
     // Reset Fileflags --------------
@@ -692,7 +719,7 @@ Processes::AvailableFunction::execute( SLIInterpreter* i ) const
     // ------------------------------
 
     bool result;
-    if ( !( **istreamdatum ).good() )
+    if ( not( **istreamdatum ).good() )
     { // an error occured. No data can be read.
       // no data is currently available
       result = false;             // no data is available
@@ -719,13 +746,16 @@ Processes::GetPIDFunction::execute( SLIInterpreter* i ) const
   pid_t pid;
   pid = getpid();
   if ( pid < 0 )
-    i->raiseerror( systemerror( i ) ); // ehemals:i->raiseerror ("CannotFork");
+  {
+    i->raiseerror( systemerror( i ) );
+  }
   else
   {
     i->EStack.pop(); // Don't forget to pop yourself...
 
-    Token result_token( new IntegerDatum(
-      pid ) ); // Make Token, containing IntegerDatum, which is initialized to pid;
+    Token result_token( new IntegerDatum( pid ) ); // Make Token, containing
+                                                   // IntegerDatum, which is
+                                                   // initialized to pid;
     i->OStack.push_move( result_token );
   }
 }
@@ -737,13 +767,16 @@ Processes::GetPPIDFunction::execute( SLIInterpreter* i ) const
   pid_t ppid;
   ppid = getppid();
   if ( ppid < 0 )
-    i->raiseerror( systemerror( i ) ); // ehemals:i->raiseerror ("CannotFork");
+  {
+    i->raiseerror( systemerror( i ) );
+  }
   else
   {
     i->EStack.pop(); // Don't forget to pop yourself...
 
-    Token result_token( new IntegerDatum(
-      ppid ) ); // Make Token, containing IntegerDatum, which is initialized to ppid;
+    Token result_token( new IntegerDatum( ppid ) ); // Make Token, containing
+                                                    // IntegerDatum, which is
+                                                    // initialized to ppid;
     i->OStack.push_move( result_token );
   }
 }
@@ -756,13 +789,16 @@ Processes::GetPGRPFunction::execute( SLIInterpreter* i ) const
   pid_t pgrp;
   pgrp = getpgrp();
   if ( pgrp < 0 )
-    i->raiseerror( systemerror( i ) ); // ehemals:i->raiseerror ("CannotFork");
+  {
+    i->raiseerror( systemerror( i ) );
+  }
   else
   {
     i->EStack.pop(); // Don't forget to pop yourself...
 
-    Token result_token( new IntegerDatum(
-      pgrp ) ); // Make Token, containing IntegerDatum, which is initialized to pgrp;
+    Token result_token( new IntegerDatum( pgrp ) ); // Make Token, containing
+                                                    // IntegerDatum, which is
+                                                    // initialized to pgrp;
     i->OStack.push_move( result_token );
   }
 }
@@ -778,12 +814,14 @@ Processes::MkfifoFunction::execute( SLIInterpreter* i ) const
   assert( s_d != NULL );
 
   // call mkfifo();
-  mode_t mode =
-    S_IRWXU | S_IRWXG | S_IRWXO; // Try to give all permissions, modified only by the user`s umask.
-  int result = mkfifo( s_d->c_str(), mode ); // StringDatum is derived from string
+  mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO; // Try to give all permissions,
+                                             // modified only by the user`s
+                                             // umask.
+  // StringDatum is derived from string
+  int result = mkfifo( s_d->c_str(), mode );
 
   if ( result == -1 )
-  { // an error occured!
+  { // an error occurred!
     i->raiseerror( systemerror( i ) );
   }
   else
@@ -794,7 +832,7 @@ Processes::MkfifoFunction::execute( SLIInterpreter* i ) const
 }
 
 #if defined IS_BLUEGENE_P || defined IS_BLUEGENE_Q
-/* BeginDocumentation
+/** @BeginDocumentation
  Name: memory_thisjob_bg - Reports memory usage on Blue Gene/P/Q systems
  Description:
  memory_thisjob_bg returns a dictionary with the heap and stack memory
@@ -811,14 +849,16 @@ Processes::MemoryThisjobBgFunction::execute( SLIInterpreter* i ) const
   ( *dict )[ "heap" ] = heap_memory;
   unsigned long stack_memory = bg_get_stack_mem();
   ( *dict )[ "stack" ] = stack_memory;
+  unsigned long mmap_memory = bg_get_mmap_mem();
+  ( *dict )[ "mmap" ] = mmap_memory;
 
   i->OStack.push( dict );
   i->EStack.pop();
 }
 #endif
 
-#if defined __APPLE__ && HAVE_MACH_MACH_H
-/* BeginDocumentation
+#if defined __APPLE__ && defined HAVE_MACH_MACH_H
+/** @BeginDocumentation
  Name: memory_thisjob_darwin - Reports memory usage on Darwin/Apple systems
  Description:
  memory_thisjob_darwin returns the resident memory usage of a process in Bytes.
@@ -855,13 +895,19 @@ Processes::SetNonblockFunction::execute( SLIInterpreter* i ) const
   // Get filestatus-flags on this fd:
   int flags = fcntl( fd, F_GETFL );
   if ( flags == -1 )
+  {
     i->raiseerror( systemerror( i ) ); // an error occured!
+  }
 
   // modify flags to the new value:
   if ( *newflag_d )
+  {
     flags |= O_NONBLOCK; // set the flag
+  }
   else
+  {
     flags &= ~O_NONBLOCK; // erase the flag
+  }
 
   // Set new filestatus-flags:
   int result = fcntl( fd, F_SETFL, flags );
@@ -883,8 +929,12 @@ Processes::SetNonblockFunction::execute( SLIInterpreter* i ) const
 void
 Processes::CtermidFunction::execute( SLIInterpreter* i ) const
 {
-  char term[] = "\0";
-  std::string termid = ctermid( term );
+  // ensure term buffer is sufficiently large and safely initialized
+  assert( L_ctermid > 0 );
+  char term[ L_ctermid ];
+  term[ 0 ] = '\0';
+
+  const std::string termid = ctermid( term );
 
   i->OStack.push( Token( termid ) );
   i->EStack.pop();

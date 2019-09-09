@@ -23,16 +23,21 @@
 #ifndef NORMAL_RANDOMDEV_H
 #define NORMAL_RANDOMDEV_H
 
+// C++ includes:
 #include <cmath>
-#include "randomgen.h"
-#include "randomdev.h"
+
+// Includes from libnestutil:
 #include "lockptr.h"
+
+// Includes from librandom:
+#include "randomdev.h"
+#include "randomgen.h"
 
 
 namespace librandom
 {
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::normal - normal random deviate generator
 Description: Generates normally distributed random numbers.
 
@@ -43,6 +48,7 @@ Parameters:
  sigma - standard deviation (default: 1.0)
 
 SeeAlso: CreateRDV, RandomArray, rdevdict
+
 Author: Hans Ekkehard Plesser
 */
 

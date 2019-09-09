@@ -23,16 +23,28 @@
 #ifndef IAF_PSC_ALPHA_MULTISYNAPSE_H
 #define IAF_PSC_ALPHA_MULTISYNAPSE_H
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
+// Generated includes:
+#include <sstream>
 
-/* BeginDocumentation
-Name: iaf_psc_alpha_multisynapse - Leaky integrate-and-fire neuron model with multiple ports.
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
+
+namespace nest
+{
+
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup psc
+
+Name: iaf_psc_alpha_multisynapse - Leaky integrate-and-fire neuron model with
+                                   multiple ports.
 
 Description:
 
@@ -49,16 +61,10 @@ Sends: SpikeEvent
 Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
 
 Author:  Schrader, adapted from iaf_psc_alpha
-SeeAlso: iaf_psc_alpha, iaf_psc_delta, iaf_psc_exp, iaf_cond_exp, iaf_psc_exp_multisynapse
+
+SeeAlso: iaf_psc_alpha, iaf_psc_delta, iaf_psc_exp, iaf_cond_exp,
+iaf_psc_exp_multisynapse
 */
-
-namespace nest
-{
-class Network;
-
-/**
- * Leaky integrate-and-fire neuron with alpha-shaped PSCs.
- */
 class iaf_psc_alpha_multisynapse : public Archiving_Node
 {
 
@@ -68,7 +74,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -91,11 +98,12 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // The next two classes need to be friends to access the State_ class/member
-  friend class RecordablesMap< iaf_psc_alpha_multisynapse >;
-  friend class UniversalDataLogger< iaf_psc_alpha_multisynapse >;
+  friend class DynamicRecordablesMap< iaf_psc_alpha_multisynapse >;
+  friend class DynamicUniversalDataLogger< iaf_psc_alpha_multisynapse >;
+  friend class DataAccessFunctor< iaf_psc_alpha_multisynapse >;
 
   // ----------------------------------------------------------------
 
@@ -106,40 +114,38 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t Tau_;
+    double Tau_;
 
     /** Membrane capacitance in pF. */
-    double_t C_;
+    double C_;
 
     /** Refractory period in ms. */
-    double_t TauR_;
+    double refractory_time_;
 
     /** Resting potential in mV. */
-    double_t U0_;
+    double E_L_;
 
     /** External current in pA */
-    double_t I_e_;
+    double I_e_;
 
     /** Reset value of the membrane potential */
-    double_t V_reset_;
+    double V_reset_;
 
     /** Threshold, RELATIVE TO RESTING POTENTIAL(!).
-        I.e. the real threshold is (U0_+Theta_). */
-    double_t Theta_;
+        I.e. the real threshold is (E_L_+Theta_). */
+    double Theta_;
 
     /** Lower bound, RELATIVE TO RESTING POTENTIAL(!).
         I.e. the real lower bound is (LowerBound_+Theta_). */
-    double_t LowerBound_;
+    double LowerBound_;
 
     /** Time constants of synaptic currents in ms. */
-    std::vector< double_t > tau_syn_;
-
-    // type is long because other types are not put through in GetStatus
-    std::vector< long > receptor_types_;
-    size_t num_of_receptors_;
+    std::vector< double > tau_syn_;
 
     // boolean flag which indicates whether the neuron has connections
     bool has_connections_;
+
+    size_t n_receptors_() const; //!< Returns the size of tau_syn_
 
     Parameters_(); //!< Sets default parameter values
 
@@ -158,13 +164,37 @@ private:
    */
   struct State_
   {
-    double_t y0_; //!< Constant current
-    std::vector< double_t > y1_syn_;
-    std::vector< double_t > y2_syn_;
-    double_t y3_;      //!< This is the membrane potential RELATIVE TO RESTING POTENTIAL.
-    double_t current_; //! This is the current in a time step. This is only here to allow logging
+    /**
+     * Enumeration identifying recordable state elements.
+     * This enum identifies the element that will be recorded when
+     * calling get_state_element. The first two (V_M and I) are fixed
+     * sized state elements, while the third (I_SYN) represents the
+     * synaptic current at each receptor, thus it can have a variable
+     * size. The current at each receptor is read out from the vector
+     * y2_syn_. To get the synaptic current's value at synapse k, one
+     * must call get_state_element as:
+     * get_state_element( State_::I_SYN + k *
+     *    State_::NUM_STATE_ELEMENTS_PER_RECEPTOR )
+     */
+    enum StateVecElems
+    {
+      V_M = 0,
+      I,    // 1
+      I_SYN // 2
+    };
 
-    int_t r_; //!< Number of refractory steps remaining
+    static const size_t NUMBER_OF_FIXED_STATES_ELEMENTS = I_SYN; // V_M, I
+    static const size_t NUM_STATE_ELEMENTS_PER_RECEPTOR = 1;     // I_SYN
+
+    double I_const_; //!< Constant current
+    std::vector< double > y1_syn_;
+    std::vector< double > y2_syn_;
+    //! This is the membrane potential RELATIVE TO RESTING POTENTIAL.
+    double V_m_;
+    double current_; //! This is the current in a time step. This is only here
+                     //! to allow logging
+
+    int refractory_steps_; //!< Number of refractory steps remaining
 
     State_(); //!< Default initialization
 
@@ -193,7 +223,7 @@ private:
     RingBuffer currents_;
 
     //! Logger for all analog data
-    UniversalDataLogger< iaf_psc_alpha_multisynapse > logger_;
+    DynamicUniversalDataLogger< iaf_psc_alpha_multisynapse > logger_;
   };
 
   // ----------------------------------------------------------------
@@ -203,35 +233,21 @@ private:
    */
   struct Variables_
   {
-    std::vector< double_t > PSCInitialValues_;
-    int_t RefractoryCounts_;
+    std::vector< double > PSCInitialValues_;
+    int RefractoryCounts_;
 
-    std::vector< double_t > P11_syn_;
-    std::vector< double_t > P21_syn_;
-    std::vector< double_t > P22_syn_;
-    std::vector< double_t > P31_syn_;
-    std::vector< double_t > P32_syn_;
+    std::vector< double > P11_syn_;
+    std::vector< double > P21_syn_;
+    std::vector< double > P22_syn_;
+    std::vector< double > P31_syn_;
+    std::vector< double > P32_syn_;
 
-    double_t P30_;
-    double_t P33_;
+    double P30_;
+    double P33_;
 
     unsigned int receptor_types_size_;
 
   }; // Variables
-
-  // Access functions for UniversalDataLogger -------------------------------
-
-  //! Read out the real membrane potential
-  double_t
-  get_V_m_() const
-  {
-    return S_.y3_ + P_.U0_;
-  }
-  double_t
-  get_current_() const
-  {
-    return S_.current_;
-  }
 
   // Data members -----------------------------------------------------------
 
@@ -249,8 +265,39 @@ private:
   /** @} */
 
   //! Mapping of recordables names to access functions
-  static RecordablesMap< iaf_psc_alpha_multisynapse > recordablesMap_;
+  DynamicRecordablesMap< iaf_psc_alpha_multisynapse > recordablesMap_;
+
+  // Data Access Functor getter
+  DataAccessFunctor< iaf_psc_alpha_multisynapse > get_data_access_functor( size_t elem );
+  inline double
+  get_state_element( size_t elem )
+  {
+    if ( elem == State_::V_M )
+    {
+      return S_.V_m_ + P_.E_L_;
+    }
+    else if ( elem == State_::I )
+    {
+      return S_.current_;
+    }
+    else
+    {
+      return S_.y2_syn_[ elem - S_.NUMBER_OF_FIXED_STATES_ELEMENTS ];
+    }
+  };
+
+  // Utility function that inserts the synaptic conductances to the
+  // recordables map
+
+  Name get_i_syn_name( size_t elem );
+  void insert_current_recordables( size_t first = 0 );
 };
+
+inline size_t
+iaf_psc_alpha_multisynapse::Parameters_::n_receptors_() const
+{
+  return tau_syn_.size();
+}
 
 inline port
 iaf_psc_alpha_multisynapse::send_test_event( Node& target, rport receptor_type, synindex, bool )
@@ -265,7 +312,9 @@ inline port
 iaf_psc_alpha_multisynapse::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -273,7 +322,9 @@ inline port
 iaf_psc_alpha_multisynapse::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 
@@ -285,25 +336,6 @@ iaf_psc_alpha_multisynapse::get_status( DictionaryDatum& d ) const
   Archiving_Node::get_status( d );
 
   ( *d )[ names::recordables ] = recordablesMap_.get_list();
-}
-
-inline void
-iaf_psc_alpha_multisynapse::set_status( const DictionaryDatum& d )
-{
-  Parameters_ ptmp = P_;                 // temporary copy in case of errors
-  const double delta_EL = ptmp.set( d ); // throws if BadProperty
-  State_ stmp = S_;                      // temporary copy in case of errors
-  stmp.set( d, ptmp, delta_EL );         // throws if BadProperty
-
-  // We now know that (ptmp, stmp) are consistent. We do not
-  // write them back to (P_, S_) before we are also sure that
-  // the properties to be set in the parent class are internally
-  // consistent.
-  Archiving_Node::set_status( d );
-
-  // if we get here, temporaries contain consistent set of properties
-  P_ = ptmp;
-  S_ = stmp;
 }
 
 } // namespace

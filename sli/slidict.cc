@@ -23,19 +23,23 @@
 /*
     SLI Dictionary access
 */
-#include <typeinfo>
+
 #include "slidict.h"
-#include "dictdatum.h"
-#include "namedatum.h"
-#include "dictstack.h"
-#include "iostreamdatum.h"
-#include "integerdatum.h"
+
+// C++ includes:
+#include <typeinfo>
+
+// Includes from sli:
 #include "arraydatum.h"
 #include "booldatum.h"
+#include "dictdatum.h"
+#include "dictstack.h"
+#include "integerdatum.h"
+#include "iostreamdatum.h"
+#include "namedatum.h"
 #include "tokenutils.h"
-/*
-BeginDocumentation
 
+/** @BeginDocumentation
    Name: dict - Create new, empty dictionary
 
    Synopsis: dict -> <<>>
@@ -62,9 +66,7 @@ DictFunction::execute( SLIInterpreter* i ) const
   i->OStack.push( DictionaryDatum( new Dictionary ) );
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: put_d - Add an entry to a dictionary
 
    Synopsis: <<dict>> /key val -> <<dict>>
@@ -111,25 +113,31 @@ DictputFunction::execute( SLIInterpreter* i ) const
         ( *dict )->insert_move( *key, i->OStack.top() );
 #ifdef DICTSTACK_CACHE
         if ( ( *dict )->is_on_dictstack() )
+        {
           i->DStack->clear_token_from_cache( *key );
+        }
 #endif
         i->OStack.pop( 3 );
         i->EStack.pop(); // never forget me
         return;
       }
       else
+      {
         throw ArgumentType( 1 );
+      }
     }
     else
+    {
       throw ArgumentType( 2 );
+    }
   }
   else
+  {
     throw StackUnderflow( 3, i->OStack.load() );
+  }
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: get_d - look a name up in a dictionary
 
    Synopsis: dict /key get_d -> any
@@ -176,17 +184,21 @@ DictgetFunction::execute( SLIInterpreter* i ) const
         return;
       }
       else
+      {
         throw ArgumentType( 0 );
+      }
     }
     else
+    {
       throw ArgumentType( 1 );
+    }
   }
   else
+  {
     throw StackUnderflow( 2, i->OStack.load() );
+  }
 }
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: info - Display the contents of a dictionary
 
    Synopsis: ostream dict info -> -
@@ -230,14 +242,18 @@ DictinfoFunction::execute( SLIInterpreter* i ) const
   i->OStack.pop( 2 );
 }
 
-/* BeginDocumentation
+/** @BeginDocumentation
  Name: length_d - counts elements of a dictionary
+
  Synopsis: dict length_d -> int
 
  Examples: <</a 1 /b 2>> length_d -> 2
    modeldict length_d --> 34
+
  Author: docu by Sirko Straube
+
  Remarks: Use length if you are not sure of the data type.
+
  SeeAlso: length
 */
 
@@ -261,8 +277,7 @@ Empty_DFunction::execute( SLIInterpreter* i ) const
   // call: dict empty_D dict bool
   assert( i->OStack.load() > 0 );
 
-  DictionaryDatum const* const dd =
-    dynamic_cast< DictionaryDatum const* const >( i->OStack.top().datum() );
+  DictionaryDatum const* const dd = dynamic_cast< DictionaryDatum const* const >( i->OStack.top().datum() );
 
   assert( dd != NULL );
 
@@ -272,9 +287,7 @@ Empty_DFunction::execute( SLIInterpreter* i ) const
 }
 
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: countdictstack - return number of dictionaries on the dictionary stack.
 
    Synopsis:
@@ -300,15 +313,16 @@ CountdictstackFunction::execute( SLIInterpreter* i ) const
   i->OStack.push_move( st );
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: dictstack - return current dictionary stack as array
+
    Synopsis: dictstack -> array
-   Description: Returns an array whose entries are references to the dictionaries
-     on the dictionary stack. The dictionaries are stored from bottom to top,
-     such that the first array element refers to the bottom of the stack and the
-     last array element to the top.
+
+   Description: Returns an array whose entries are references to the
+     dictionaries on the dictionary stack. The dictionaries are stored from
+     bottom to top, such that the first array element refers to the bottom of
+     the stack and the last array element to the top.
+
    SeeAlso: currentdict, countdictstack, cleardictstack, whos
 */
 void
@@ -323,12 +337,13 @@ DictstackFunction::execute( SLIInterpreter* i ) const
   i->OStack.push_move( st );
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: currentdict - return topmost dictionary of the dictionary stack
+
    Synopsis: currentdict -> dict
+
    Description: Returns a reference to the current dictionary.
+
    SeeAlso: dictstack, begin, end, cleardictstack, who, whos
 */
 void
@@ -342,13 +357,14 @@ CurrentdictFunction::execute( SLIInterpreter* i ) const
   i->OStack.push_move( dt );
 }
 
-/*
-BeginDocumentation
+/** @BeginDocumentation
+   Name: cleardictstack - Pop all non standard dictionaries off the dictionary
+                          stack.
 
-   Name: cleardictstack - Pop all non standard dictionaries off the dictionary stack.
    Description: Removes all non standard dictionaries off the dictionary stack.
      After this, only the systemdict and the userdict dictionaries remain on the
      dictionary stack.
+
    SeeAlso: dictstack, begin, end, currentdict, who, whos
 */
 void
@@ -357,12 +373,12 @@ CleardictstackFunction::execute( SLIInterpreter* i ) const
   // Pop all non-permanent dictionaries
   i->EStack.pop();
   while ( i->DStack->size() > 2 )
+  {
     i->DStack->pop();
+  }
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: topinfo_d - print contents of top dictionary to stream
 
    Synopsis: ostream topinfo_d -> -
@@ -372,18 +388,6 @@ BeginDocumentation
 
    Parameters:
      ostream - a valid output stream
-
-   Examples:
-
-   Diagnostics:
-
-   Bugs:
-
-   Author:
-
-   FirstVersion:
-
-   Remarks:
 
    SeeAlso: dictstack, currentdict, info, who, whos
 */
@@ -400,10 +404,9 @@ DicttopinfoFunction::execute( SLIInterpreter* i ) const
   i->OStack.pop();
 }
 
-/*
-BeginDocumentation
-
-   Name: info_ds - print contents of all dictionaries on the dicitonary stack to stream
+/** @BeginDocumentation
+   Name: info_ds - print contents of all dictionaries on the dicitonary stack to
+                   stream
 
    Synopsis: ostream info_ds -> -
 
@@ -430,9 +433,7 @@ WhoFunction::execute( SLIInterpreter* i ) const
   i->OStack.pop();
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: begin - Make a dictionary the current dictionary.
 
    Synopsis: dict begin -> -
@@ -463,15 +464,17 @@ DictbeginFunction::execute( SLIInterpreter* i ) const
       return;
     }
     else
+    {
       i->raiseerror( i->ArgumentTypeError );
+    }
   }
   else
+  {
     i->raiseerror( i->StackUnderflowError );
+  }
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: end - Close the current (topmost) dictionary.
 
    Synopsis: - end -> -
@@ -497,12 +500,12 @@ DictendFunction::execute( SLIInterpreter* i ) const
     i->EStack.pop();
   }
   else
+  {
     i->raiseerror( "DictStackUnderflow" );
+  }
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: undef - Remove a key from a dictionary.
 
    Synopsis: dict key undef -> -
@@ -556,25 +559,31 @@ UndefFunction::execute( SLIInterpreter* i ) const
         i->EStack.pop();
 #ifdef DICTSTACK_CACHE
         if ( ( *dict )->is_on_dictstack() )
+        {
           i->DStack->clear_token_from_cache( *key );
+        }
 #endif
         ( *dict )->erase( *key );
         i->OStack.pop( 2 );
         return;
       }
       else
+      {
         throw ArgumentType( 0 );
+      }
     }
     else
+    {
       throw ArgumentType( 1 );
+    }
   }
   else
+  {
     throw StackUnderflow( 2, i->OStack.load() );
+  }
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: <<>> - Create a new dictionary.
 
    Synopsis: << /key1 val1 ... /keyn valn >> -> dict
@@ -624,10 +633,11 @@ DictconstructFunction::execute( SLIInterpreter* i ) const
 {
   // call: mark key1 val1 ... keyn valn -> dict
 
-  size_t l = i->OStack.load();
-
-  if ( l == 0 )
+  size_t load = i->OStack.load();
+  if ( load == 0 )
+  {
     throw StackUnderflow( 1, 0 );
+  }
 
   DictionaryDatum* dictd = new DictionaryDatum( new Dictionary );
   Token dict( dictd );
@@ -636,14 +646,13 @@ DictconstructFunction::execute( SLIInterpreter* i ) const
   static Token mark = i->baselookup( i->mark_name );
 
   size_t n = 0; //!< pick(1) is the first literal, then we count in steps of 2
-  while ( ( n < l ) && !( i->OStack.pick( n ) == mark ) )
+  while ( ( n < load ) && not( i->OStack.pick( n ) == mark ) )
   {
     Token& val = ( i->OStack.pick( n ) );
     key = dynamic_cast< LiteralDatum* >( i->OStack.pick( n + 1 ).datum() );
     if ( key == NULL )
     {
-      i->message(
-        30, "DictConstruct", "Literal expected. Maybe initializer list is in the wrong order." );
+      i->message( 30, "DictConstruct", "Literal expected. Maybe initializer list is in the wrong order." );
       i->raiseerror( i->ArgumentTypeError );
       delete dictd;
       return;
@@ -652,7 +661,7 @@ DictconstructFunction::execute( SLIInterpreter* i ) const
     n += 2; // count number of elements
   }
 
-  if ( n == l )
+  if ( n == load )
   {
     i->message( 30, "DictConstruct", "<< expected." );
     i->raiseerror( i->ArgumentTypeError );
@@ -672,18 +681,16 @@ DictconstructFunction::execute( SLIInterpreter* i ) const
 }
 
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: known - check whether a name is defined in a dictionary or object
 
    Synopsis: dict /key known -> bool
              int  /key known -> bool
 
    Examples:
-   modeldict /iaf_neuron known -> true
+   modeldict /iaf_psc_alpha known -> true
    modeldict /parkinson_neuron known -> false
-   /iaf_psc_alpha_presc Create /Interpol_Order know -> true
+   /iaf_psc_alpha_presc GetDefaults /Interpol_Order known -> true
 
    Author: docu edited by Sirko Straube
 
@@ -704,9 +711,7 @@ KnownFunction::execute( SLIInterpreter* i ) const
   i->OStack.top() = new BoolDatum( known );
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: cleardict - Clears the contents of a dictionary
 
    Synopsis: dict cleardict
@@ -722,16 +727,16 @@ CleardictFunction::execute( SLIInterpreter* i ) const
   assert( dict != NULL );
 #ifdef DICTSTACK_CACHE
   if ( ( *dict )->is_on_dictstack() )
+  {
     i->DStack->clear_dict_from_cache( *dict );
+  }
 #endif
   ( *dict )->clear();
   i->EStack.pop(); // never forget me
   i->OStack.pop();
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: clonedict - create a copy of a dictionary
 
    Synopsis: dict1 clonedict -> dict1 dict2
@@ -765,9 +770,7 @@ ClonedictFunction::execute( SLIInterpreter* i ) const
   i->EStack.pop(); // never forget me
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: cva_d - Convert dictionary to array
 
    Synopsis: dict cva_d -> array
@@ -844,9 +847,7 @@ Cva_dFunction::execute( SLIInterpreter* i ) const
   i->OStack.push( ad );
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: keys - Return array of keys in a dictionary
 
    Synopsis:
@@ -889,16 +890,14 @@ KeysFunction::execute( SLIInterpreter* i ) const
   for ( TokenMap::const_iterator t = ( *dict )->begin(); t != ( *dict )->end(); ++t )
   {
     Token nt( new LiteralDatum( ( *t ).first ) );
-    assert( !nt.empty() );
+    assert( not nt.empty() );
     ad->push_back_move( nt );
   }
   i->OStack.pop();
   i->OStack.push( ad );
 }
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
    Name: values - Return array of values in a dictionary
 
    Synopsis:

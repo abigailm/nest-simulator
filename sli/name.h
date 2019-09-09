@@ -23,11 +23,12 @@
 #ifndef NAME_H
 #define NAME_H
 
+// C++ includes:
 #include <cassert>
-#include <map>
-#include <string>
 #include <deque>
 #include <iostream>
+#include <map>
+#include <string>
 
 /**
  * Represent strings by ints to facilitate fast comparison.
@@ -97,7 +98,7 @@ public:
 
   bool operator!=( const Name& n ) const
   {
-    return !( handle_ == n.handle_ );
+    return not( handle_ == n.handle_ );
   }
 
   /**

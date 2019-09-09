@@ -23,7 +23,8 @@
 #ifndef MODELRANGE_H
 #define MODELRANGE_H
 
-#include "nest.h"
+// Includes from nestkernel:
+#include "nest_types.h"
 
 namespace nest
 {
@@ -35,7 +36,7 @@ public:
   bool
   is_in_range( index gid ) const
   {
-    return ( ( gid >= first_gid_ ) && ( gid <= last_gid_ ) );
+    return ( ( gid >= first_gid_ ) and ( gid <= last_gid_ ) );
   }
   index
   get_model_id() const

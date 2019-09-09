@@ -23,17 +23,25 @@
 #ifndef LAYER_H
 #define LAYER_H
 
+// C++ includes:
+#include <bitset>
 #include <iostream>
 #include <utility>
-#include <bitset>
-#include "nest.h"
+
+// Includes from nestkernel:
+#include "kernel_manager.h"
+#include "nest_types.h"
 #include "subnet.h"
-#include "position.h"
+
+// Includes from sli:
 #include "dictutils.h"
-#include "topology_names.h"
-#include "ntree.h"
+
+// Includes from topology:
 #include "connection_creator.h"
+#include "ntree.h"
+#include "position.h"
 #include "selector.h"
+#include "topology_names.h"
 
 namespace nest
 {
@@ -62,7 +70,7 @@ public:
    * @param sind subnet index of node
    * @returns position of node as std::vector
    */
-  virtual std::vector< double_t > get_position_vector( const index sind ) const = 0;
+  virtual std::vector< double > get_position_vector( const index sind ) const = 0;
 
   /**
    * Returns displacement of node from given position. When using periodic
@@ -71,8 +79,7 @@ public:
    * @param to        node in layer to which displacement is to be computed
    * @returns vector pointing from from_pos to node to's position
    */
-  virtual std::vector< double_t > compute_displacement( const std::vector< double_t >& from_pos,
-    const index to ) const = 0;
+  virtual std::vector< double > compute_displacement( const std::vector< double >& from_pos, const index to ) const = 0;
 
   /**
    * Returns distance to node from given position. When using periodic
@@ -81,8 +88,7 @@ public:
    * @param to        node in layer to which displacement is to be computed
    * @returns length of vector pointing from from_pos to node to's position
    */
-  virtual double_t compute_distance( const std::vector< double_t >& from_pos,
-    const index to ) const = 0;
+  virtual double compute_distance( const std::vector< double >& from_pos, const index to ) const = 0;
 
   /**
    * Connect this layer to the given target layer. The actual connections
@@ -108,9 +114,8 @@ public:
    * @param allow_oversized allow mask to be greater than layer
    * @returns nodes in layer inside mask.
    */
-  virtual std::vector< index > get_global_nodes( const MaskDatum& mask,
-    const std::vector< double_t >& anchor,
-    bool allow_oversized ) = 0;
+  virtual std::vector< index >
+  get_global_nodes( const MaskDatum& mask, const std::vector< double >& anchor, bool allow_oversized ) = 0;
 
   /**
    * Write layer data to stream.
@@ -121,7 +126,8 @@ public:
   virtual void dump_nodes( std::ostream& os ) const = 0;
 
   /**
-   * Dumps information about all connections of the given type having their source in
+   * Dumps information about all connections of the given type having their
+   * source in
    * the given layer to the given output stream. For distributed simulations
    * this function will dump the connections with local targets only.
    * @param out output stream
@@ -137,28 +143,28 @@ public:
    * @param depth layer depth
    * @returns iterator for local nodes pointing to first node at given depth
    */
-  std::vector< Node* >::iterator local_begin( int_t depth );
+  std::vector< Node* >::iterator local_begin( int depth );
 
   /**
    * End of local children at given depth.
    * @param depth layer depth
    * @returns iterator for local nodes pointing to the end of the given depth
    */
-  std::vector< Node* >::iterator local_end( int_t depth );
+  std::vector< Node* >::iterator local_end( int depth );
 
   /**
    * Start of local children at given depth.
    * @param depth layer depth
    * @returns iterator for local nodes pointing to first node at given depth
    */
-  std::vector< Node* >::const_iterator local_begin( int_t depth ) const;
+  std::vector< Node* >::const_iterator local_begin( int depth ) const;
 
   /**
    * End of local children at given depth.
    * @param depth layer depth
    * @returns iterator for local nodes pointing to the end of the given depth
    */
-  std::vector< Node* >::const_iterator local_end( int_t depth ) const;
+  std::vector< Node* >::const_iterator local_end( int depth ) const;
 
 protected:
   /**
@@ -169,7 +175,7 @@ protected:
   /**
    * number of neurons at each position
    */
-  int_t depth_;
+  int depth_;
 
   /**
    * GID for the single layer for which we cache global position information
@@ -205,7 +211,7 @@ public:
   /**
    * Copy constructor.
    */
-  Layer( const Layer& l );
+  Layer( const Layer& other_layer );
 
   /**
    * Virtual destructor
@@ -273,17 +279,16 @@ public:
    * @param sind local subnet index of node
    * @returns position of node as std::vector
    */
-  std::vector< double_t > get_position_vector( const index sind ) const;
+  std::vector< double > get_position_vector( const index sind ) const;
 
   /**
-   * Returns displacement of a position from another position. When using periodic
-   * boundary conditions, will return minimum displacement.
+   * Returns displacement of a position from another position. When using
+   * periodic boundary conditions, will return minimum displacement.
    * @param from_pos  position vector in layer
    * @param to_pos    position to which displacement is to be computed
    * @returns vector pointing from from_pos to to_pos
    */
-  virtual Position< D > compute_displacement( const Position< D >& from_pos,
-    const Position< D >& to_pos ) const;
+  virtual Position< D > compute_displacement( const Position< D >& from_pos, const Position< D >& to_pos ) const;
 
   /**
    * Returns displacement of node from given position. When using periodic
@@ -294,8 +299,7 @@ public:
    */
   Position< D > compute_displacement( const Position< D >& from_pos, const index to ) const;
 
-  std::vector< double_t > compute_displacement( const std::vector< double_t >& from_pos,
-    const index to ) const;
+  std::vector< double > compute_displacement( const std::vector< double >& from_pos, const index to ) const;
 
   /**
    * Returns distance to node from given position. When using periodic
@@ -304,9 +308,9 @@ public:
    * @param to        node in layer to which displacement is to be computed
    * @returns length of vector pointing from from_pos to node to's position
    */
-  double_t compute_distance( const Position< D >& from_pos, const index to ) const;
+  double compute_distance( const Position< D >& from_pos, const index to ) const;
 
-  double_t compute_distance( const std::vector< double_t >& from_pos, const index to ) const;
+  double compute_distance( const std::vector< double >& from_pos, const index to ) const;
 
 
   /**
@@ -334,11 +338,9 @@ public:
     Position< D > lower_left,
     Position< D > extent );
 
-  std::vector< std::pair< Position< D >, index > >* get_global_positions_vector(
-    Selector filter = Selector() );
+  std::vector< std::pair< Position< D >, index > >* get_global_positions_vector( Selector filter = Selector() );
 
-  virtual std::vector< std::pair< Position< D >, index > > get_global_positions_vector(
-    Selector filter,
+  virtual std::vector< std::pair< Position< D >, index > > get_global_positions_vector( Selector filter,
     const MaskDatum& mask,
     const Position< D >& anchor,
     bool allow_oversized );
@@ -346,9 +348,8 @@ public:
   /**
    * Return a vector with the GIDs of the nodes inside the mask.
    */
-  std::vector< index > get_global_nodes( const MaskDatum& mask,
-    const std::vector< double_t >& anchor,
-    bool allow_oversized );
+  std::vector< index >
+  get_global_nodes( const MaskDatum& mask, const std::vector< double >& anchor, bool allow_oversized );
 
   /**
    * Connect this layer to the given target layer. The actual connections
@@ -368,9 +369,10 @@ public:
   void dump_nodes( std::ostream& os ) const;
 
   /**
-   * Dumps information about all connections of the given type having their source in
-   * the given layer to the given output stream. For distributed simulations
-   * this function will dump the connections with local targets only.
+   * Dumps information about all connections of the given type having their
+   * source in the given layer to the given output stream. For distributed
+   * simulations this function will dump the connections with local targets
+   * only.
    * @param out output stream
    * @param synapse_id type of connection
    */
@@ -403,8 +405,7 @@ protected:
   /**
    * Insert global position info into ntree.
    */
-  virtual void insert_global_positions_ntree_( Ntree< D, index >& tree,
-    const Selector& filter ) = 0;
+  virtual void insert_global_positions_ntree_( Ntree< D, index >& tree, const Selector& filter ) = 0;
 
   /**
    * Insert global position info into vector.
@@ -417,9 +418,10 @@ protected:
    */
   virtual void insert_local_positions_ntree_( Ntree< D, index >& tree, const Selector& filter ) = 0;
 
-  Position< D > lower_left_;  ///< lower left corner (minimum coordinates) of layer
-  Position< D > extent_;      ///< size of layer
-  std::bitset< D > periodic_; ///< periodic b.c.
+  //! lower left corner (minimum coordinates) of layer
+  Position< D > lower_left_;
+  Position< D > extent_;      //!< size of layer
+  std::bitset< D > periodic_; //!< periodic b.c.
 
   /**
    * Global position information for a single layer
@@ -444,14 +446,12 @@ public:
    * @param layer           The layer to mask
    * @param filter          Optionally select subset of neurons
    * @param mask            The mask to apply to the layer
-   * @param include_global  If true, include all nodes, otherwise only local to MPI process
-   * @param allow_oversized If true, allow larges masks than layers when using periodic b.c.
+   * @param include_global  If true, include all nodes, otherwise only local to
+   *                        MPI process
+   * @param allow_oversized If true, allow larges masks than layers when using
+   *                        periodic b.c.
    */
-  MaskedLayer( Layer< D >& layer,
-    Selector filter,
-    const MaskDatum& mask,
-    bool include_global,
-    bool allow_oversized );
+  MaskedLayer( Layer< D >& layer, Selector filter, const MaskDatum& mask, bool include_global, bool allow_oversized );
 
   /**
    * Constructor for applying "converse" mask to layer. To be used for
@@ -461,9 +461,12 @@ public:
    * @param layer           The layer to mask (source layer)
    * @param filter          Optionally select subset of neurons
    * @param mask            The mask to apply to the layer
-   * @param include_global  If true, include all nodes, otherwise only local to MPI process
-   * @param allow_oversized If true, allow larges masks than layers when using periodic b.c.
-   * @param target          The layer which the given mask is defined for (target layer)
+   * @param include_global  If true, include all nodes, otherwise only local to
+   * MPI process
+   * @param allow_oversized If true, allow larges masks than layers when using
+   * periodic b.c.
+   * @param target          The layer which the given mask is defined for
+   * (target layer)
    */
   MaskedLayer( Layer< D >& layer,
     Selector filter,
@@ -477,7 +480,8 @@ public:
   /**
    * Iterate over nodes inside mask
    * @param anchor Position to apply mask to
-   * @returns an iterator for the nodes inside the mask centered on the anchor position
+   * @returns an iterator for the nodes inside the mask centered on the anchor
+   * position
    */
   typename Ntree< D, index >::masked_iterator begin( const Position< D >& anchor );
 
@@ -512,9 +516,13 @@ inline MaskedLayer< D >::MaskedLayer( Layer< D >& layer,
   : mask_( maskd )
 {
   if ( include_global )
+  {
     ntree_ = layer.get_global_positions_ntree( filter );
+  }
   else
+  {
     ntree_ = layer.get_local_positions_ntree( filter );
+  }
 
   check_mask_( layer, allow_oversized );
 }
@@ -529,10 +537,13 @@ inline MaskedLayer< D >::MaskedLayer( Layer< D >& layer,
   : mask_( maskd )
 {
   if ( include_global )
+  {
     ntree_ = layer.get_global_positions_ntree(
       filter, target.get_periodic_mask(), target.get_lower_left(), target.get_extent() );
+  }
   // else
-  //  ntree_ = layer.get_local_positions_ntree(filter, target.get_periodic_mask(),
+  //  ntree_ = layer.get_local_positions_ntree(filter,
+  //  target.get_periodic_mask(),
   //  target.get_lower_left(), target.get_extent());
 
   check_mask_( target, allow_oversized );
@@ -552,7 +563,7 @@ MaskedLayer< D >::begin( const Position< D >& anchor )
   {
     return ntree_->masked_begin( dynamic_cast< const Mask< D >& >( *mask_ ), anchor );
   }
-  catch ( std::bad_cast e )
+  catch ( std::bad_cast& e )
   {
     throw BadProperty( "Mask is incompatible with layer." );
   }
@@ -577,11 +588,11 @@ inline Layer< D >::Layer()
 }
 
 template < int D >
-inline Layer< D >::Layer( const Layer& l )
-  : AbstractLayer( l )
-  , lower_left_( l.lower_left_ )
-  , extent_( l.extent_ )
-  , periodic_( l.periodic_ )
+inline Layer< D >::Layer( const Layer& other_layer )
+  : AbstractLayer( other_layer )
+  , lower_left_( other_layer.lower_left_ )
+  , extent_( other_layer.extent_ )
+  , periodic_( other_layer.periodic_ )
 {
 }
 
@@ -607,31 +618,31 @@ Layer< D >::compute_displacement( const Position< D >& from_pos, const index to 
 }
 
 template < int D >
-inline std::vector< double_t >
-Layer< D >::compute_displacement( const std::vector< double_t >& from_pos, const index to ) const
+inline std::vector< double >
+Layer< D >::compute_displacement( const std::vector< double >& from_pos, const index to ) const
 {
-  return std::vector< double_t >( compute_displacement( Position< D >( from_pos ), to ) );
+  return std::vector< double >( compute_displacement( Position< D >( from_pos ), to ) );
 }
 
 template < int D >
-inline double_t
+inline double
 Layer< D >::compute_distance( const Position< D >& from_pos, const index to ) const
 {
   return compute_displacement( from_pos, to ).length();
 }
 
 template < int D >
-inline double_t
-Layer< D >::compute_distance( const std::vector< double_t >& from_pos, const index to ) const
+inline double
+Layer< D >::compute_distance( const std::vector< double >& from_pos, const index to ) const
 {
   return compute_displacement( Position< D >( from_pos ), to ).length();
 }
 
 template < int D >
-inline std::vector< double_t >
+inline std::vector< double >
 Layer< D >::get_position_vector( const index sind ) const
 {
-  return std::vector< double_t >( get_position( sind ) );
+  return std::vector< double >( get_position( sind ) );
 }
 
 template < int D >
@@ -647,7 +658,9 @@ inline void
 Layer< D >::clear_vector_cache_() const
 {
   if ( cached_vector_ != 0 )
+  {
     delete cached_vector_;
+  }
   cached_vector_ = 0;
   cached_vector_layer_ = -1;
 }

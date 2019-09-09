@@ -23,13 +23,18 @@
 #ifndef SUBNET_H
 #define SUBNET_H
 
-#include <vector>
+// C++ includes:
 #include <string>
-#include "node.h"
-#include "dictdatum.h"
-#include "multirange.h"
+#include <vector>
 
-/* BeginDocumentation
+// Includes from nestkernel:
+#include "multirange.h"
+#include "node.h"
+
+// Includes from sli:
+#include "dictdatum.h"
+
+/** @BeginDocumentation
 
 Name: subnet - Root node for subnetworks.
 
@@ -54,8 +59,6 @@ number_of_children (integertype) -
 namespace nest
 {
 
-using std::vector;
-
 class Node;
 
 /**
@@ -78,6 +81,9 @@ public:
 
   void set_status( const DictionaryDatum& );
   void get_status( DictionaryDatum& ) const;
+
+  void set_local_device_id( const index ldid );
+  index get_local_device_id() const;
 
   bool has_proxies() const;
 
@@ -102,24 +108,32 @@ public:
   index add_remote_node( index gid, index mid );
 
   /**
+   * Add a gid range to the subnet.
+   * If a subsequent node is added via `add_node` or `add_remote_node`
+   * the calls to `gid_.push_back()` are ignored, if the gid of the
+   * node is already in the range.
+   */
+  void add_gid_range( index start_gid, index end_gid );
+
+  /**
    * Return iterator to the first local child node.
    */
-  vector< Node* >::iterator local_begin();
+  std::vector< Node* >::iterator local_begin();
 
   /**
    * Return iterator to the end of the local child-list.
    */
-  vector< Node* >::iterator local_end();
+  std::vector< Node* >::iterator local_end();
 
   /**
    * Return const iterator to the first local child node.
    */
-  vector< Node* >::const_iterator local_begin() const;
+  std::vector< Node* >::const_iterator local_begin() const;
 
   /**
    * Return const iterator to the end of the local child-list.
    */
-  vector< Node* >::const_iterator local_end() const;
+  std::vector< Node* >::const_iterator local_end() const;
 
   /**
    * Return pointer to Node at given LID if it is local.
@@ -188,7 +202,7 @@ protected:
   {
   }
   void
-  update( Time const&, const long_t, const long_t )
+  update( Time const&, const long, const long )
   {
   }
 
@@ -199,7 +213,7 @@ protected:
    * vector may be NULL. Note that all code must handle
    * this case gracefully.
    */
-  vector< Node* > nodes_;
+  std::vector< Node* > nodes_;
 
   /**
    * GIDs of global child nodes.
@@ -211,11 +225,18 @@ protected:
 private:
   void get_dimensions_( std::vector< int >& ) const;
 
-  std::string label_;          //!< user-defined label for this node.
-  DictionaryDatum customdict_; //!< user-defined dictionary for this node.
-  // note that DictionaryDatum is a pointer and must be initialized in the constructor.
-  bool homogeneous_; //!< flag which indicates if the subnet contains different kinds of models.
+  std::string label_; //!< user-defined label for this node.
+                      /**
+                       * user-defined dictionary for this node.
+                       * note that DictionaryDatum is a pointer and must be initialized in the
+                       * constructor.
+                       */
+  DictionaryDatum customdict_;
+  bool homogeneous_; //!< flag which indicates if the subnet contains different
+                     //!< kinds of models.
   index last_mid_;   //!< model index of last child
+
+  index local_device_id_;
 };
 
 /**
@@ -226,9 +247,13 @@ Subnet::add_node( Node* n )
 {
   const index lid = gids_.size();
   const index mid = n->get_model_id();
-  if ( ( homogeneous_ ) && ( lid > 0 ) )
+  if ( ( homogeneous_ ) and ( lid > 0 ) )
+  {
     if ( mid != last_mid_ )
+    {
       homogeneous_ = false;
+    }
+  }
   n->set_lid_( lid );
   n->set_subnet_index_( nodes_.size() );
   nodes_.push_back( n );
@@ -245,33 +270,43 @@ inline index
 Subnet::add_remote_node( index gid, index mid )
 {
   const index lid = gids_.size();
-  if ( ( homogeneous_ ) && ( lid > 0 ) )
+  if ( ( homogeneous_ ) and ( lid > 0 ) )
+  {
     if ( mid != last_mid_ )
+    {
       homogeneous_ = false;
+    }
+  }
   last_mid_ = mid;
   gids_.push_back( gid );
   return lid;
 }
 
-inline vector< Node* >::iterator
+inline void
+Subnet::add_gid_range( index start_gid, index end_gid )
+{
+  gids_.add_range( start_gid, end_gid );
+}
+
+inline std::vector< Node* >::iterator
 Subnet::local_begin()
 {
   return nodes_.begin();
 }
 
-inline vector< Node* >::iterator
+inline std::vector< Node* >::iterator
 Subnet::local_end()
 {
   return nodes_.end();
 }
 
-inline vector< Node* >::const_iterator
+inline std::vector< Node* >::const_iterator
 Subnet::local_begin() const
 {
   return nodes_.begin();
 }
 
-inline vector< Node* >::const_iterator
+inline std::vector< Node* >::const_iterator
 Subnet::local_end() const
 {
   return nodes_.end();
@@ -308,8 +343,9 @@ Subnet::at_lid( index lid ) const
   assert( local_size() == global_size() );
 
   if ( lid >= nodes_.size() )
+  {
     throw UnknownNode();
-
+  }
   return nodes_[ lid ];
 }
 
@@ -347,6 +383,18 @@ inline bool
 Subnet::is_homogeneous() const
 {
   return homogeneous_;
+}
+
+inline void
+Subnet::set_local_device_id( const index ldid )
+{
+  local_device_id_ = ldid;
+}
+
+inline index
+Subnet::get_local_device_id() const
+{
+  return local_device_id_;
 }
 
 } // namespace

@@ -33,11 +33,15 @@
           in a SLI error message.  HEP 2002-09-19.
 */
 
-#include "slimodule.h"
-#include "slifunction.h"
+// Generated includes:
 #include "config.h"
 
+// Includes from sli:
+#include "slifunction.h"
+#include "slimodule.h"
+
 #ifdef HAVE_GSL
+// External include:
 #include <gsl/gsl_integration.h>
 #endif
 
@@ -158,7 +162,7 @@ private:
 
 // Part 4: Documentation for all functions -------------------------
 
-/* BeginDocumentation
+/** @BeginDocumentation
 
 Name: Gammainc - incomplete gamma function
 
@@ -182,7 +186,7 @@ Remarks: This is the incomplete Gamma function P(a,x) defined as no. 6.5.1
 References: http://sources.redhat.com/gsl/ref
 */
 
-/* BeginDocumentation
+/** @BeginDocumentation
 
 Name: Erf - error function
 
@@ -206,7 +210,7 @@ References: http://sources.redhat.com/gsl/ref
 SeeAlso: Erfc
 */
 
-/* BeginDocumentation
+/** @BeginDocumentation
 
 Name: Erfc - complementary error function
 
@@ -230,7 +234,7 @@ References: http://sources.redhat.com/gsl/ref
 SeeAlso: Erf
 */
 
-/* BeginDocumentation
+/** @BeginDocumentation
 
 Name:GaussDiskConv - Convolution of a Gaussian with an excentric disk
 

@@ -23,9 +23,12 @@
 #ifndef STOPWATCH_H
 #define STOPWATCH_H
 
-#include <iostream>
+// C includes:
 #include <sys/time.h>
+
+// C++ includes:
 #include <cassert>
+#include <iostream>
 
 namespace nest
 {
@@ -131,8 +134,7 @@ public:
   /**
    * This method prints out the currently elapsed time.
    */
-  void
-  print( const char* msg = "", timeunit_t timeunit = SECONDS, std::ostream& os = std::cout ) const;
+  void print( const char* msg = "", timeunit_t timeunit = SECONDS, std::ostream& os = std::cout ) const;
 
   /**
    * Convenient method for writing time in seconds
@@ -163,7 +165,7 @@ inline void
 nest::Stopwatch::start()
 {
 #ifndef DISABLE_TIMING
-  if ( !isRunning() )
+  if ( not isRunning() )
   {
     _prev_elapsed += _end - _beg;  // store prev. time, if we resume
     _end = _beg = get_timestamp(); // invariant: _end >= _beg

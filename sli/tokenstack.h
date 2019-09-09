@@ -26,8 +26,9 @@
     SLI's stack for tokens
 */
 
-#include "token.h"
+// Includes from sli:
 #include "tarrayobj.h"
+#include "token.h"
 #include "tokenarray.h"
 
 /* This stack implementation assumes that functions are only called,
@@ -159,7 +160,9 @@ public:
   roll( size_t n, long k )
   {
     if ( n < 2 || k == 0 )
+    {
       return; // nothing to do
+    }
 
     if ( k > 0 )
     {

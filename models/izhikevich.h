@@ -23,73 +23,87 @@
 #ifndef IZHIKEVICH_H
 #define IZHIKEVICH_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "ring_buffer.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-class Network;
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
 
-/* BeginDocumentation
-   Name: izhikevich - Izhikevich neuron model
+Name: izhikevich - Izhikevich neuron model
 
-   Description:
-   Implementation of the simple spiking neuron model introduced by Izhikevich [1].
-   The dynamics are given by:
-       dv/dt = 0.04*v^2 + 5*v + 140 - u + I
-          du/dt = a*(b*v - u)
+Description:
+Implementation of the simple spiking neuron model introduced by Izhikevich
+[1]. The dynamics are given by:
+  @f[
+  dv/dt = 0.04*v^2 + 5*v + 140 - u + I \\
+     du/dt = a*(b*v - u)] @f]
 
-       if v >= V_th:
-         v is set to c
-         u is incremented by d
+    if  \f$ v >= V_{th} \f$:
+      v is set to c
+      u is incremented by d
 
-       v jumps on each spike arrival by the weight of the spike.
+    v jumps on each spike arrival by the weight of the spike.
 
-   As published in [1], the numerics differs from the standard forward Euler technique
-   in two ways:
-   1) the new value of u is calulated based on the new value of v, rather than the
-      previous value
-   2) the variable v is updated using a time step half the size of that used to update
-      variable u.
+As published in [1], the numerics differs from the standard forward Euler
+technique in two ways:
+1) the new value of u is calculated based on the new value of v, rather than
+the previous value
+2) the variable v is updated using a time step half the size of that used to
+update variable u.
 
-   This model offers both forms of integration, they can be selected using the
-   boolean parameter consistent_integration. To reproduce some results published on
-       the basis of this model, it is necessary to use the published form of the dynamics.
-   In this case, consistent_integration must be set to false. For all other purposes,
-   it is recommended to use the standard technique for forward Euler integration. In
-   this case, consistent_integration must be set to true (default).
-
-
-   Parameters:
-   The following parameters can be set in the status dictionary.
-
-   V_m        double - Membrane potential in mV
-   U_m		double - Membrane potential recovery variable
-   V_th       double - Spike threshold in mV.
-   I_e        double - Constant input current in pA. (R=1)
-   V_min      double - Absolute lower value for the membrane potential.
-   a			double - describes time scale of recovery variable
-   b			double - sensitivity of recovery variable
-   c			double - after-spike reset value of V_m
-   d			double - after-spike reset value of U_m
-       consistent_integration		bool - use standard integration technique
+This model offers both forms of integration, they can be selected using the
+boolean parameter consistent_integration. To reproduce some results published
+on the basis of this model, it is necessary to use the published form of the
+dynamics. In this case, consistent_integration must be set to false. For all
+other purposes, it is recommended to use the standard technique for forward
+Euler integration. In this case, consistent_integration must be set to true
+(default).
 
 
-   References:
-   [1] Izhikevich, Simple Model of Spiking Neurons,
-   IEEE Transactions on Neural Networks (2003) 14:1569-1572
+Parameters:
+The following parameters can be set in the status dictionary.
 
-   Sends: SpikeEvent
+\verbatim embed:rst
+======================= =======  ==============================================
+ V_m                    mV       Membrane potential
+ U_m                    mV       Membrane potential recovery variable
+ V_th                   mV       Spike threshold
+ I_e                    pA       Constant input current (R=1)
+ V_min                  mV       Absolute lower value for the membrane potential
+ a                      real     Describes time scale of recovery variable
+ b                      real     Sensitivity of recovery variable
+ c                      mV       After-spike reset value of V_m
+ d                      mV       After-spike reset value of U_m
+ consistent_integration boolean  Use standard integration technique
+======================= =======  ==============================================
+\endverbatim
 
-   Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
-   FirstVersion: 2009
-   Author: Hanuschkin, Morrison, Kunkel
-   SeeAlso: iaf_psc_delta, mat2_psc_exp
+References:
+
+\verbatim embed:rst
+.. [1] Izhikevich EM (2003). Simple model of spiking neurons. IEEE Transactions on
+       Neural Networks, 14:1569-1572.
+       DOI: https://doi.org/10.1109/TNN.2003.820440
+\endverbatim
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+FirstVersion: 2009
+
+Author: Hanuschkin, Morrison, Kunkel
+
+SeeAlso: iaf_psc_delta, mat2_psc_exp
 */
 class izhikevich : public Archiving_Node
 {
@@ -100,7 +114,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -126,7 +141,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // ----------------------------------------------------------------
 
@@ -135,19 +150,19 @@ private:
    */
   struct Parameters_
   {
-    double_t a_;
-    double_t b_;
-    double_t c_;
-    double_t d_;
+    double a_;
+    double b_;
+    double c_;
+    double d_;
 
     /** External DC current */
-    double_t I_e_;
+    double I_e_;
 
     /** Threshold */
-    double_t V_th_;
+    double V_th_;
 
     /** Lower bound */
-    double_t V_min_;
+    double V_min_;
 
     /** Use standard integration numerics **/
     bool consistent_integration_;
@@ -165,9 +180,9 @@ private:
    */
   struct State_
   {
-    double_t v_; // membrane potential
-    double_t u_; // membrane recovery variable
-    double_t I_; // input current
+    double v_; // membrane potential
+    double u_; // membrane recovery variable
+    double I_; // input current
 
 
     /** Accumulate spikes arriving during refractory period, discounted for
@@ -211,13 +226,13 @@ private:
   // Access functions for UniversalDataLogger -----------------------
 
   //! Read out the membrane potential
-  double_t
+  double
   get_V_m_() const
   {
     return S_.v_;
   }
   //! Read out the recovery variable
-  double_t
+  double
   get_U_m_() const
   {
     return S_.u_;
@@ -248,7 +263,9 @@ inline port
 izhikevich::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -256,7 +273,9 @@ inline port
 izhikevich::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -264,7 +283,9 @@ inline port
 izhikevich::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

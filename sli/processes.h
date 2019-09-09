@@ -26,19 +26,24 @@
 /*
     SLI's basic process management capabilities
 */
-#include <cstdlib>
 
-#include "config.h"
-
-
-#include <cstdio>
+// C includes:
 #include <sys/types.h>
+
+// C++ includes:
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <vector>
-#include "slimodule.h"
-#include "slifunction.h"
+
+// Generated includes:
+#include "config.h"
+
+// Includes from sli:
 #include "name.h"
+#include "slifunction.h"
+#include "slimodule.h"
 
 // A new SLI-Module:
 class Processes : public SLIModule
@@ -46,8 +51,7 @@ class Processes : public SLIModule
   // The following concernes the new module: -----------------------
 
 public:
-  static const std::string systemerror(
-    SLIInterpreter* ); // This will be used to produce systemerror-messages
+  static const std::string systemerror( SLIInterpreter* ); // This will be used to produce systemerror-messages
 
   static int fd( std::istream* s );
   static int fd( std::ostream* s );
@@ -92,11 +96,11 @@ public:
   const Name SIGTTOU_name;
 
 
-  const Name sys_errname; // The name of the variable in errordict, in which the name of a system
-                          // error will be stored
+  const Name sys_errname; // The name of the variable in errordict, in which the
+                          // name of a system error will be stored
   const Name sys_errno;   // The corresponding error-number
 
-  // The Names of the system's error-numberes contained in errordict
+  // The Names of the system's error-numbers contained in errordict
   const Name E2BIG_name;
   const Name EACCES_name;
   const Name EAGAIN_name;
@@ -151,24 +155,19 @@ public:
     , SIGTERM_name( "SIGTERM" )
     , SIGUSR1_name( "SIGUSR1" )
     , SIGUSR2_name( "SIGUSR2" )
-    ,
-
-    SIGCHLD_name( "SIGCHLD" )
+    , SIGCHLD_name( "SIGCHLD" )
     , SIGCONT_name( "SIGCONT" )
     , SIGSTOP_name( "SIGSTOP" )
     , SIGTSTP_name( "SIGTSTP" )
     , SIGTTIN_name( "SIGTTIN" )
     , SIGTTOU_name( "SIGTTOU" )
-    ,
+    , sys_errname( "sys_errname" ) // The name of the variable in errordict, in
+                                   // which the name of a system error will be
+                                   // stored
+    , sys_errno( "sys_errno" )     // The corresponding error-number
 
-
-    sys_errname( "sys_errname" )
-    , // The name of the variable in errordict, in which the name of a system error will be stored
-    sys_errno( "sys_errno" )
-    , // The corresponding error-number
-
-    // The Names of the system's error-numberes contained in errordict
-    E2BIG_name( "E2BIG" )
+    // The Names of the system's error-numbers contained in errordict
+    , E2BIG_name( "E2BIG" )
     , EACCES_name( "EACCES" )
     , EAGAIN_name( "EAGAIN" )
     , EBADF_name( "EBADF" )
@@ -216,7 +215,8 @@ public:
   // This function will return the name of our module:
   const std::string name( void ) const;
 
-  // This function -may- return a string of SLI-commands to be executed for initialization
+  // This function -may- return a string of SLI-commands to be executed for
+  // initialization
   const std::string commandstring( void ) const;
 
 
@@ -305,7 +305,7 @@ public:
   };
 #endif
 
-#if defined __APPLE__ && HAVE_MACH_MACH_H
+#if defined __APPLE__ && defined HAVE_MACH_MACH_H
   class MemoryThisjobDarwinFunction : public SLIFunction
   {
     void execute( SLIInterpreter* ) const;
@@ -355,7 +355,7 @@ public:
   MemoryThisjobBgFunction memorythisjobbgfunction;
 #endif
 
-#if defined __APPLE__ && HAVE_MACH_MACH_H
+#if defined __APPLE__ && defined HAVE_MACH_MACH_H
   MemoryThisjobDarwinFunction memorythisjobdarwinfunction;
 #endif
 
@@ -369,8 +369,7 @@ public:
 // Description of new SLI-commands:
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: fork - create a child process of SLI
 
 Synopsis: fork -> PID
@@ -396,8 +395,8 @@ Author: R Kupper
 FirstVersion: Mar 17 1999
 
 Remarks: A full parallel process of SLI is forked.
-         Parent and child will execute in parallel. There is no way to know which
-         will start being executed first.
+         Parent and child will execute in parallel. There is no way to know
+         which will start being executed first.
          Child inherits all open files, including stdin and stdout, from parent!
          Thus, calling fork interactively from the SLI-prompt will result in
          command-line-confusion if both processes end up without quitting.
@@ -419,9 +418,9 @@ Synopsis: CommandArray  sysexec -> -
 Description: Transfer control to a UNIX-Command.
 
 Parameters:  In : CommandArray (array of strings):
-                    An array containing the command to execute. The first element
-                    is interpreted as the command, the remaining elements as it's
-                    parameters.
+                  An array containing the command to execute. The first
+                  element is interpreted as the command, the remaining elements
+                  as it's parameters.
 
              Out: -whatever will be will be-
 
@@ -441,8 +440,7 @@ SeeAlso: sysexec, fork, spoon
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: waitPID - wait or check for a child process to terminate
 
 Synopsis: PIDin NoHangFlag waitPID -> Status NormalExitFlag PIDout
@@ -489,10 +487,10 @@ Parameters: In : PIDin(integer):      -1: Wait for any child process.
                    that signal is reported in the Status argument (see below).
 
                  Status(integer):
-                   If NormalExitFlag is true, this reports the child's exit code,
-                   i.e. the low-order eight bits of the status argument that the
-                   child passed to exit(), or the value the child process
-                   returned from main().
+                   If NormalExitFlag is true, this reports the child's exit
+                   code, i.e. the low-order eight bits of the status argument
+                   that the child passed to exit(), or the value the child
+                   process returned from main().
                    If NormalExitFlag is false, this reports the number of the
                    signal that caused the termination of the child process. Look
                    up this number in signaldict, to know what it means.
@@ -522,8 +520,7 @@ SeeAlso: wait, spoon, signaldict, getPGRP
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: kill - send a signal to another process
 
 Synopsis: PID  SIGNAL kill -> -
@@ -593,13 +590,13 @@ Remarks: "kill" can be used to send ANY signal, but it's most oftenly used
           D. Lewine, O'Reilly & Assoc. Inc.
 
 
-SeeAlso: signaldict, system, sysexec, wait, waitPID, spoon, fork, getPPID, getPGRP
+SeeAlso: signaldict, system, sysexec, wait, waitPID, spoon, fork, getPPID,
+getPGRP
 
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: signaldict - Dictionary containing the machine-dependent signal codes.
 
 Synopsis: signaldict -> signaldict
@@ -635,8 +632,7 @@ SeeAlso: kill, wait, waitPID, system, sysexec, spoon, fork
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: pipe - Open up a pipe
 
 Synopsis: pipe -> read_end write_end
@@ -704,21 +700,20 @@ SeeAlso: dup2, available, spawn
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: available - check if data is available from an istream
 
 Synopsis: istream available -> istream {true|false}
 
-Description: "availabe" gives the answer to one question:
-             --Is there at least one character waitng to be read
+Description: "available" gives the answer to one question:
+             --Is there at least one character waiting to be read
                from the istream?--
              If "available" returns true, it can be safely assumed that
              reading one character from the given istream is safe,
              i.e. it will NEITHER BLOCK nor yield EOF or an error.
 
              Alternative: Functions available_is (undocumented)
-             -> behaviour and synopsis are the same.
+             -> behavior and synopsis are the same.
 
 Parameters: In:  istream: The istream to check.
             Out: true or false, indicating if data is waiting on the stream.
@@ -726,10 +721,10 @@ Parameters: In:  istream: The istream to check.
 Examples: myfifo available { getline } if % read it data is available.
 
 Diagnostics: If a system-error occurs, a code is stored in "sys_errno"
-             (contained in errordict) to identify the error, and "sys_errname" is
-             set to the error message. Then a "SystemError" is raised.
+             (contained in errordict) to identify the error, and "sys_errname"
+             is set to the error message. Then a "SystemError" is raised.
              The following system errors may be issued, according to the
-             POSIX standard (errors in parantheses are not
+             POSIX standard (errors in parentheses are not
              expected to occur in this routines' context):
 
              (EACCES)  Search permission is denied for a
@@ -741,7 +736,7 @@ Diagnostics: If a system-error occurs, a code is stored in "sys_errno"
                        implementation, this indicates trouble
                        getting a fildescriptor from a stream. If
                        it occurs, ask the author for a proper
-                       soultion!)
+                       solution!)
              (EDEADLK) A fcntl with function F_SETLKW would
                        cause a deadlock.
               EINTR    Function was interrupted by a signal.
@@ -784,8 +779,7 @@ SeeAlso: pipe, mkfifo, spawn, eof, in_avail
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: getPID - Get ID of the current process
 
 Synopsis: getPID -> -
@@ -809,8 +803,7 @@ SeeAlso: getPPID, getPGRP, fork, spoon, waitPID, kill, system, spawn, shpawn
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: getPPID - Get parent ID of the current process
 
 Synopsis: getPPID -> -
@@ -832,8 +825,7 @@ SeeAlso: getPID, getPGRP, fork, spoon, waitPID, kill, system, spawn, shpawn
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: getPGRP - Get process group ID of the current process
 
 Synopsis: getPGRP -> -
@@ -857,8 +849,7 @@ SeeAlso: fork, getPID, kill
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: mkfifo - Create a FIFO special file (named pipe)
 
 Synopsis: path mkfifo -> -
@@ -869,7 +860,7 @@ Description: The "mkfifo" command creates a new FIFO special file named
              file creation mask. (See remarks below.)
 
              Alternative: Functions mkfifo_s (undocumented)
-             -> behaviour and synopsis are the same.
+             -> behavior and synopsis are the same.
 
 Parameters: In: path(string):
                  Path name of the FIFO to create.
@@ -877,8 +868,8 @@ Parameters: In: path(string):
 Examples: (/home/kupper/my_fifo) mkfifo
 
 Diagnostics: If a system-error occurs, a code is stored in "sys_errno"
-             (contained in errordict) to identify the error, and "sys_errname" is
-             set to the error message. Then a "SystemError" is raised.
+             (contained in errordict) to identify the error, and "sys_errname"
+             is set to the error message. Then a "SystemError" is raised.
              The following system errors may be issued, according to the
              POSIX standard:
 
@@ -911,8 +902,7 @@ SeeAlso: pipe, mkfifo, ifstream, available, ignore, dup2
 */
 
 //-----------------------------------------------------------------------------
-/* BeginDocumentation
-
+/** @BeginDocumentation
 Name: setNONBLOCK - Switch between blocking and non-blocking I/O.
 
 Synopsis: ifstream {true|false} setNONBLOCK -> ifstream
@@ -924,10 +914,10 @@ Description: "setNONBLOCK" sets or erases the O_NONBLOCK flag on
              created stream has the O_NONBLOCK-Flag erased,
              meaning that blocking I/O is selected. By erasing
              O_NONBLOCK, a subsequent read attempt on the stream
-             will yield EOF if no data is availabe.
+             will yield EOF if no data is available.
 
              Alternatives: Function setNONBLOCK_is_b (undocumented)
-             -> behaviour and synopsis are the same.
+             -> behavior and synopsis are the same.
 
 Parameters: In : ifstream: The stream to change the flag on.
             Out: -
@@ -936,10 +926,10 @@ Examples: cin    false setNONBLOCK
           myfifo true  setNONBLOCK % set non-blocking I/O for my fifo.
 
 Diagnostics: If a system-error occurs, a code is stored in "sys_errno"
-             (contained in errordict) to identify the error, and "sys_errname" is
-             set to the error message. Then a "SystemError" is raised.
+             (contained in errordict) to identify the error, and "sys_errname"
+             is set to the error message. Then a "SystemError" is raised.
              The following system errors may be issued, according to the
-             POSIX standard (errors in parantheses are not
+             POSIX standard (errors in parentheses are not
              expected to occur in this routines' context):
 
              (EACCES)  Search permission is denied for a
@@ -949,9 +939,9 @@ Diagnostics: If a system-error occurs, a code is stored in "sys_errno"
                        delayed in the I/O operation.
               EBADF    Invalid file descriptor. (With the current
                        implementation, this indicates trouble
-                       getting a fildescriptor from a stream. If
+                       getting a filedescriptor from a stream. If
                        it occurs, ask the author for a proper
-                       soultion!)
+                       solution!)
              (EDEADLK) An fcntl with function F_SETLKW would
                        cause a deadlock.
               EINTR    Function was interrupted by a signal.
@@ -971,9 +961,7 @@ SeeAlso: available, ignore
 */
 
 
-/*
-BeginDocumentation
-
+/** @BeginDocumentation
 Name: ctermid - Return the path to the controlling terminal of the process.
 
 Synopsis: ctermid -> (pathname)

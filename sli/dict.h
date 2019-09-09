@@ -25,11 +25,13 @@
 /*
     SLI's dictionary class
 */
-#include "name.h"
-#include "token.h"
-
+// C++ includes:
 #include <map>
+
+// Includes from sli:
+#include "name.h"
 #include "sliexceptions.h"
+#include "token.h"
 
 
 typedef std::map< Name, Token, std::less< Name > > TokenMap;
@@ -58,14 +60,12 @@ class Dictionary : private TokenMap
     static bool nocase_compare( char c1, char c2 );
 
   public:
-    bool operator()( const std::pair< Name, Token >& lhs,
-      const std::pair< Name, Token >& rhs ) const
+    bool operator()( const std::pair< Name, Token >& lhs, const std::pair< Name, Token >& rhs ) const
     {
       const std::string& ls = lhs.first.toString();
       const std::string& rs = rhs.first.toString();
 
-      return std::lexicographical_compare(
-        ls.begin(), ls.end(), rs.begin(), rs.end(), nocase_compare );
+      return std::lexicographical_compare( ls.begin(), ls.end(), rs.begin(), rs.end(), nocase_compare );
     }
   };
 
@@ -104,7 +104,8 @@ public:
   const Token& lookup( const Name& n ) const;
 
   /**
-   * lookup a name in the dictionary. If the name is not found an UndefinedName exception is thrown.
+   * lookup a name in the dictionary. If the name is not found an UndefinedName
+   * exception is thrown.
    * lookup2 is the preferred way to retrieve entries from the dictionary.
    * @note The token returned should @b always  be stored as a
    *       <tt>const \&</tt>, so that the control flag for
@@ -169,7 +170,8 @@ public:
    * Checks nested dictionaries recursively.
    * @param std::string& contains string with names of non-accessed entries
    * @returns true if all dictionary elements have been accessed
-   * @note this is just a wrapper, all_accessed_() does the work, hides recursion
+   * @note this is just a wrapper, all_accessed_() does the work, hides
+   * recursion
    * @see clear_access_flags(), all_accessed_()
    */
   bool
@@ -210,10 +212,10 @@ public:
   void initialize_property_array( Name propname );
 
   /**
-   * This function is called when a dictionary is pushed to the dictionary stack.
-   * The dictioray stack must keep track about which dictioraries are on the dictionary stack.
-   * If a dictionary is modified and it is on the dictionary stack, the cache of the dictionary
-   * stack must
+   * This function is called when a dictionary is pushed to the dictionary
+   * stack. The dictioray stack must keep track about which dictioraries are on
+   * the dictionary stack. If a dictionary is modified and it is on the
+   * dictionary stack, the cache of the dictionary stack must
    * be adjusted. This is e.g. the case for the systemdict or the errordict.
    */
   void
@@ -223,7 +225,8 @@ public:
   }
 
   /**
-   * This function is called when the dictionary is popped from the dictionary stack.
+   * This function is called when the dictionary is popped from the dictionary
+   * stack.
    */
   void
   remove_dictstack_reference()
@@ -246,7 +249,8 @@ private:
    * Worker function checking whether all elements have been accessed.
    * Checks nested dictionaries recursively.
    * @param std::string& contains string with names of non-accessed entries
-   * @param std::string prefix for nested dictionary entries, built during recursion
+   * @param std::string prefix for nested dictionary entries, built during
+   * recursion
    * @returns true if all dictionary elements have been accessed
    * @note this is just the worker for all_accessed()
    * @see clear_access_flags(), all_accessed()
@@ -262,9 +266,13 @@ Dictionary::lookup( const Name& n ) const
 {
   TokenMap::const_iterator where = find( n );
   if ( where != end() )
+  {
     return ( *where ).second;
+  }
   else
+  {
     return Dictionary::VoidToken;
+  }
 }
 
 inline const Token&
@@ -272,9 +280,13 @@ Dictionary::lookup2( const Name& n ) const
 {
   TokenMap::const_iterator where = find( n );
   if ( where != end() )
+  {
     return ( *where ).second;
+  }
   else
+  {
     throw UndefinedName( n.toString() );
+  }
 }
 
 inline bool
@@ -282,9 +294,13 @@ Dictionary::known( const Name& n ) const
 {
   TokenMap::const_iterator where = find( n );
   if ( where != end() )
+  {
     return true;
+  }
   else
+  {
     return false;
+  }
 }
 
 inline bool
@@ -292,9 +308,13 @@ Dictionary::known_but_not_accessed( const Name& n ) const
 {
   TokenMap::const_iterator where = find( n );
   if ( where != end() )
+  {
     return not where->second.accessed();
+  }
   else
+  {
     return false;
+  }
 }
 
 inline Token&
@@ -308,9 +328,13 @@ inline const Token& Dictionary::operator[]( const Name& n ) const
 {
   TokenMap::const_iterator where = find( n );
   if ( where != end() )
+  {
     return ( *where ).second;
+  }
   else
+  {
     throw UndefinedName( n.toString() );
+  }
 }
 
 

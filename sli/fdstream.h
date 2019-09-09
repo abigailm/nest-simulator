@@ -28,8 +28,11 @@
  *  the file descriptor.
  */
 
+// Generated includes:
 #include "config.h"
+
 #ifndef HAVE_ISTREAM
+// C++ includes:
 #include <iostream>
 #include <fstream>
 
@@ -38,21 +41,21 @@ typedef std::ofstream ofdstream;
 typedef std::iostream fdstream;
 #else
 
+// C includes:
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
-#include <streambuf>
+
+// C++ includes:
+#include <cassert>
+#include <cstdio> // for the parallel FILE* workaround.
+#include <fstream>
+#include <iostream>
 #include <istream>
 #include <ostream>
+#include <streambuf>
 #include <string>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <iostream>
-#include <fstream>
-#include <cassert>
-
-#include <cstdio> // for the parallel FILE* workaround.
 
 // The Compaq C++ compiler V6.5-014 surpresses all non standard
 // names if compilation is performed with -std strict_ansi.
@@ -123,7 +126,9 @@ protected:
     {
       int size = ::read( m_fd, m_inbuf, s_bufsiz );
       if ( size < 1 )
+      {
         return traits_type::eof();
+      }
       setg( m_inbuf, m_inbuf, m_inbuf + size );
     }
     return traits_type::to_int_type( *gptr() );
@@ -138,7 +143,7 @@ protected:
       return traits_type::eof();
     }
 
-    if ( !traits_type::eq_int_type( c, traits_type::eof() ) )
+    if ( not traits_type::eq_int_type( c, traits_type::eof() ) )
     {
       *pptr() = traits_type::to_char_type( c );
       pbump( 1 );
@@ -152,7 +157,9 @@ protected:
   {
     std::streamsize size = pptr() - pbase();
     if ( size > 0 && ::write( m_fd, m_outbuf, size ) != size )
+    {
       return -1;
+    }
     setp( m_outbuf, m_outbuf + s_bufsiz );
     return 0;
   }
@@ -206,7 +213,8 @@ public:
   fdbuf*
   rdbuf() const
   {
-    return const_cast< fdbuf* >( &sb ); // return type is non-const, member is const, by C++ specs!
+    // return type is non-const, member is const, by C++ specs!
+    return const_cast< fdbuf* >( &sb );
   }
 
   bool
@@ -262,7 +270,8 @@ public:
   fdbuf*
   rdbuf() const
   {
-    return const_cast< fdbuf* >( &sb ); // return type is non-const, member is const, by C++ specs!
+    // return type is non-const, member is const, by C++ specs!
+    return const_cast< fdbuf* >( &sb );
   }
 
   bool
@@ -319,7 +328,8 @@ public:
   fdbuf*
   rdbuf() const
   {
-    return const_cast< fdbuf* >( &sb ); // return type is non-const, member is const, by C++ specs!
+    // return type is non-const, member is const, by C++ specs!
+    return const_cast< fdbuf* >( &sb );
   }
 
   bool

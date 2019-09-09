@@ -22,18 +22,22 @@
 
 
 #include "node.h"
+
+// Includes from libnestutil:
+#include "compose.hpp"
+
+// Includes from nestkernel:
 #include "exceptions.h"
-#include "event.h"
-#include "network.h"
-#include "namedatum.h"
+#include "kernel_manager.h"
+#include "subnet.h"
+
+// Includes from sli:
 #include "arraydatum.h"
 #include "dictutils.h"
-#include "compose.hpp"
+#include "namedatum.h"
 
 namespace nest
 {
-
-Network* Node::net_ = NULL;
 
 Node::Node()
   : gid_( 0 )
@@ -45,6 +49,7 @@ Node::Node()
   , vp_( invalid_thread_ )
   , frozen_( false )
   , buffers_initialized_( false )
+  , node_uses_wfr_( false )
 {
 }
 
@@ -57,7 +62,9 @@ Node::Node( const Node& n )
   , thread_( n.thread_ )
   , vp_( n.vp_ )
   , frozen_( n.frozen_ )
-  , buffers_initialized_( false ) // copy must always initialized its own buffers
+  // copy must always initialized its own buffers
+  , buffers_initialized_( false )
+  , node_uses_wfr_( n.node_uses_wfr_ )
 {
 }
 
@@ -68,7 +75,7 @@ Node::~Node()
 void
 Node::init_state()
 {
-  Model const* const model = net_->get_model( model_id_ );
+  Model const* const model = kernel().model_manager.get_model( model_id_ );
   assert( model );
   init_state_( model->get_prototype() );
 }
@@ -77,7 +84,9 @@ void
 Node::init_buffers()
 {
   if ( buffers_initialized_ )
+  {
     return;
+  }
 
   init_buffers_();
 
@@ -87,31 +96,47 @@ Node::init_buffers()
 std::string
 Node::get_name() const
 {
-  if ( net_ == 0 || model_id_ < 0 )
+  if ( model_id_ < 0 )
+  {
     return std::string( "UnknownNode" );
+  }
 
-  return net_->get_model( model_id_ )->get_name();
+  return kernel().model_manager.get_model( model_id_ )->get_name();
 }
 
 Model&
 Node::get_model_() const
 {
-  if ( net_ == 0 || model_id_ < 0 )
+  if ( model_id_ < 0 )
+  {
     throw UnknownModelID( model_id_ );
+  }
 
-  return *net_->get_model( model_id_ );
+  return *kernel().model_manager.get_model( model_id_ );
 }
 
 bool
 Node::is_local() const
 {
-  return !is_proxy();
+  return not is_proxy();
 }
 
 DictionaryDatum
 Node::get_status_dict_()
 {
   return DictionaryDatum( new Dictionary );
+}
+
+void
+Node::set_local_device_id( const index lsdid )
+{
+  assert( false && "set_local_device_id() called on a non-device node of type" );
+}
+
+index
+Node::get_local_device_id() const
+{
+  assert( false && "set_local_device_id() called on a non-device node." );
 }
 
 DictionaryDatum
@@ -130,6 +155,7 @@ Node::get_status_base()
   {
     ( *dict )[ names::global_id ] = get_gid();
     ( *dict )[ names::frozen ] = is_frozen();
+    ( *dict )[ names::node_uses_wfr ] = node_uses_wfr();
     ( *dict )[ names::thread ] = get_thread();
     ( *dict )[ names::vp ] = get_vp();
     if ( parent_ )
@@ -144,6 +170,7 @@ Node::get_status_base()
   }
 
   ( *dict )[ names::thread_local_id ] = get_thread_lid();
+  ( *dict )[ names::supports_precise_spikes ] = is_off_grid();
 
   // This is overwritten with a corresponding value in the
   // base classes for stimulating and recording devices, and
@@ -167,11 +194,21 @@ Node::set_status_base( const DictionaryDatum& dict )
   }
   catch ( BadProperty& e )
   {
-    throw BadProperty( String::compose(
-      "Setting status of a '%1' with GID %2: %3", get_name(), get_gid(), e.message() ) );
+    throw BadProperty(
+      String::compose( "Setting status of a '%1' with GID %2: %3", get_name(), get_gid(), e.message() ) );
   }
 
   updateValue< bool >( dict, names::frozen, frozen_ );
+}
+
+/**
+ * Default implementation of wfr_update just
+ * throws UnexpectedEvent
+ */
+bool
+Node::wfr_update( Time const&, const long, const long )
+{
+  throw UnexpectedEvent();
 }
 
 /**
@@ -187,7 +224,8 @@ Node::send_test_event( Node&, rport, synindex, bool )
  * Default implementation of register_stdp_connection() just
  * throws IllegalConnection
  */
-void Node::register_stdp_connection( double_t )
+void
+Node::register_stdp_connection( double, double )
 {
   throw IllegalConnection();
 }
@@ -206,6 +244,18 @@ Node::handle( SpikeEvent& )
 
 port
 Node::handles_test_event( SpikeEvent&, rport )
+{
+  throw IllegalConnection();
+}
+
+void
+Node::handle( WeightRecorderEvent& )
+{
+  throw UnexpectedEvent();
+}
+
+port
+Node::handles_test_event( WeightRecorderEvent&, rport )
 {
   throw IllegalConnection();
 }
@@ -244,7 +294,8 @@ port
 Node::handles_test_event( DataLoggingRequest&, rport )
 {
   throw IllegalConnection(
-    "Possible cause: only static synapse types may be used to connect devices." );
+    "Possible cause: only static synapse types may be used to connect "
+    "devices." );
 }
 
 void
@@ -281,45 +332,125 @@ port
 Node::handles_test_event( DSSpikeEvent&, rport )
 {
   throw IllegalConnection(
-    "Possible cause: only static synapse types may be used to connect devices." );
+    "Possible cause: only static synapse types may be used to connect "
+    "devices." );
 }
 
 port
 Node::handles_test_event( DSCurrentEvent&, rport )
 {
   throw IllegalConnection(
-    "Possible cause: only static synapse types may be used to connect devices." );
+    "Possible cause: only static synapse types may be used to connect "
+    "devices." );
 }
 
-double_t Node::get_K_value( double_t )
+void
+Node::handle( GapJunctionEvent& )
+{
+  throw UnexpectedEvent();
+}
+
+port
+Node::handles_test_event( GapJunctionEvent&, rport )
+{
+  throw IllegalConnection();
+  return invalid_port_;
+}
+
+void
+Node::sends_secondary_event( GapJunctionEvent& )
+{
+  throw IllegalConnection();
+}
+
+void
+Node::handle( InstantaneousRateConnectionEvent& )
+{
+  throw UnexpectedEvent();
+}
+
+void
+Node::handle( DiffusionConnectionEvent& )
+{
+  throw UnexpectedEvent();
+}
+
+void
+Node::handle( DelayedRateConnectionEvent& )
+{
+  throw UnexpectedEvent();
+}
+
+port
+Node::handles_test_event( InstantaneousRateConnectionEvent&, rport )
+{
+  throw IllegalConnection();
+  return invalid_port_;
+}
+
+port
+Node::handles_test_event( DiffusionConnectionEvent&, rport )
+{
+  throw IllegalConnection();
+  return invalid_port_;
+}
+
+port
+Node::handles_test_event( DelayedRateConnectionEvent&, rport )
+{
+  throw IllegalConnection();
+  return invalid_port_;
+}
+
+void
+Node::sends_secondary_event( InstantaneousRateConnectionEvent& )
+{
+  throw IllegalConnection();
+}
+
+void
+Node::sends_secondary_event( DiffusionConnectionEvent& )
+{
+  throw IllegalConnection();
+}
+
+void
+Node::sends_secondary_event( DelayedRateConnectionEvent& )
+{
+  throw IllegalConnection();
+}
+
+
+double
+Node::get_LTD_value( double )
+{
+  throw UnexpectedEvent();
+}
+
+double
+Node::get_K_value( double )
 {
   throw UnexpectedEvent();
 }
 
 
 void
-Node::get_K_values( double_t, double_t&, double_t& )
+Node::get_K_values( double, double&, double& )
 {
   throw UnexpectedEvent();
 }
 
 void
-nest::Node::get_history( double_t,
-  double_t,
-  std::deque< histentry >::iterator*,
-  std::deque< histentry >::iterator* )
+nest::Node::get_history( double, double, std::deque< histentry >::iterator*, std::deque< histentry >::iterator* )
 {
   throw UnexpectedEvent();
 }
 
 void
-Node::set_has_proxies( const bool )
-{
-  throw UnexpectedEvent();
-}
-
-void
-Node::set_local_receiver( const bool )
+nest::Node::get_LTP_history( double,
+  double,
+  std::deque< histentry_cl >::iterator*,
+  std::deque< histentry_cl >::iterator* )
 {
   throw UnexpectedEvent();
 }

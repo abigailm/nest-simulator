@@ -20,25 +20,33 @@
  *
  */
 
+// Generated includes:
 #include "config.h"
 
 #ifndef GSL_BINOMIAL_RANDOMDEV_H
 #define GSL_BINOMIAL_RANDOMDEV_H
 
-#include "randomgen.h"
-#include "randomdev.h"
+// Includes from libnestutil:
 #include "lockptr.h"
-#include "dictdatum.h"
+
+// Includes from librandom:
 #include "gslrandomgen.h"
+#include "randomdev.h"
+#include "randomgen.h"
+
+// Includes from sli:
+#include "dictdatum.h"
 
 #ifdef HAVE_GSL
 
-#include <gsl/gsl_rng.h>
+// External includes:
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_rng.h>
 
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::gsl_binomial - GSL binomial random deviate generator
+
 Description:
 This function returns a random integer from the binomial distribution,
 the number of successes in n independent trials with probability
@@ -54,6 +62,7 @@ Parameters:
    n - number of trials (positive integer)
 
 SeeAlso: CreateRDV, RandomArray, rdevdict
+
 Author: Jochen Martin Eppler
 */
 
@@ -75,7 +84,8 @@ namespace librandom
   - parameter p (optional, default = 0.5)
   - parameter n (optional, default = 1)
 
- @see http://www.gnu.org/software/gsl/manual/html_node/The-Binomial-Distribution.html
+ @see
+ http://www.gnu.org/software/gsl/manual/html_node/The-Binomial-Distribution.html
  @ingroup RandomDeviateGenerators
 */
 

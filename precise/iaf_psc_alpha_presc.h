@@ -23,100 +23,95 @@
 #ifndef IAF_PSC_ALPHA_PRESC_H
 #define IAF_PSC_ALPHA_PRESC_H
 
-#include "config.h"
-
-#include "nest.h"
-#include "event.h"
-#include "node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-
-#include "universal_data_logger.h"
-
+// C++ includes:
 #include <vector>
 
-/*BeginDocumentation
-  Name: iaf_psc_alpha_presc - Leaky integrate-and-fire neuron
-  with alpha-shape postsynaptic currents; prescient implementation.
+// Generated includes:
+#include "config.h"
 
-  Description:
-  iaf_psc_alpha_presc is the "prescient" implementation of the leaky
-  integrate-and-fire model neuron with alpha-shaped postsynaptic
-  currents in the sense of [1].
-
-  PSCs are normalized to an amplitude of 1pA.
-
-  The prescient implementation predicts the effect of spikes arriving
-  during a time step by exactly integrating their effect from the
-  precise time of spike arrival to the end of the time step.  This is
-  exact if the neuron was not refractory at the beginning of the
-  interval and remains subthreshold throughout the
-  interval. Subthreshold dynamics are integrated using exact integration
-  between events [2].
-
-  Parameters:
-  The following parameters can be set in the status dictionary.
-
-
-  V_m          double - Membrane potential in mV
-  E_L          double - Resting membrane potential in mV.
-  V_min        double - Absolute lower value for the membrane potential.
-  C_m          double - Capacity of the membrane in pF
-  tau_m        double - Membrane time constant in ms.
-  t_ref        double - Duration of refractory period in ms.
-  V_th         double - Spike threshold in mV.
-  V_reset      double - Reset potential of the membrane in mV.
-  tau_syn      double - Rise time of the synaptic alpha function in ms.
-  I_e          double - Constant external input current in pA.
-  Interpol_Order  int - Interpolation order for spike time:
-                        0-none, 1-linear, 2-quadratic, 3-cubic
-
-  Remarks:
-  Please note that this node is capable of sending precise spike times
-  to target nodes (on-grid spike time plus offset). If this node is
-  connected to a spike_detector, the property "precise_times" of the
-  spike_detector has to be set to true in order to record the offsets
-  in addition to the on-grid spike times.
-
-  Remarks:
-  If tau_m is very close to tau_syn_ex or tau_syn_in, the model
-  will numerically behave as if tau_m is equal to tau_syn_ex or
-  tau_syn_in, respectively, to avoid numerical instabilities.
-  For details, please see IAF_Neruons_Singularity.ipynb in
-  the NEST source code (docs/model_details).
-
-  References:
-  [1] Morrison A, Straube S, Plesser H E, & Diesmann M (2006) Exact Subthreshold
-  Integration with Continuous Spike Times in Discrete Time Neural Network
-  Simulations. To appear in Neural Computation.
-  [2] Rotter S & Diesmann M (1999) Exact simulation of time-invariant linear
-  systems with applications to neuronal modeling. Biologial Cybernetics
-  81:381-402.
-
-  Author: Diesmann, Eppler, Morrison, Plesser, Straube
-
-  Sends: SpikeEvent
-
-  Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
-
-  SeeAlso: iaf_psc_alpha, iaf_psc_alpha_canon, iaf_psc_delta_canon
-
-*/
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
 
-/**
- * Leaky iaf neuron, alpha PSC synapses, canonical implementation.
- * @note Inherit privately from Node, so no classes can be derived
- * from this one.
- * @todo Implement current input in consistent way.
- */
-class iaf_psc_alpha_presc : public Node
+/** @BeginDocumentation
+Name: iaf_psc_alpha_presc - Leaky integrate-and-fire neuron
+with alpha-shape postsynaptic currents; prescient implementation.
+
+Description:
+
+iaf_psc_alpha_presc is the "prescient" implementation of the leaky
+integrate-and-fire model neuron with alpha-shaped postsynaptic
+currents in the sense of [1].
+
+PSCs are normalized to an amplitude of 1pA.
+
+The prescient implementation predicts the effect of spikes arriving
+during a time step by exactly integrating their effect from the
+precise time of spike arrival to the end of the time step.  This is
+exact if the neuron was not refractory at the beginning of the
+interval and remains subthreshold throughout the
+interval. Subthreshold dynamics are integrated using exact integration
+between events [2].
+
+Parameters:
+
+The following parameters can be set in the status dictionary.
+
+
+V_m          double - Membrane potential in mV
+E_L          double - Resting membrane potential in mV.
+V_min        double - Absolute lower value for the membrane potential.
+C_m          double - Capacity of the membrane in pF
+tau_m        double - Membrane time constant in ms.
+t_ref        double - Duration of refractory period in ms.
+V_th         double - Spike threshold in mV.
+V_reset      double - Reset potential of the membrane in mV.
+tau_syn      double - Rise time of the synaptic alpha function in ms.
+I_e          double - Constant external input current in pA.
+Interpol_Order  int - Interpolation order for spike time:
+                      0-none, 1-linear, 2-quadratic, 3-cubic
+
+Remarks:
+
+This model transmits precise spike times to target nodes (on-grid spike
+time and offset). If this node is connected to a spike_detector, the
+property "precise_times" of the spike_detector has to be set to true in
+order to record the offsets in addition to the on-grid spike times.
+
+The iaf_psc_delta_ps neuron accepts connections transmitting
+CurrentEvents. These events transmit stepwise-constant currents which
+can only change at on-grid times.
+
+If tau_m is very close to tau_syn, the model will numerically behave
+as if tau_m is equal to tau_syn, to avoid numerical instabilities.
+For details, please see doc/model_details/IAF_neurons_singularity.ipynb.
+
+References:
+
+[1] Morrison A, Straube S, Plesser H E, & Diesmann M (2006) Exact Subthreshold
+Integration with Continuous Spike Times in Discrete Time Neural Network
+Simulations. To appear in Neural Computation.
+[2] Rotter S & Diesmann M (1999) Exact simulation of time-invariant linear
+systems with applications to neuronal modeling. Biologial Cybernetics
+81:381-402.
+
+Author: Diesmann, Eppler, Morrison, Plesser, Straube
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+SeeAlso: iaf_psc_alpha, iaf_psc_alpha_ps, iaf_psc_delta_ps
+*/
+class iaf_psc_alpha_presc : public Archiving_Node
 {
-
-  class Network;
-
 public:
   /** Basic constructor.
       This constructor should only be used by GenericModel to create
@@ -135,7 +130,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -179,8 +175,8 @@ private:
    * advanced from event to event, as retrieved from the spike queue.
    *
    * Return from refractoriness is handled as a special event in the
-   * queue, which is marked by a weight that is GSL_NAN.  This greatly simplifies
-   * the code.
+   * queue, which is marked by a weight that is GSL_NAN.  This greatly
+   * simplifies the code.
    *
    * For steps, during which no events occur, the precomputed propagator matrix
    * is used.  For other steps, the propagator matrix is computed as needed.
@@ -188,17 +184,14 @@ private:
    * While the neuron is refractory, membrane potential (y3_) is
    * clamped to U_reset_.
    */
-  void update( Time const& origin, const long_t from, const long_t to );
+  void update( Time const& origin, const long from, const long to );
 
   //@}
-
-  Time get_spiketime() const;
-  void set_spiketime( Time const& );
 
   /**
    * Compute membrane potential after return from refractoriness.
    */
-  double_t update_y3_delta_() const;
+  double update_y3_delta_() const;
 
   /** @name Threshold-crossing interpolation
    * These functions determine the time of threshold crossing using
@@ -225,10 +218,10 @@ private:
    * @param   Time const &
    * @returns time from previous event to threshold crossing
    */
-  double_t thresh_find_( const double_t ) const;
-  double_t thresh_find1_( const double_t ) const;
-  double_t thresh_find2_( const double_t ) const;
-  double_t thresh_find3_( const double_t ) const;
+  double thresh_find_( const double ) const;
+  double thresh_find1_( const double ) const;
+  double thresh_find2_( const double ) const;
+  double thresh_find3_( const double ) const;
   //@}
 
   // The next two classes need to be friends to access the State_ class/member
@@ -244,36 +237,36 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t tau_m_;
+    double tau_m_;
 
     /** Time constant of synaptic current in ms. */
-    double_t tau_syn_;
+    double tau_syn_;
 
     /** Membrane capacitance in pF. */
-    double_t c_m_;
+    double c_m_;
 
     /** Refractory period in ms. */
-    double_t t_ref_;
+    double t_ref_;
 
     /** Resting potential in mV. */
-    double_t E_L_;
+    double E_L_;
 
     /** External DC current [pA] */
-    double_t I_e_;
+    double I_e_;
 
     /** Threshold, RELATIVE TO RESTING POTENTAIL(!).
         I.e. the real threshold is U_th_ + E_L_. */
-    double_t U_th_;
+    double U_th_;
 
     /** Lower bound, RELATIVE TO RESTING POTENTAIL(!).
         I.e. the real lower bound is U_min_+E_L_. */
-    double_t U_min_;
+    double U_min_;
 
     /** Reset potential.
         At threshold crossing, the membrane potential is reset to this value.
         Relative to resting potential.
     */
-    double_t U_reset_;
+    double U_reset_;
 
     /** Interpolation order */
     interpOrder Interpol_;
@@ -295,15 +288,15 @@ private:
    */
   struct State_
   {
-    double_t y0_; //!< external input current
-    double_t y1_; //!< alpha current, first component
-    double_t y2_; //!< alpha current, second component
-    double_t y3_; //!< Membrane pot. rel. to resting pot. E_L_.
+    double y0_; //!< external input current
+    double y1_; //!< alpha current, first component
+    double y2_; //!< alpha current, second component
+    double y3_; //!< Membrane pot. rel. to resting pot. E_L_.
 
-    long_t r_; //!< refractory steps remaining
+    long r_; //!< refractory steps remaining
 
-    long_t last_spike_step_;     //!< time stamp of most recent spike
-    double_t last_spike_offset_; //!< offset of most recent spike
+    long last_spike_step_;     //!< time stamp of most recent spike
+    double last_spike_offset_; //!< offset of most recent spike
 
     State_(); //!< Default initialization
 
@@ -343,28 +336,28 @@ private:
    */
   struct Variables_
   {
-    double_t y0_before_; //!< y0_ at beginning of mini-step, for interpolation
-    double_t y1_before_; //!< y1_ at beginning of mini-step, for interpolation
-    double_t y2_before_; //!< y2_ at beginning of mini-step, for interpolation
-    double_t y3_before_; //!< y3_ at beginning of mini-step, for interpolation
+    double y0_before_; //!< y0_ at beginning of mini-step, for interpolation
+    double y1_before_; //!< y1_ at beginning of mini-step, for interpolation
+    double y2_before_; //!< y2_ at beginning of mini-step, for interpolation
+    double y3_before_; //!< y3_ at beginning of mini-step, for interpolation
 
-    double_t h_ms_;            //!< time resolution in ms
-    double_t PSCInitialValue_; //!< e / tau_syn
-    double_t gamma_;           //!< 1/c_m * 1/(1/tau_syn - 1/tau_m)
-    double_t gamma_sq_;        //!< 1/c_m * 1/(1/tau_syn - 1/tau_m)^2
-    double_t expm1_tau_m_;     //!< exp(-h/tau_m) - 1
-    double_t expm1_tau_syn_;   //!< exp(-h/tau_syn) - 1
-    double_t P30_;             //!< progagator matrix elem, 3rd row
-    double_t P31_;             //!< progagator matrix elem, 3rd row
-    double_t P32_;             //!< progagator matrix elem, 3rd row
+    double h_ms_;            //!< time resolution in ms
+    double PSCInitialValue_; //!< e / tau_syn
+    double gamma_;           //!< 1/c_m * 1/(1/tau_syn - 1/tau_m)
+    double gamma_sq_;        //!< 1/c_m * 1/(1/tau_syn - 1/tau_m)^2
+    double expm1_tau_m_;     //!< exp(-h/tau_m) - 1
+    double expm1_tau_syn_;   //!< exp(-h/tau_syn) - 1
+    double P30_;             //!< progagator matrix elem, 3rd row
+    double P31_;             //!< progagator matrix elem, 3rd row
+    double P32_;             //!< progagator matrix elem, 3rd row
 
-    long_t refractory_steps_; //!< refractory time in steps remaining
+    long refractory_steps_; //!< refractory time in steps remaining
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out the real membrane potential
-  double_t
+  double
   get_V_m_() const
   {
     return S_.y3_ + P_.E_L_;
@@ -402,7 +395,9 @@ inline port
 iaf_psc_alpha_presc::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -410,7 +405,9 @@ inline port
 iaf_psc_alpha_presc::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -418,7 +415,9 @@ inline port
 iaf_psc_alpha_presc::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 
@@ -427,6 +426,8 @@ iaf_psc_alpha_presc::get_status( DictionaryDatum& d ) const
 {
   P_.get( d );
   S_.get( d, P_ );
+  Archiving_Node::get_status( d );
+
   ( *d )[ names::recordables ] = recordablesMap_.get_list();
 }
 
@@ -437,6 +438,12 @@ iaf_psc_alpha_presc::set_status( const DictionaryDatum& d )
   const double delta_EL = ptmp.set( d ); // throws if BadProperty
   State_ stmp = S_;                      // temporary copy in case of errors
   stmp.set( d, ptmp, delta_EL );         // throws if BadProperty
+
+  // We now know that (ptmp, stmp) are consistent. We do not
+  // write them back to (P_, S_) before we are also sure that
+  // the properties to be set in the parent class are internally
+  // consistent.
+  Archiving_Node::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;

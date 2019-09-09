@@ -24,112 +24,145 @@
 #define CORRELATION_DETECTOR_H
 
 
-#include <vector>
+// C++ includes:
 #include <deque>
-#include "nest.h"
+#include <vector>
+
+// Includes from nestkernel:
 #include "event.h"
+#include "nest_types.h"
 #include "node.h"
 #include "pseudo_recording_device.h"
-
-/* BeginDocumentation
-
-   Name: correlation_detector - Device for evaluating cross correlation between two spike sources
-
-   Description:
-   The correlation_detector device is a recording device. It is used to record
-   spikes from two pools of spike inputs and calculates the count_histogram of inter-spike
-   intervals (raw cross correlation) binned to bins of duration delta_tau.
-   The result can be obtained via GetStatus under the key /count_histogram.
-   In parallel it records a weighted histogram, where the connection weights
-   are used to weight every count. In order to minimize numerical errors the Kahan summation
-   algorithm is used when calculating the weighted histogram.
-   (http://en.wikipedia.org/wiki/Kahan_summation_algorithm)
-   Both are arrays of 2*tau_max/delta_tau+1 values containing the histogram counts in the
-   following way:
-
-   Let t_{1,i} be the spike times of source 1, t_{2,j} the spike times of source 2.
-   histogram[n] then contains the sum of products of the weight w_{1,i}*w_{2,j},
-   count_histogram[n] contains 1 summed over all events with t_{2,j} - t_{1,i} in
-
-   [ n*delta_tau - tau_max - delta_tau/2 , n*delta_tau - tau_max + delta_tau/2 ) .
-
-   The bins are centered around the time difference they represent, but are left-closed
-   and right-open. This means that events with time difference -tau_max-delta_tau/2 are
-   counted in the leftmost bin, but event with difference tau_max+delta_tau/2 are not
-   counted at all.
-
-   The correlation detector has two inputs, which are selected via the receptor_port of the
-   incoming connection: All incoming connections with receptor_port = 0 will be pooled as the
-   spike source 1, the ones with receptor_port = 1 will be used as spike source 2.
-
-   Parameters:
-   Tstart     double    - Time when to start counting events. This time should be set to at least
-                         start + tau_max in order to avoid edge effects of the correlation counts.
-   Tstop      double    - Time when to stop counting events. This time should be set to at most
-                          Tsim - tau_max, where Tsim is the duration of simulation,
-                          in order to avoid edge effects of the correlation counts.
-   delta_tau  double    - bin width in ms
-   tau_max    double    - one-sided histogram width in ms. Events with differences in
-                         [-tau_max-delta_tau/2, tau_max+delta_tau/2) are counted.
-
-   histogram            double vector, read-only  - raw, weighted cross correlation counts
-   histogram_correction double_vector, read-only  - correction factors for kahan summation algorithm
-   count_histogram      long vector, read-only    - raw, cross correlation counts
-   n_events             integer vector            - number of events from source 0 and 1.
-                                                    By setting n_events to [0 0], the histogram
-                                                    is cleared.
-
-   Remarks: This recorder does not record to file, screen or memory in the usual sense.
-
-   Example:
-   /s1 /spike_generator Create def
-   /s2 /spike_generator Create def
-   s1 << /spike_times [ 1.0 1.5 2.7 4.0 5.1 ] >> SetStatus
-   s2 << /spike_times [ 0.9 1.8 2.1 2.3 3.5 3.8 4.9 ] >> SetStatus
-   /cd /correlation_detector Create def
-   cd << /delta_tau 0.5 /tau_max 2.5 >> SetStatus
-   s1 cd << /receptor_type 0 >> Connect
-   s2 cd << /receptor_type 1 >> Connect
-   10 Simulate
-   cd [/n_events] get ==   --> [# 5 7 #]
-   cd [/histogram] get ==  --> [. 0 3 3 1 4 3 2 6 1 2 2 .]
-   cd << /reset true >> SetStatus
-   cd [/histogram] get ==  --> [. 0 0 0 0 0 0 0 0 0 0 0 .]
-
-   Receives: SpikeEvent
-
-   Author: Moritz Helias
-           Jakob Jordan (implemented Kahan summation algorithm) 2013/02/18
-   FirstVersion: 2007/5/21
-   SeeAlso: spike_detector, Device, PseudoRecordingDevice
-   Availability: NEST
-*/
 
 
 namespace nest
 {
 
-class Network;
+/** @BeginDocumentation
+@ingroup Devices
+@ingroup detector
 
-/**
- * Correlation detector class.
- *
- * @note Correlation detectors IGNORE any connection delays.
- *
- * @note Correlation detector breaks with the persistence scheme as
- *       follows: the internal buffers for storing spikes are part
- *       of State_, but are initialized by init_buffers_().
- *
- * @todo The correlation detector could be made more efficient as follows
- *       (HEP 2008-07-01):
- *       - incoming_ is vector of two deques
- *       - let handle() push_back() entries in incoming_ and do nothing else
- *       - keep index to last "old spike" in each incoming_; cannot
- *         be iterator since that may change
- *       - update() deletes all entries before now-tau_max, sorts the new entries,
- *         then registers new entries in histogram
- */
+Name: correlation_detector - Device for evaluating cross correlation between
+                             two spike sources
 
+Description:
+
+The correlation_detector device is a recording device. It is used to record
+spikes from two pools of spike inputs and calculates the count_histogram of
+inter-spike intervals (raw cross correlation) binned to bins of duration
+\f$ \delta_\tau \f$. The result can be obtained via GetStatus under the key
+/count_histogram.
+In parallel it records a weighted histogram, where the connection weights
+are used to weight every count. In order to minimize numerical errors the
+Kahan summation algorithm is used when calculating the weighted histogram.
+(http://en.wikipedia.org/wiki/Kahan_summation_algorithm)
+Both are arrays of \f$ 2*\tau_{max}/\delta_\tau+1 \f$ values containing the
+histogram counts in the following way:
+
+Let \f$ t_{1,i}\f$ be the spike times of source 1,
+\f$ t_{2,j} \f$ the spike times of source 2.
+histogram[n] then contains the sum of products of the weight
+\f$ w_{1,i}*w_{2,j}, \f$ count_histogram[n] contains 1 summed over all events
+with\f$ t_{2,j}-t_{1,i} \f$ in
+
+   @f[ n*\delta_\tau - \tau_{max} - \delta_\tau/2 @f]
+   @f[ n*\delta_\tau - \tau_{max} + \delta_\tau/2 @f]
+
+The bins are centered around the time difference they represent, but are
+left-closed and right-open. This means that events with time difference
+-tau_max-delta_tau/2 are counted in the leftmost bin, but event with
+difference tau_max+delta_tau/2 are not counted at all.
+
+The correlation detector has two inputs, which are selected via the
+receptor_port of the incoming connection: All incoming connections with
+receptor_port = 0 will be pooled as the spike source 1, the ones with
+receptor_port = 1 will be used as spike source 2.
+
+Parameters:
+
+\verbatim embed:rst
+==================== ======== ====================================================
+Tstart               real     Time when to start counting events. This time should
+                              be set to at least start + tau_max in order to avoid
+                              edge effects of the correlation counts.
+Tstop                real     Time when to stop counting events. This time should
+                              be set to at most Tsim - tau_max, where Tsim is the
+                              duration of simulation, in order to avoid edge
+                              effects of the correlation counts.
+delta_tau            ms       Bin width. This has to be an odd multiple of
+                              the resolution, to allow the symmetry between
+                              positive and negative time-lags.
+tau_max              ms       One-sided width. In the lower triagnular part
+                              events with differences in [0, tau_max+delta_tau/2)
+                              are counted. On the diagonal and in the upper
+                              triangular part events with differences in
+                              (0, tau_max+delta_tau/2].
+N_channels           integer  The number of pools. This defines the range of
+                              receptor_type. Default is 1.
+                              Setting N_channels clears count_covariance,
+                              covariance and n_events.
+histogram            squared  read-only - raw, weighted, cross-correlation counts
+                     synaptic Unit depends on model
+                     weights
+histogram_correction list of  read-only - Correction factors for kahan summation
+                     integers algoritm
+n_events             list of  Number of events from source 0 and 1. By setting
+                     integers n_events to [0,0], the histogram is cleared.
+==================== ======== ====================================================
+\endverbatim
+
+Remarks:
+
+This recorder does not record to file, screen or memory in the usual
+sense.
+
+Correlation detectors IGNORE any connection delays.
+
+Correlation detector breaks with the persistence scheme as
+follows: the internal buffers for storing spikes are part
+of State_, but are initialized by init_buffers_().
+
+@todo The correlation detector could be made more efficient as follows
+(HEP 2008-07-01):
+- incoming_ is vector of two deques
+- let handle() push_back() entries in incoming_ and do nothing else
+- keep index to last "old spike" in each incoming_; cannot
+  be iterator since that may change
+- update() deletes all entries before now-tau_max, sorts the new
+  entries, then registers new entries in histogram
+
+Example:
+
+See Auto- and crosscorrelation functions for spike trains[cross_check_mip_corrdet.py]
+in pynest/examples.
+
+     SLI
+
+     /s1 /spike_generator Create def
+     /s2 /spike_generator Create def
+     s1 << /spike_times [ 1.0 1.5 2.7 4.0 5.1 ] >> SetStatus
+     s2 << /spike_times [ 0.9 1.8 2.1 2.3 3.5 3.8 4.9 ] >> SetStatus
+     /cd /correlation_detector Create def
+     cd << /delta_tau 0.5 /tau_max 2.5 >> SetStatus
+     s1 cd << /receptor_type 0 >> Connect
+     s2 cd << /receptor_type 1 >> Connect
+     10 Simulate
+     cd [/n_events] get ==   --> [# 5 7 #]
+     cd [/histogram] get ==  --> [. 0 3 3 1 4 3 2 6 1 2 2 .]
+     cd << /reset true >> SetStatus
+     cd [/histogram] get ==  --> [. 0 0 0 0 0 0 0 0 0 0 0 .]
+
+Receives: SpikeEvent
+
+Author: Moritz Helias
+        Jakob Jordan (implemented Kahan summation algorithm) 2013/02/18
+
+FirstVersion: 2007/5/21
+
+SeeAlso: spike_detector, Device, PseudoRecordingDevice
+
+Availability: NEST
+*/
 class correlation_detector : public Node
 {
 
@@ -149,7 +182,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -166,7 +200,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // ------------------------------------------------------------
 
@@ -176,10 +210,10 @@ private:
    */
   struct Spike_
   {
-    long_t timestep_;
-    double_t weight_;
+    long timestep_;
+    double weight_;
 
-    Spike_( long_t timestep, double_t weight )
+    Spike_( long timestep, double weight )
       : timestep_( timestep )
       , weight_( weight )
     {
@@ -234,17 +268,19 @@ private:
    */
   struct State_
   {
-    std::vector< long_t > n_events_;        //!< spike counters
+    std::vector< long > n_events_;          //!< spike counters
     std::vector< SpikelistType > incoming_; //!< incoming spikes, sorted
-                                            /** Weighted histogram.
-                                             *  @note Data type is double to accomodate weights.
-                                             */
-    std::vector< double_t > histogram_;
-    std::vector< double_t > histogram_correction_; //!< used for Kahan summation algorithm
 
-    /** Unweighted histogram.
+    /** Weighted histogram.
+     * @note Data type is double to accommodate weights.
      */
-    std::vector< long_t > count_histogram_;
+    std::vector< double > histogram_;
+
+    //! used for Kahan summation algorithm
+    std::vector< double > histogram_correction_;
+
+    //! Unweighted histogram.
+    std::vector< long > count_histogram_;
 
     State_(); //!< initialize default state
 
@@ -269,7 +305,9 @@ inline port
 correlation_detector::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type < 0 || receptor_type > 1 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
 
   return receptor_type;
 }

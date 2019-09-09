@@ -23,63 +23,71 @@
 #ifndef ppd_sup_generator_H
 #define ppd_sup_generator_H
 
+// C++ includes:
 #include <vector>
-#include "nest.h"
-#include "event.h"
-#include "node.h"
-#include "stimulating_device.h"
-#include "scheduler.h"
+
+// Includes from librandom:
 #include "binomial_randomdev.h"
 #include "poisson_randomdev.h"
+
+// Includes from nestkernel:
 #include "connection.h"
-
-/*BeginDocumentation
-Name: ppd_sup_generator - simulate the superimposed spike train of a population of Poisson processes
-with dead time.
-Description:
-
-  The ppd_sup_generator generator simulates the pooled spike train of a
-  population of neurons firing independently with Poisson process with dead
-  time statistics.
-  The rate parameter can also be sine-modulated. The generator does not
-  initialize to equilibrium in this case, initial transients might occur.
-
-Parameters:
-   The following parameters appear in the element's status dictionary:
-
-   rate                double - mean firing rate of the component processes, default: 0 s^-1
-   dead_time           double - minimal time between two spikes of the component processes, default:
-0 ms
-   n_proc              long   - number of superimposed independent component processes, default: 1
-   frequency           double - rate modulation frequency, default: 0 Hz
-   relative_amplitude  double - relative rate modulation amplitude, default: 0
-
-Remarks:
-   The generator has been published in Deger, Helias, Boucsein, Rotter (2011)
-   Statistical properties of superimposed stationary spike trains,
-   Journal of Computational Neuroscience.
-   URL: http://www.springerlink.com/content/u75211r381p08301/
-   DOI: 10.1007/s10827-011-0362-8
-
-Authors:
-   June 2009, Moritz Deger, Moritz Helias
-
-SeeAlso: gamma_sup_generator, poisson_generator_ps, spike_generator, Device, StimulatingDevice
-*/
-
+#include "device_node.h"
+#include "event.h"
+#include "nest_types.h"
+#include "stimulating_device.h"
 
 namespace nest
 {
 
-/**
- * Generator of the spike output of a population of Poisson processes with dead time.
- *
- * This Poisson process with dead time superposition generator sends different spike
- * trains to all its targets.
- *
- * @ingroup Devices
- */
-class ppd_sup_generator : public Node
+/** @BeginDocumentation
+@ingroup Devices
+@ingroup generator
+
+Name: ppd_sup_generator - simulate the superimposed spike train of a population
+of Poisson processes
+with dead time.
+
+Description:
+
+The ppd_sup_generator generator simulates the pooled spike train of a
+population of neurons firing independently with Poisson process with dead
+time statistics.
+The rate parameter can also be sine-modulated. The generator does not
+initialize to equilibrium in this case, initial transients might occur.
+
+Parameters:
+
+The following parameters appear in the element's status dictionary:
+\verbatim embed:rst
+===================  ======== =================================================
+ rate                spikes/s Mean firing rate of the component processes,
+                              default: 0 spikes/s
+ dead_time           ms       Minimal time between two spikes of the component
+                              processes, default: 0 ms
+ n_proc              integer  Number of superimposed independent component
+                              processes, default: 1
+ frequency           Hz       Rate modulation frequency, default: 0 Hz
+ relative_amplitude  real     Relative rate modulation amplitude, default: 0
+===================  ======== =================================================
+\endverbatim
+
+Remarks:
+
+References:
+
+\verbatim embed:rst
+.. [1]  Deger M, Helias M, Boucsein C, Rotter S (2011). Statistical properties
+        of superimposed stationary spike trains. Journal of Computational
+        Neuroscience. DOI: https://doi.org/10.1007/s10827-011-0362-8
+\endverbatim
+Authors:
+   June 2009, Moritz Deger, Moritz Helias
+
+SeeAlso: gamma_sup_generator, poisson_generator_ps, spike_generator, Device,
+StimulatingDevice
+*/
+class ppd_sup_generator : public DeviceNode
 {
 
 public:
@@ -99,7 +107,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::event_hook;
 
@@ -107,7 +116,6 @@ public:
 
   void get_status( DictionaryDatum& ) const;
   void set_status( const DictionaryDatum& );
-
 
 private:
   void init_state_( const Node& );
@@ -123,7 +131,7 @@ private:
    * information.
    * @see event_hook, DSSpikeEvent
    */
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   /**
    * Send out spikes.
@@ -139,11 +147,11 @@ private:
    */
   struct Parameters_
   {
-    double_t rate_;      //!< process rate [Hz]
-    double_t dead_time_; //!< dead time [ms]
-    ulong_t n_proc_;     //!< number of component processes
-    double_t frequency_; //!< rate modulation frequency [Hz]
-    double_t amplitude_; //!< rate modulation amplitude [Hz]
+    double rate_;          //!< process rate [Hz]
+    double dead_time_;     //!< dead time [ms]
+    unsigned long n_proc_; //!< number of component processes
+    double frequency_;     //!< rate modulation frequency [Hz]
+    double amplitude_;     //!< rate modulation amplitude [Hz]
 
     /**
      * Number of targets.
@@ -167,23 +175,25 @@ private:
 
     librandom::BinomialRandomDev bino_dev_;   //!< random deviate generator
     librandom::PoissonRandomDev poisson_dev_; //!< random deviate generator
-    std::vector< ulong_t > occ_refractory_;   //!< occupation numbers of ages below dead time
-    ulong_t occ_active_;                      //!< summed occupation number of ages above dead time
-    size_t activate_;                         //!< rotating pointer
+    //! occupation numbers of ages below dead time
+    std::vector< unsigned long > occ_refractory_;
+    unsigned long occ_active_; //!< summed occupation number of ages above dead time
+    size_t activate_;          //!< rotating pointer
 
   public:
-    Age_distribution_( size_t num_age_bins,
-      ulong_t ini_occ_ref,
-      ulong_t ini_occ_act ); //!< initialize age dist
-    ulong_t update( double_t hazard_rate,
-      librandom::RngPtr rng ); //!< update age dist and generate spikes
+    //! initialize age dist
+    Age_distribution_( size_t num_age_bins, unsigned long ini_occ_ref, unsigned long ini_occ_act );
+
+    //! update age dist and generate spikes
+    unsigned long update( double hazard_rate, librandom::RngPtr rng );
   };
 
 
   struct Buffers_
   {
     /**
-     * Age distribution of component Poisson processes with dead time of the superposition.
+     * Age distribution of component Poisson processes with dead time of the
+     * superposition.
      */
 
     std::vector< Age_distribution_ > age_distributions_;
@@ -193,9 +203,9 @@ private:
 
   struct Variables_
   {
-    double_t hazard_step_;   //!< base hazard rate in units of time step
-    double_t hazard_step_t_; //!< hazard rate at time t in units of time step
-    double_t omega_;         //!< angular velocity of rate modulation [rad/ms]
+    double hazard_step_;   //!< base hazard rate in units of time step
+    double hazard_step_t_; //!< hazard rate at time t in units of time step
+    double omega_;         //!< angular velocity of rate modulation [rad/ms]
 
     /**
      * @name update-hook communication.
@@ -207,8 +217,8 @@ private:
      *   t_min_active_ < t <= t_max_active_
      */
     //@{
-    double_t t_min_active_; //!< start of generator activity in slice
-    double_t t_max_active_; //!< end of generator activity in slice
+    double t_min_active_; //!< start of generator activity in slice
+    double t_max_active_; //!< end of generator activity in slice
     //@}
   };
 
@@ -221,10 +231,7 @@ private:
 };
 
 inline port
-ppd_sup_generator::send_test_event( Node& target,
-  rport receptor_type,
-  synindex syn_id,
-  bool dummy_target )
+ppd_sup_generator::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
 {
   device_.enforce_single_syn_type( syn_id );
 
@@ -240,7 +247,9 @@ ppd_sup_generator::send_test_event( Node& target,
     e.set_sender( *this );
     const port p = target.handles_test_event( e, receptor_type );
     if ( p != invalid_port_ and not is_model_prototype() )
+    {
       ++P_.num_targets_; // count number of targets
+    }
     return p;
   }
 }

@@ -20,40 +20,46 @@
  *
  */
 
-#include "config.h"
-#include "integerdatum.h"
-#include "booldatum.h"
-#include "doubledatum.h"
-#include "arraydatum.h"
-#include "dictdatum.h"
-#include "network.h"
-#include "model.h"
-#include "genericmodel.h"
-#include "communicator.h"
-#include "communicator_impl.h"
 #include "topologymodule.h"
-#include "layer.h"
-#include "layer_impl.h"
+
+// Generated includes:
+#include "config.h"
+
+// Includes from nestkernel:
+#include "genericmodel.h"
+#include "genericmodel_impl.h"
+#include "kernel_manager.h"
+#include "model.h"
+#include "model_manager_impl.h"
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "booldatum.h"
+#include "dictdatum.h"
+#include "doubledatum.h"
+#include "integerdatum.h"
+#include "iostreamdatum.h"
+
+// Includes from topology:
+#include "connection_creator_impl.h"
 #include "free_layer.h"
 #include "grid_layer.h"
+#include "grid_mask.h"
+#include "layer.h"
+#include "layer_impl.h"
 #include "mask.h"
 #include "mask_impl.h"
-#include "grid_mask.h"
-#include "connection_creator_impl.h"
-#include "parameter.h"
-#include "lockptrdatum_impl.h"
-#include "iostreamdatum.h"
+#include "topology.h"
+#include "topology_parameter.h"
+
 
 namespace nest
 {
 SLIType TopologyModule::MaskType;
 SLIType TopologyModule::ParameterType;
 
-Network* TopologyModule::net_;
-
-TopologyModule::TopologyModule( Network& net )
+TopologyModule::TopologyModule()
 {
-  net_ = &net;
   MaskType.settypename( "masktype" );
   MaskType.setdefaultaction( SLIInterpreter::datatypefunction );
   ParameterType.settypename( "parametertype" );
@@ -83,10 +89,10 @@ TopologyModule::mask_factory_( void )
   return factory;
 }
 
-GenericFactory< Parameter >&
+GenericFactory< TopologyParameter >&
 TopologyModule::parameter_factory_( void )
 {
-  static GenericFactory< Parameter > factory;
+  static GenericFactory< TopologyParameter > factory;
   return factory;
 }
 
@@ -133,7 +139,6 @@ TopologyModule::create_mask( const Token& t )
         { // mask has already been defined
           throw BadProperty( "Mask definition dictionary contains extraneous items." );
         }
-
         mask = create_mask( dit->first, getValue< DictionaryDatum >( dit->second ) );
       }
     }
@@ -147,7 +152,7 @@ TopologyModule::create_mask( const Token& t )
       try
       {
 
-        std::vector< double_t > anchor = getValue< std::vector< double_t > >( anchor_token );
+        std::vector< double > anchor = getValue< std::vector< double > >( anchor_token );
         AbstractMask* amask;
 
         switch ( anchor.size() )
@@ -165,15 +170,15 @@ TopologyModule::create_mask( const Token& t )
         delete mask;
         mask = amask;
       }
-      catch ( TypeMismatch e )
+      catch ( TypeMismatch& e )
       {
 
         DictionaryDatum ad = getValue< DictionaryDatum >( anchor_token );
 
-        int_t dim = 2;
-        int_t column = getValue< long >( ad, names::column );
-        int_t row = getValue< long >( ad, names::row );
-        int_t layer;
+        int dim = 2;
+        int column = getValue< long >( ad, names::column );
+        int row = getValue< long >( ad, names::row );
+        int layer;
         if ( ad->known( names::layer ) )
         {
           layer = getValue< long >( ad, names::layer );
@@ -185,9 +190,9 @@ TopologyModule::create_mask( const Token& t )
           try
           {
             GridMask< 2 >& grid_mask_2d = dynamic_cast< GridMask< 2 >& >( *mask );
-            grid_mask_2d.set_anchor( Position< 2, int_t >( column, row ) );
+            grid_mask_2d.set_anchor( Position< 2, int >( column, row ) );
           }
-          catch ( std::bad_cast e )
+          catch ( std::bad_cast& e )
           {
             throw BadProperty( "Mask must be 2-dimensional grid mask." );
           }
@@ -196,9 +201,9 @@ TopologyModule::create_mask( const Token& t )
           try
           {
             GridMask< 3 >& grid_mask_3d = dynamic_cast< GridMask< 3 >& >( *mask );
-            grid_mask_3d.set_anchor( Position< 3, int_t >( column, row, layer ) );
+            grid_mask_3d.set_anchor( Position< 3, int >( column, row, layer ) );
           }
-          catch ( std::bad_cast e )
+          catch ( std::bad_cast& e )
           {
             throw BadProperty( "Mask must be 3-dimensional grid mask." );
           }
@@ -219,7 +224,9 @@ TopologyModule::create_parameter( const Token& t )
   // parameters
   ParameterDatum* pd = dynamic_cast< ParameterDatum* >( t.datum() );
   if ( pd )
+  {
     return *pd;
+  }
 
   // If t is a DoubleDatum, create a ConstantParameter with this value
   DoubleDatum* dd = dynamic_cast< DoubleDatum* >( t.datum() );
@@ -249,19 +256,19 @@ TopologyModule::create_parameter( const Token& t )
   }
 }
 
-Parameter*
+TopologyParameter*
 TopologyModule::create_parameter( const Name& name, const DictionaryDatum& d )
 {
   // The parameter factory will create the parameter without regard for
   // the anchor
-  Parameter* param = parameter_factory_().create( name, d );
+  TopologyParameter* param = parameter_factory_().create( name, d );
 
   // Wrap the parameter object created above in an AnchoredParameter if
   // the dictionary contains an anchor
   if ( d->known( names::anchor ) )
   {
-    std::vector< double_t > anchor = getValue< std::vector< double_t > >( d, names::anchor );
-    Parameter* aparam;
+    std::vector< double > anchor = getValue< std::vector< double > >( d, names::anchor );
+    TopologyParameter* aparam;
     switch ( anchor.size() )
     {
     case 2:
@@ -288,14 +295,18 @@ create_doughnut( const DictionaryDatum& d )
   // The doughnut (actually an annulus) is created using a DifferenceMask
   Position< 2 > center( 0, 0 );
   if ( d->known( names::anchor ) )
-    center = getValue< std::vector< double_t > >( d, names::anchor );
+  {
+    center = getValue< std::vector< double > >( d, names::anchor );
+  }
 
-  const double outer = getValue< double_t >( d, names::outer_radius );
-  const double inner = getValue< double_t >( d, names::inner_radius );
+  const double outer = getValue< double >( d, names::outer_radius );
+  const double inner = getValue< double >( d, names::inner_radius );
   if ( inner >= outer )
+  {
     throw BadProperty(
       "topology::create_doughnut: "
       "inner_radius < outer_radius required." );
+  }
 
   BallMask< 2 > outer_circle( center, outer );
   BallMask< 2 > inner_circle( center, inner );
@@ -350,17 +361,18 @@ TopologyModule::init( SLIInterpreter* i )
 
   i->createcommand( "cvdict_M", &cvdict_Mfunction );
 
-  // Register layer types as models
-  Network& net = get_network();
+  i->createcommand( "SelectNodesByMask_L_a_M", &selectnodesbymask_L_a_Mfunction );
 
-  register_model< FreeLayer< 2 > >( net, "topology_layer_free" );
-  register_model< FreeLayer< 3 > >( net, "topology_layer_free_3d" );
-  register_model< GridLayer< 2 > >( net, "topology_layer_grid" );
-  register_model< GridLayer< 3 > >( net, "topology_layer_grid_3d" );
+  kernel().model_manager.register_node_model< FreeLayer< 2 > >( "topology_layer_free" );
+  kernel().model_manager.register_node_model< FreeLayer< 3 > >( "topology_layer_free_3d" );
+  kernel().model_manager.register_node_model< GridLayer< 2 > >( "topology_layer_grid" );
+  kernel().model_manager.register_node_model< GridLayer< 3 > >( "topology_layer_grid_3d" );
 
   // Register mask types
   register_mask< BallMask< 2 > >();
   register_mask< BallMask< 3 > >();
+  register_mask< EllipseMask< 2 > >();
+  register_mask< EllipseMask< 3 > >();
   register_mask< BoxMask< 2 > >();
   register_mask< BoxMask< 3 > >();
   register_mask< BoxMask< 3 > >( "volume" ); // For compatibility with topo 2.0
@@ -373,13 +385,13 @@ TopologyModule::init( SLIInterpreter* i )
   register_parameter< ExponentialParameter >( "exponential" );
   register_parameter< GaussianParameter >( "gaussian" );
   register_parameter< Gaussian2DParameter >( "gaussian2D" );
+  register_parameter< GammaParameter >( "gamma" );
   register_parameter< UniformParameter >( "uniform" );
   register_parameter< NormalParameter >( "normal" );
   register_parameter< LognormalParameter >( "lognormal" );
 }
 
-/*BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::CreateLayer - create a spatial layer of nodes
 
   Synopsis:
@@ -407,29 +419,14 @@ TopologyModule::CreateLayer_DFunction::execute( SLIInterpreter* i ) const
 
   DictionaryDatum layer_dict = getValue< DictionaryDatum >( i->OStack.pick( 0 ) );
 
-  layer_dict->clear_access_flags();
-
-  index layernode = AbstractLayer::create_layer( layer_dict );
-
-  std::string missed;
-  if ( !layer_dict->all_accessed( missed ) )
-  {
-    if ( net_->dict_miss_is_error() )
-      throw UnaccessedDictionaryEntry( missed );
-    else
-      net_->message( SLIInterpreter::M_WARNING,
-        "topology::CreateLayer",
-        ( "Unread dictionary entries: " + missed ).c_str() );
-  }
+  index layernode = create_layer( layer_dict );
 
   i->OStack.pop( 1 );
   i->OStack.push( layernode );
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::GetPosition - retrieve position of input node
 
   Synopsis: node_gid GetPosition -> [array]
@@ -447,7 +444,7 @@ TopologyModule::CreateLayer_DFunction::execute( SLIInterpreter* i ) const
   %%Create layer
   << /rows 5
      /columns 4
-     /elements /iaf_neuron
+     /elements /iaf_psc_alpha
   >> /dictionary Set
 
   dictionary CreateLayer /src Set
@@ -462,28 +459,16 @@ TopologyModule::GetPosition_iFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 1 );
 
-  Network& net = get_network();
+  index node_gid = getValue< long >( i->OStack.pick( 0 ) );
 
-  index node_gid = getValue< long_t >( i->OStack.pick( 0 ) );
-  if ( not net.is_local_gid( node_gid ) )
-    throw KernelException( "GetPosition is currently implemented for local nodes only." );
-
-  Node const* const node = net.get_node( node_gid );
-
-  AbstractLayer* const layer = dynamic_cast< AbstractLayer* >( node->get_parent() );
-  if ( !layer )
-    throw LayerExpected();
-
-  Token result = layer->get_position_vector( node->get_subnet_index() );
+  Token result = get_position( node_gid );
 
   i->OStack.pop( 1 );
   i->OStack.push( result );
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::Displacement - compute displacement vector
 
   Synopsis: from_gid to_gid Displacement -> [double vector]
@@ -514,7 +499,7 @@ TopologyModule::GetPosition_iFunction::execute( SLIInterpreter* i ) const
   topology using
   << /rows 5
      /columns 4
-     /elements /iaf_neuron
+     /elements /iaf_psc_alpha
   >> CreateLayer ;
 
   4 5         Displacement
@@ -529,30 +514,18 @@ TopologyModule::Displacement_a_iFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 2 );
 
-  Network& net = get_network();
+  std::vector< double > point = getValue< std::vector< double > >( i->OStack.pick( 1 ) );
 
-  std::vector< double_t > point = getValue< std::vector< double_t > >( i->OStack.pick( 1 ) );
+  index node_gid = getValue< long >( i->OStack.pick( 0 ) );
 
-  index node_gid = getValue< long_t >( i->OStack.pick( 0 ) );
-  if ( not net.is_local_gid( node_gid ) )
-    throw KernelException( "Displacement is currently implemented for local nodes only." );
-
-  Node const* const node = net.get_node( node_gid );
-
-  AbstractLayer* const layer = dynamic_cast< AbstractLayer* >( node->get_parent() );
-  if ( !layer )
-    throw LayerExpected();
-
-  Token result = layer->compute_displacement( point, node->get_lid() );
+  Token result = displacement( point, node_gid );
 
   i->OStack.pop( 2 );
   i->OStack.push( result );
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::Distance - compute distance between nodes
 
   Synopsis: from_gid to_gid Distance -> double
@@ -583,7 +556,7 @@ TopologyModule::Displacement_a_iFunction::execute( SLIInterpreter* i ) const
   topology using
   << /rows 5
      /columns 4
-     /elements /iaf_neuron
+     /elements /iaf_psc_alpha
   >> CreateLayer ;
 
   4 5         Distance
@@ -598,29 +571,18 @@ TopologyModule::Distance_a_iFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 2 );
 
-  Network& net = get_network();
+  std::vector< double > point = getValue< std::vector< double > >( i->OStack.pick( 1 ) );
 
-  std::vector< double_t > point = getValue< std::vector< double_t > >( i->OStack.pick( 1 ) );
+  index node_gid = getValue< long >( i->OStack.pick( 0 ) );
 
-  index node_gid = getValue< long_t >( i->OStack.pick( 0 ) );
-  if ( not net.is_local_gid( node_gid ) )
-    throw KernelException( "Distance is currently implemented for local nodes only." );
-
-  Node const* const node = net.get_node( node_gid );
-
-  AbstractLayer* const layer = dynamic_cast< AbstractLayer* >( node->get_parent() );
-  if ( !layer )
-    throw LayerExpected();
-
-  Token result = layer->compute_distance( point, node->get_lid() );
+  Token result = distance( point, node_gid );
 
   i->OStack.pop( 2 );
   i->OStack.push( result );
   i->EStack.pop();
 }
 
-/*BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::CreateMask - create a spatial mask
 
   Synopsis:
@@ -645,28 +607,14 @@ TopologyModule::CreateMask_DFunction::execute( SLIInterpreter* i ) const
 
   const DictionaryDatum mask_dict = getValue< DictionaryDatum >( i->OStack.pick( 0 ) );
 
-  mask_dict->clear_access_flags();
-
-  MaskDatum datum( create_mask( mask_dict ) );
-
-  std::string missed;
-  if ( !mask_dict->all_accessed( missed ) )
-  {
-    if ( get_network().dict_miss_is_error() )
-      throw UnaccessedDictionaryEntry( missed );
-    else
-      get_network().message( SLIInterpreter::M_WARNING,
-        "topology::CreateMask",
-        ( "Unread dictionary entries: " + missed ).c_str() );
-  }
+  MaskDatum datum = nest::create_mask( mask_dict );
 
   i->OStack.pop( 1 );
   i->OStack.push( datum );
   i->EStack.pop();
 }
 
-/*BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::Inside - test if a point is inside a mask
 
   Synopsis:
@@ -684,10 +632,10 @@ TopologyModule::Inside_a_MFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 2 );
 
-  std::vector< double_t > point = getValue< std::vector< double_t > >( i->OStack.pick( 1 ) );
+  std::vector< double > point = getValue< std::vector< double > >( i->OStack.pick( 1 ) );
   MaskDatum mask = getValue< MaskDatum >( i->OStack.pick( 0 ) );
 
-  bool ret = mask->inside( point );
+  bool ret = inside( point, mask );
 
   i->OStack.pop( 2 );
   i->OStack.push( Token( BoolDatum( ret ) ) );
@@ -702,7 +650,7 @@ TopologyModule::And_M_MFunction::execute( SLIInterpreter* i ) const
   MaskDatum mask1 = getValue< MaskDatum >( i->OStack.pick( 1 ) );
   MaskDatum mask2 = getValue< MaskDatum >( i->OStack.pick( 0 ) );
 
-  MaskDatum newmask = mask1->intersect_mask( *mask2 );
+  MaskDatum newmask = intersect_mask( mask1, mask2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newmask );
@@ -717,7 +665,7 @@ TopologyModule::Or_M_MFunction::execute( SLIInterpreter* i ) const
   MaskDatum mask1 = getValue< MaskDatum >( i->OStack.pick( 1 ) );
   MaskDatum mask2 = getValue< MaskDatum >( i->OStack.pick( 0 ) );
 
-  MaskDatum newmask = mask1->union_mask( *mask2 );
+  MaskDatum newmask = union_mask( mask1, mask2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newmask );
@@ -732,7 +680,7 @@ TopologyModule::Sub_M_MFunction::execute( SLIInterpreter* i ) const
   MaskDatum mask1 = getValue< MaskDatum >( i->OStack.pick( 1 ) );
   MaskDatum mask2 = getValue< MaskDatum >( i->OStack.pick( 0 ) );
 
-  MaskDatum newmask = mask1->minus_mask( *mask2 );
+  MaskDatum newmask = minus_mask( mask1, mask2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newmask );
@@ -747,7 +695,7 @@ TopologyModule::Mul_P_PFunction::execute( SLIInterpreter* i ) const
   ParameterDatum param1 = getValue< ParameterDatum >( i->OStack.pick( 1 ) );
   ParameterDatum param2 = getValue< ParameterDatum >( i->OStack.pick( 0 ) );
 
-  ParameterDatum newparam = param1->multiply_parameter( *param2 );
+  ParameterDatum newparam = multiply_parameter( param1, param2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newparam );
@@ -762,7 +710,7 @@ TopologyModule::Div_P_PFunction::execute( SLIInterpreter* i ) const
   ParameterDatum param1 = getValue< ParameterDatum >( i->OStack.pick( 1 ) );
   ParameterDatum param2 = getValue< ParameterDatum >( i->OStack.pick( 0 ) );
 
-  ParameterDatum newparam = param1->divide_parameter( *param2 );
+  ParameterDatum newparam = divide_parameter( param1, param2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newparam );
@@ -777,7 +725,7 @@ TopologyModule::Add_P_PFunction::execute( SLIInterpreter* i ) const
   ParameterDatum param1 = getValue< ParameterDatum >( i->OStack.pick( 1 ) );
   ParameterDatum param2 = getValue< ParameterDatum >( i->OStack.pick( 0 ) );
 
-  ParameterDatum newparam = param1->add_parameter( *param2 );
+  ParameterDatum newparam = add_parameter( param1, param2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newparam );
@@ -792,7 +740,7 @@ TopologyModule::Sub_P_PFunction::execute( SLIInterpreter* i ) const
   ParameterDatum param1 = getValue< ParameterDatum >( i->OStack.pick( 1 ) );
   ParameterDatum param2 = getValue< ParameterDatum >( i->OStack.pick( 0 ) );
 
-  ParameterDatum newparam = param1->subtract_parameter( *param2 );
+  ParameterDatum newparam = subtract_parameter( param1, param2 );
 
   i->OStack.pop( 2 );
   i->OStack.push( newparam );
@@ -805,30 +753,18 @@ TopologyModule::GetGlobalChildren_i_M_aFunction::execute( SLIInterpreter* i ) co
 {
   i->assert_stack_load( 3 );
 
-  index gid = getValue< long_t >( i->OStack.pick( 2 ) );
+  index gid = getValue< long >( i->OStack.pick( 2 ) );
   MaskDatum maskd = getValue< MaskDatum >( i->OStack.pick( 1 ) );
-  std::vector< double_t > anchor = getValue< std::vector< double_t > >( i->OStack.pick( 0 ) );
+  std::vector< double > anchor = getValue< std::vector< double > >( i->OStack.pick( 0 ) );
 
-  AbstractMask& mask = *maskd;
-  AbstractLayer* layer = dynamic_cast< AbstractLayer* >( get_network().get_node( gid ) );
-  if ( layer == NULL )
-    throw LayerExpected();
-
-  std::vector< index > gids = layer->get_global_nodes( mask, anchor, false );
-
-  ArrayDatum result;
-  result.reserve( gids.size() );
-  for ( std::vector< index >::iterator it = gids.begin(); it != gids.end(); ++it )
-    result.push_back( new IntegerDatum( *it ) );
+  ArrayDatum result = get_global_children( gid, maskd, anchor );
 
   i->OStack.pop( 3 );
   i->OStack.push( result );
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::ConnectLayers - connect two layers
 
   Synopsis: sourcelayergid targetlayergid connection_dict
@@ -915,7 +851,7 @@ TopologyModule::GetGlobalChildren_i_M_aFunction::execute( SLIInterpreter* i ) co
   model*             literal
   lid^               integer
 
-  *modeltype (i.e. /iaf_neuron) of nodes that should be connected to
+  *modeltype (i.e. /iaf_psc_alpha) of nodes that should be connected to
   in the layer. All nodes are used if this variable isn't set.
   ^Nesting depth of nodes that should be connected to. All layers are used
   if this variable isn't set.
@@ -974,7 +910,7 @@ TopologyModule::GetGlobalChildren_i_M_aFunction::execute( SLIInterpreter* i ) co
   << /rows 15
      /columns 43
      /extent [1.0 2.0]
-     /elements /iaf_neuron
+     /elements /iaf_psc_alpha
   >> /src_dictionary Set
 
   src_dictionary CreateLayer /src Set
@@ -984,20 +920,20 @@ TopologyModule::GetGlobalChildren_i_M_aFunction::execute( SLIInterpreter* i ) co
   << /rows 34
      /columns 71
      /extent [3.0 1.0]
-     /elements {/iaf_neuron Create ; /iaf_psc_alpha Create ;}
+     /elements {/iaf_psc_alpha Create ; /iaf_psc_alpha Create ;}
   >> /tgt_dictionary Set
 
   tgt_dictionary CreateLayer /tgt Set
 
-  <<	/connection_type (convergent)
+  <<  /connection_type (convergent)
       /mask << /grid << /rows 2 /columns 3 >>
                /anchor << /row 4 /column 2 >> >>
       /weights 2.3
       /delays [2.3 1.2 3.2 1.3 2.3 1.2]
       /kernel << /gaussian << /sigma 1.2 /p_center 1.41 >> >>
-      /sources << /model /iaf_neuron
+      /sources << /model /iaf_psc_alpha
                   /lid 1 >>
-      /targets << /model /iaf_neuron
+      /targets << /model /iaf_psc_alpha
                   /lid 2 >>
       /synapse_model /stdp_synapse
 
@@ -1014,40 +950,18 @@ TopologyModule::ConnectLayers_i_i_DFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 3 );
 
-  index source_gid = getValue< long_t >( i->OStack.pick( 2 ) );
-  index target_gid = getValue< long_t >( i->OStack.pick( 1 ) );
+  index source_gid = getValue< long >( i->OStack.pick( 2 ) );
+  index target_gid = getValue< long >( i->OStack.pick( 1 ) );
   const DictionaryDatum connection_dict = getValue< DictionaryDatum >( i->OStack.pick( 0 ) );
 
-  AbstractLayer* source = dynamic_cast< AbstractLayer* >( get_network().get_node( source_gid ) );
-  AbstractLayer* target = dynamic_cast< AbstractLayer* >( get_network().get_node( target_gid ) );
-
-  if ( ( source == NULL ) || ( target == NULL ) )
-    throw LayerExpected();
-
-  connection_dict->clear_access_flags();
-
-  ConnectionCreator connector( connection_dict );
-
-  std::string missed;
-  if ( !connection_dict->all_accessed( missed ) )
-  {
-    if ( get_network().dict_miss_is_error() )
-      throw UnaccessedDictionaryEntry( missed );
-    else
-      get_network().message( SLIInterpreter::M_WARNING,
-        "topology::CreateLayers",
-        ( "Unread dictionary entries: " + missed ).c_str() );
-  }
-
-  source->connect( *target, connector );
+  connect_layers( source_gid, target_gid, connection_dict );
 
   i->OStack.pop( 3 );
   i->EStack.pop();
 }
 
 
-/*BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::CreateParameter - create a spatial function
 
   Synopsis:
@@ -1072,20 +986,7 @@ TopologyModule::CreateParameter_DFunction::execute( SLIInterpreter* i ) const
   i->assert_stack_load( 1 );
   const DictionaryDatum param_dict = getValue< DictionaryDatum >( i->OStack.pick( 0 ) );
 
-  param_dict->clear_access_flags();
-
-  ParameterDatum datum( create_parameter( param_dict ) );
-
-  std::string missed;
-  if ( !param_dict->all_accessed( missed ) )
-  {
-    if ( get_network().dict_miss_is_error() )
-      throw UnaccessedDictionaryEntry( missed );
-    else
-      get_network().message( SLIInterpreter::M_WARNING,
-        "topology::CreateParameter",
-        ( "Unread dictionary entries: " + missed ).c_str() );
-  }
+  ParameterDatum datum = nest::create_parameter( param_dict );
 
   i->OStack.pop( 1 );
   i->OStack.push( datum );
@@ -1093,8 +994,7 @@ TopologyModule::CreateParameter_DFunction::execute( SLIInterpreter* i ) const
 }
 
 
-/*BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::GetValue - compute value of parameter at a point
 
   Synopsis:
@@ -1114,20 +1014,17 @@ TopologyModule::GetValue_a_PFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 2 );
 
-  std::vector< double_t > point = getValue< std::vector< double_t > >( i->OStack.pick( 1 ) );
+  std::vector< double > point = getValue< std::vector< double > >( i->OStack.pick( 1 ) );
   ParameterDatum param = getValue< ParameterDatum >( i->OStack.pick( 0 ) );
 
-  librandom::RngPtr rng = get_network().get_grng();
-  double_t value = param->value( point, rng );
+  double value = get_value( point, param );
 
   i->OStack.pop( 2 );
   i->OStack.push( value );
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::DumpLayerNodes - write information about layer nodes to file
 
   Synopsis: ostream layer_gid DumpLayerNodes -> ostream
@@ -1155,7 +1052,7 @@ TopologyModule::GetValue_a_PFunction::execute( SLIInterpreter* i ) const
   Examples:
 
   topology using
-  /my_layer << /rows 5 /columns 4 /elements /iaf_neuron >> CreateLayer def
+  /my_layer << /rows 5 /columns 4 /elements /iaf_psc_alpha >> CreateLayer def
 
   (my_layer_dump.lyr) (w) file
   my_layer DumpLayerNodes
@@ -1170,25 +1067,21 @@ TopologyModule::DumpLayerNodes_os_iFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 2 );
 
-  const index layer_gid = getValue< long_t >( i->OStack.pick( 0 ) );
+  const index layer_gid = getValue< long >( i->OStack.pick( 0 ) );
   OstreamDatum out = getValue< OstreamDatum >( i->OStack.pick( 1 ) );
 
-  AbstractLayer const* const layer = dynamic_cast< AbstractLayer* >( net_->get_node( layer_gid ) );
-
-  if ( layer != 0 && out->good() )
-    layer->dump_nodes( *out );
+  dump_layer_nodes( layer_gid, out );
 
   i->OStack.pop( 1 ); // leave ostream on stack
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
+/** @BeginDocumentation
+  Name: topology::DumpLayerConnections - prints a list of the connections of the
+                                         nodes in the layer to file
 
-  Name: topology::DumpLayerConnections - prints a list of the connections of the nodes in the layer
-  to file
-
-  Synopsis: ostream source_layer_gid synapse_model DumpLayerConnections -> ostream
+  Synopsis: ostream source_layer_gid synapse_model DumpLayerConnections ->
+                                                                         ostream
 
   Parameters:
   ostream          - open outputstream
@@ -1196,14 +1089,15 @@ TopologyModule::DumpLayerNodes_os_iFunction::execute( SLIInterpreter* i ) const
   synapse_model    - synapse model (literal)
 
   Description:
-  Dumps information about all connections of the given type having their source in
-  the given layer to the given output stream. The data format is one line per connection as follows:
+  Dumps information about all connections of the given type having their source
+  in the given layer to the given output stream. The data format is one line per
+  connection as follows:
 
   source_gid target_gid weight delay displacement[x,y,z]
 
-  where displacement are up to three coordinates of the vector from the source to
-  the target node. If targets do not have positions (eg spike detectors outside any layer),
-  NaN is written for each displacement coordinate.
+  where displacement are up to three coordinates of the vector from the source
+  to the target node. If targets do not have positions (eg. spike detectors
+  outside any layer), NaN is written for each displacement coordinate.
 
   Remarks:
   For distributed simulations
@@ -1228,25 +1122,18 @@ TopologyModule::DumpLayerConnections_os_i_lFunction::execute( SLIInterpreter* i 
   i->assert_stack_load( 3 );
 
   OstreamDatum out_file = getValue< OstreamDatum >( i->OStack.pick( 2 ) );
-  std::ostream& out = *out_file;
 
-  const index layer_gid = getValue< long_t >( i->OStack.pick( 1 ) );
+  const index layer_gid = getValue< long >( i->OStack.pick( 1 ) );
 
   const Token syn_model = i->OStack.pick( 0 );
 
-  AbstractLayer* const layer = dynamic_cast< AbstractLayer* >( net_->get_node( layer_gid ) );
-  if ( layer == NULL )
-    throw TypeMismatch( "any layer type", "something else" );
-
-  layer->dump_connections( out, syn_model );
+  dump_layer_connections( syn_model, layer_gid, out_file );
 
   i->OStack.pop( 2 ); // leave ostream on stack
   i->EStack.pop();
 }
 
-/*
-  BeginDocumentation
-
+/** @BeginDocumentation
   Name: topology::GetElement - return node GID at specified layer position
 
   Synopsis: layer_gid [array] GetElement -> node_gid
@@ -1268,7 +1155,7 @@ TopologyModule::DumpLayerConnections_os_i_lFunction::execute( SLIInterpreter* i 
   %%Create layer
   << /rows 5
      /columns 4
-     /elements /iaf_neuron
+     /elements /iaf_psc_alpha
   >> /dictionary Set
 
   dictionary CreateLayer /src Set
@@ -1282,43 +1169,10 @@ TopologyModule::GetElement_i_iaFunction::execute( SLIInterpreter* i ) const
 {
   i->assert_stack_load( 2 );
 
-  const index layer_gid = getValue< long_t >( i->OStack.pick( 1 ) );
+  const index layer_gid = getValue< long >( i->OStack.pick( 1 ) );
   TokenArray array = getValue< TokenArray >( i->OStack.pick( 0 ) );
 
-  std::vector< index > node_gids;
-
-  switch ( array.size() )
-  {
-  case 2:
-  {
-    GridLayer< 2 >* layer = dynamic_cast< GridLayer< 2 >* >( net_->get_node( layer_gid ) );
-    if ( layer == 0 )
-    {
-      throw TypeMismatch( "grid layer node", "something else" );
-    }
-
-    node_gids = layer->get_nodes( Position< 2, int_t >(
-      static_cast< index >( array[ 0 ] ), static_cast< index >( array[ 1 ] ) ) );
-  }
-  break;
-
-  case 3:
-  {
-    GridLayer< 3 >* layer = dynamic_cast< GridLayer< 3 >* >( net_->get_node( layer_gid ) );
-    if ( layer == 0 )
-    {
-      throw TypeMismatch( "grid layer node", "something else" );
-    }
-
-    node_gids = layer->get_nodes( Position< 3, int_t >( static_cast< index >( array[ 0 ] ),
-      static_cast< index >( array[ 1 ] ),
-      static_cast< index >( array[ 2 ] ) ) );
-  }
-  break;
-
-  default:
-    throw TypeMismatch( "array with length 2 or 3", "something else" );
-  }
+  std::vector< index > node_gids = get_element( layer_gid, array );
 
   i->OStack.pop( 2 );
 
@@ -1348,8 +1202,59 @@ TopologyModule::Cvdict_MFunction::execute( SLIInterpreter* i ) const
   i->EStack.pop();
 }
 
+
+void
+TopologyModule::SelectNodesByMask_L_a_MFunction::execute( SLIInterpreter* i ) const
+{
+  i->assert_stack_load( 3 );
+
+  const index& layer_gid = getValue< long >( i->OStack.pick( 2 ) );
+  std::vector< double > anchor = getValue< std::vector< double > >( i->OStack.pick( 1 ) );
+  MaskDatum mask = getValue< MaskDatum >( i->OStack.pick( 0 ) );
+
+  std::vector< index > mask_gids;
+
+  const int dim = anchor.size();
+
+  if ( dim != 2 and dim != 3 )
+  {
+    throw BadProperty( "Center must be 2- or 3-dimensional." );
+  }
+
+  if ( dim == 2 )
+  {
+    Layer< 2 >* layer = dynamic_cast< Layer< 2 >* >( kernel().node_manager.get_node( layer_gid ) );
+
+    MaskedLayer< 2 > ml = MaskedLayer< 2 >( *layer, Selector(), mask, true, false );
+
+    for ( Ntree< 2, index >::masked_iterator it = ml.begin( Position< 2 >( anchor[ 0 ], anchor[ 1 ] ) ); it != ml.end();
+          ++it )
+    {
+      mask_gids.push_back( it->second );
+    }
+  }
+  else
+  {
+    Layer< 3 >* layer = dynamic_cast< Layer< 3 >* >( kernel().node_manager.get_node( layer_gid ) );
+
+    MaskedLayer< 3 > ml = MaskedLayer< 3 >( *layer, Selector(), mask, true, false );
+
+    for ( Ntree< 3, index >::masked_iterator it = ml.begin( Position< 3 >( anchor[ 0 ], anchor[ 1 ], anchor[ 2 ] ) );
+          it != ml.end();
+          ++it )
+    {
+      mask_gids.push_back( it->second );
+    }
+  }
+
+  i->OStack.pop( 3 );
+  i->OStack.push( mask_gids );
+  i->EStack.pop();
+}
+
+
 std::string
-LayerExpected::message()
+LayerExpected::message() const
 {
   return std::string();
 }

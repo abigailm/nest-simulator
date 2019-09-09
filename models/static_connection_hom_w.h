@@ -20,48 +20,45 @@
  *
  */
 
-
-/* BeginDocumentation
-   Name: static_synapse_hom_w - Synapse type for static connections with homogeneous weight.
-
-   Description:
-     static_synapse_hom_w does not support any kind of plasticity. It simply stores
-     the parameters delay, target, and receiver port for each connection and uses a common
-     weight for all connections.
-
-   Remarks:
-     The common weight for all connections of this model must be set by SetDefaults on the model.
-     If you create copies of this model using CopyModel, each derived model can have a different
-     weight.
-
-   Transmits: SpikeEvent, RateEvent, CurrentEvent, ConductanceEvent, DataLoggingRequest,
-   DoubleDataEvent
-
-   Parameters:
-     No Parameters
-
-   References:
-     No References
-   FirstVersion: April 2008
-   Author: Susanne Kunkel, Moritz Helias
-   SeeAlso: synapsedict, static_synapse
-*/
-
 #ifndef STATICCONNECTION_HOM_W_H
 #define STATICCONNECTION_HOM_W_H
 
-#include "connection.h"
+// Includes from nestkernel:
 #include "common_properties_hom_w.h"
+#include "connection.h"
 
 namespace nest
 {
 
-/**
- * Class representing a static connection. A static connection has the properties weight, delay and
- * receiver port.
- * A suitable Connector containing these connections can be obtained from the template
- * GenericConnector.
- */
+/** @BeginDocumentation
+@ingroup Synapses
+@ingroup static
+
+Name: static_synapse_hom_w - Synapse type for static connections with
+homogeneous weight.
+
+Description:
+
+static_synapse_hom_w does not support any kind of plasticity. It simply
+stores the parameters delay, target, and receiver port for each connection
+and uses a common weight for all connections.
+
+Remarks:
+
+The common weight for all connections of this model must be set by
+SetDefaults on the model. If you create copies of this model using
+CopyModel, each derived model can have a different weight.
+
+Transmits: SpikeEvent, RateEvent, CurrentEvent, ConductanceEvent,
+DataLoggingRequest, DoubleDataEvent
+
+
+FirstVersion: April 2008
+
+Author: Susanne Kunkel, Moritz Helias
+
+SeeAlso: synapsedict, static_synapse
+*/
 template < typename targetidentifierT >
 class StaticConnectionHomW : public Connection< targetidentifierT >
 {
@@ -71,10 +68,10 @@ public:
   typedef CommonPropertiesHomW CommonPropertiesType;
   typedef Connection< targetidentifierT > ConnectionBase;
 
-  // Explicitly declare all methods inherited from the dependent base ConnectionBase.
-  // This avoids explicit name prefixes in all places these functions are used.
-  // Since ConnectionBase depends on the template parameter, they are not automatically
-  // found in the base class.
+  // Explicitly declare all methods inherited from the dependent base
+  // ConnectionBase. This avoids explicit name prefixes in all places these
+  // functions are used. Since ConnectionBase depends on the template parameter,
+  // they are not automatically found in the base class.
   using ConnectionBase::get_rport;
   using ConnectionBase::get_target;
   using ConnectionBase::get_delay_steps;
@@ -131,32 +128,48 @@ public:
   void get_status( DictionaryDatum& d ) const;
 
   void
-  check_connection( Node& s, Node& t, rport receptor_type, double_t, const CommonPropertiesType& )
+  check_connection( Node& s, Node& t, rport receptor_type, const CommonPropertiesType& )
   {
     ConnTestDummyNode dummy_target;
     ConnectionBase::check_connection_( dummy_target, s, t, receptor_type );
   }
 
   /**
-   * Send an event to the receiver of this connection.
-   * \param e The event to send
-   * \param p The port under which this connection is stored in the Connector.
-   * \param t_lastspike Time point of last spike emitted
+   * Checks to see if weight is given in syn_spec.
    */
   void
-  send( Event& e, thread t, double_t, const CommonPropertiesHomW& cp )
+  check_synapse_params( const DictionaryDatum& syn_spec ) const
+  {
+    if ( syn_spec->known( names::weight ) )
+    {
+      throw BadProperty(
+        "Weight cannot be specified since it needs to be equal "
+        "for all connections when static_synapse_hom_w is used." );
+    }
+  }
+
+  /**
+   * Send an event to the receiver of this connection.
+   * \param e The event to send
+   * \param tid Thread ID of the target
+   * \param cp Common properties-object of the synapse
+   */
+  void
+  send( Event& e, const thread tid, const CommonPropertiesHomW& cp )
   {
     e.set_weight( cp.get_weight() );
-    e.set_delay( get_delay_steps() );
-    e.set_receiver( *get_target( t ) );
+    e.set_delay_steps( get_delay_steps() );
+    e.set_receiver( *get_target( tid ) );
     e.set_rport( get_rport() );
     e();
   }
 
-  void set_weight( double_t )
+  void
+  set_weight( double )
   {
     throw BadProperty(
-      "Setting of individual weights is not possible! The common weights can be changed via "
+      "Setting of individual weights is not possible! The common weights can "
+      "be changed via "
       "CopyModel()." );
   }
 };
@@ -167,7 +180,7 @@ void
 StaticConnectionHomW< targetidentifierT >::get_status( DictionaryDatum& d ) const
 {
   ConnectionBase::get_status( d );
-  def< long_t >( d, names::size_of, sizeof( *this ) );
+  def< long >( d, names::size_of, sizeof( *this ) );
 }
 
 } // namespace

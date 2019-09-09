@@ -23,10 +23,13 @@
 /*
     SLI's data access functions
 */
+
 #include "oosupport.h"
-#include "namedatum.h"
+
+// Includes from sli:
 #include "dictdatum.h"
 #include "dictstack.h"
+#include "namedatum.h"
 
 void
 OOSupportModule::init( SLIInterpreter* i )
@@ -68,5 +71,7 @@ OOSupportModule::CallMemberFunction::execute( SLIInterpreter* i ) const
     i->OStack.pop( 2 );
   }
   else
+  {
     i->raiseerror( "UnknownMember" );
+  }
 }

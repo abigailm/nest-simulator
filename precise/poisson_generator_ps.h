@@ -23,56 +23,52 @@
 #ifndef POISSON_GENERATOR_PS_H
 #define POISSON_GENERATOR_PS_H
 
+// C++ includes:
 #include <vector>
-#include "nest.h"
-#include "event.h"
-#include "node.h"
-#include "stimulating_device.h"
-#include "scheduler.h"
+
+// Includes from librandom:
 #include "exp_randomdev.h"
+
+// Includes from nestkernel:
 #include "connection.h"
-
-/*BeginDocumentation
-Name: poisson_generator_ps - simulate neuron firing with Poisson processes
-(with arbitrary dead time) statistics and exact timing
-Description:
-
-  The poisson_generator_ps generator simulates a neuron firing with Poisson
-  statistics (with dead time), ie, exponentially distributed interspike
-  intervals plus constant dead time, spike events have exact timing
-  (i.e. not binned).
-
-Parameters:
-   The following parameters appear in the element's status dictionary:
-
-   rate     - mean firing rate. (double, var)
-   dead_time - minimal time between two spikes. (double, var)
-
-Remarks:
-   - This generator must be connected to all its targets using the
-     same synapse model. Failure to do so will only be detected at
-     runtime.
-   - This generator has only been validated in a very basic manner.
-
-   Sends: SpikeEvent
-
-SeeAlso: poisson_generator, spike_generator, Device, StimulatingDevice
-*/
+#include "device_node.h"
+#include "event.h"
+#include "nest_types.h"
+#include "stimulating_device.h"
 
 namespace nest
 {
 
-/**
- * Poisson generator (with dead time) with precisely timed spikes.
- *
- * This Poisson process (with dead time) generator sends different spike
- * trains to all its targets.
- * All spikes are sent individually with offsets identifying their precise
- * times.
- *
- * @ingroup Devices
- */
-class poisson_generator_ps : public Node
+/** @BeginDocumentation
+Name: poisson_generator_ps - simulate neuron firing with Poisson processes
+(with arbitrary dead time) statistics and exact timing
+
+Description:
+
+The poisson_generator_ps generator simulates a neuron firing with Poisson
+statistics (with dead time), ie, exponentially distributed interspike
+intervals plus constant dead time, spike events have exact timing
+(i.e. not binned).
+
+Parameters:
+
+The following parameters appear in the element's status dictionary:
+
+rate     - mean firing rate. (double, var)
+dead_time - minimal time between two spikes. (double, var)
+
+Remarks:
+
+- This generator must be connected to all its targets using the
+  same synapse model. Failure to do so will only be detected at
+  runtime.
+- This generator has only been validated in a very basic manner.
+
+Sends: SpikeEvent
+
+SeeAlso: poisson_generator, spike_generator, Device, StimulatingDevice
+*/
+class poisson_generator_ps : public DeviceNode
 {
 
 public:
@@ -111,7 +107,7 @@ private:
    * information.
    * @see event_hook, DSSpikeEvent
    */
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   /**
    * Send out spikes.
@@ -127,8 +123,8 @@ private:
    */
   struct Parameters_
   {
-    double_t rate_;      //!< process rate [Hz]
-    double_t dead_time_; //!< dead time [ms]
+    double rate_;      //!< process rate [Hz]
+    double dead_time_; //!< dead time [ms]
 
     /**
      * Number of targets.
@@ -148,7 +144,7 @@ private:
 
   struct Buffers_
   {
-    typedef std::pair< Time, double_t > SpikeTime;
+    typedef std::pair< Time, double > SpikeTime;
 
     /**
      * Time of next spike represented as time stamp and offset, for each target.
@@ -164,7 +160,7 @@ private:
 
   struct Variables_
   {
-    double_t inv_rate_ms_;            //!< 1000.0 / Parameters_.rate_
+    double inv_rate_ms_;              //!< 1000.0 / Parameters_.rate_
     librandom::ExpRandomDev exp_dev_; //!< random deviate generator
 
     /**
@@ -191,10 +187,7 @@ private:
 };
 
 inline port
-poisson_generator_ps::send_test_event( Node& target,
-  rport receptor_type,
-  synindex syn_id,
-  bool dummy_target )
+poisson_generator_ps::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
 {
   device_.enforce_single_syn_type( syn_id );
 
@@ -210,7 +203,9 @@ poisson_generator_ps::send_test_event( Node& target,
     e.set_sender( *this );
     const port p = target.handles_test_event( e, receptor_type );
     if ( p != invalid_port_ and not is_model_prototype() )
+    {
       ++P_.num_targets_; // count number of targets
+    }
     return p;
   }
 }

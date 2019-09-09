@@ -23,116 +23,31 @@
 #ifndef IAF_COND_ALPHA_MC_H
 #define IAF_COND_ALPHA_MC_H
 
+// Generated includes:
 #include "config.h"
 
 #ifdef HAVE_GSL
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
-#include "dictdatum.h"
-#include "name.h"
-
+// C++ includes:
 #include <vector>
 
+// C includes:
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv.h>
 
-/* BeginDocumentation
-Name: iaf_cond_alpha_mc - PROTOTYPE Multi-compartment conductance-based leaky integrate-and-fire
-neuron model.
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
-Description:
-THIS MODEL IS A PROTOTYPE FOR ILLUSTRATION PURPOSES. IT IS NOT YET
-FULLY TESTED. USE AT YOUR OWN PERIL!
-
-iaf_cond_alpha_mc is an implementation of a multi-compartment spiking
-neuron using IAF dynamics with conductance-based synapses. It serves
-mainly to illustrate the implementation of multicompartment models in
-NEST.
-
-The model has three compartments: soma, proximal and distal dendrite,
-labeled as s, p, and d, respectively. Compartments are connected through
-passive conductances as follows
-
-C_m.s d/dt V_m.s = ... - g_sp ( V_m.s - V_m.p )
-
-C_m.p d/dt V_m.p = ... - g_sp ( V_m.p - V_m.s ) - g_pd ( V_m.p - V_m.d )
-
-C_m.d d/dt V_m.d = ...                          - g_pd ( V_m.d - V_m.p )
-
-A spike is fired when the somatic membrane potential exceeds threshold,
-V_m.s >= V_th. After a spike, somatic membrane potential is clamped to
-a reset potential, V_m.s == V_reset, for the refractory period. Dendritic
-membrane potentials are not manipulated after a spike.
-
-There is one excitatory and one inhibitory conductance-based synapse
-onto each compartment, with alpha-function time course. The alpha
-function is normalised such that an event of weight 1.0 results in a
-peak current of 1 nS at t = tau_syn. Each compartment can also receive
-current input from a current generator, and an external (rheobase)
-current can be set for each compartment.
-
-Synapses, including those for injection external currents, are addressed through
-the receptor types given in the receptor_types entry of the state dictionary. Note
-that in contrast to the single-compartment iaf_cond_alpha model, all synaptic
-weights must be positive numbers!
-
-
-Parameters:
-The following parameters can be set in the status dictionary. Parameters
-for each compartment are collected in a sub-dictionary; these sub-dictionaries
-are called "soma", "proximal", and "distal", respectively. In the list below,
-these parameters are marked with an asterisk.
-
-V_m*         double - Membrane potential in mV
-E_L*         double - Leak reversal potential in mV.
-C_m*         double - Capacity of the membrane in pF
-E_ex*        double - Excitatory reversal potential in mV.
-E_in*        double - Inhibitory reversal potential in mV.
-g_L*         double - Leak conductance in nS;
-tau_syn_ex*  double - Rise time of the excitatory synaptic alpha function in ms.
-tau_syn_in*  double - Rise time of the inhibitory synaptic alpha function in ms.
-I_e*         double - Constant input current in pA.
-
-g_sp         double - Conductance connecting soma and proximal dendrite, in nS.
-g_pd         double - Conductance connecting proximal and distal dendrite, in nS.
-t_ref        double - Duration of refractory period in ms.
-V_th         double - Spike threshold in mV.
-V_reset      double - Reset potential of the membrane in mV.
-
-Example:
-See examples/nest/mc_neuron.py.
-
-Remark:
-This is a prototype for illustration which has undergone only limited testing.
-Details of the implementation and user-interface will likely change.
-USE AT YOUR OWN PERIL!
-
-Sends: SpikeEvent
-
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
-
-References:
-
-Meffin, H., Burkitt, A. N., & Grayden, D. B. (2004). An analytical
-model for the large, fluctuating synaptic conductance state typical of
-neocortical neurons in vivo. J.  Comput. Neurosci., 16, 159–175.
-
-Bernander, O ., Douglas, R. J., Martin, K. A. C., & Koch, C. (1991).
-Synaptic background activity influences spatiotemporal integration in
-single pyramidal cells.  Proc. Natl. Acad. Sci. USA, 88(24),
-11569–11573.
-
-Author: Plesser
-
-SeeAlso: iaf_cond_alpha
-*/
+// Includes from sli:
+#include "dictdatum.h"
+#include "name.h"
 
 namespace nest
 {
@@ -145,10 +60,118 @@ namespace nest
  */
 extern "C" int iaf_cond_alpha_mc_dynamics( double, const double*, double*, void* );
 
-/**
- * @note All parameters that occur for both compartments
- *       and dendrite are stored as C arrays, with index 0 being soma.
- */
+
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup cond
+
+
+Name: iaf_cond_alpha_mc - PROTOTYPE Multi-compartment conductance-based leaky
+                          integrate-and-fire neuron model.
+
+Description:
+
+THIS MODEL IS A PROTOTYPE FOR ILLUSTRATION PURPOSES. IT IS NOT YET
+FULLY TESTED. USE AT YOUR OWN PERIL!
+
+iaf_cond_alpha_mc is an implementation of a multi-compartment spiking
+neuron using IAF dynamics with conductance-based synapses. It serves
+mainly to illustrate the implementation of multicompartment models in
+NEST.
+
+The model has three compartments: soma, proximal and distal dendrite,
+labeled as s, p, and d, respectively. Compartments are connected through
+passive conductances as follows
+@f[
+C_{m.s} d/dt V_{m.s} = \ldots - g_{sp} ( V_{m.s} - V_{m.p} ) \\
+
+C_{m.p} d/dt V_{m.p} = \ldots - g_{sp} ( V_{m.p} - V_{m.s} )
+    - g_{pd} ( V_{m.p} - V_{m.d} ) \\
+
+C_{m.d} d/dt V_{m.d} = \ldots \qquad - g_{pd} ( V_{m.d} - V_{m.p} )
+@f]
+A spike is fired when the somatic membrane potential exceeds threshold,
+\f$ V_{m.s} >= V_{th} \f$. After a spike, somatic membrane potential is
+clamped to a reset potential, \f$ V_{m.s} == V_{reset} \f$, for the refractory
+period. Dendritic membrane potentials are not manipulated after a spike.
+
+There is one excitatory and one inhibitory conductance-based synapse
+onto each compartment, with alpha-function time course. The alpha
+function is normalised such that an event of weight 1.0 results in a
+peak current of 1 nS at t = tau_syn. Each compartment can also receive
+current input from a current generator, and an external (rheobase)
+current can be set for each compartment.
+
+Synapses, including those for injection external currents, are addressed through
+the receptor types given in the receptor_types entry of the state dictionary.
+Note that in contrast to the single-compartment iaf_cond_alpha model, all
+synaptic weights must be positive numbers!
+
+
+Parameters:
+
+The following parameters can be set in the status dictionary. Parameters
+for each compartment are collected in a sub-dictionary; these sub-dictionaries
+are called "soma", "proximal", and "distal", respectively. In the list below,
+these parameters are marked with an asterisk.
+
+\verbatim embed:rst
+
+============ ======= ==========================================================
+ V_m*        mV      Membrane potential
+ E_L*        mV      Leak reversal potential
+ C_m*        pF      Capacity of the membrane
+ E_ex*       mV      Excitatory reversal potential
+ E_in*       mV      Inhibitory reversal potential
+ g_L*        nS      Leak conductance
+ tau_syn_ex* ms      Rise time of the excitatory synaptic alpha function
+ tau_syn_in* ms      Rise time of the inhibitory synaptic alpha function
+ I_e*        pA      Constant input current
+ g_sp        nS      Conductance connecting soma and proximal dendrite
+ g_pd        nS      Conductance connecting proximal and distal dendrite
+ t_ref       ms      Duration of refractory period
+ V_th        mV      Spike threshold in mV
+ V_reset     mV      Reset potential of the membrane
+============ ======= ==========================================================
+\endverbatim
+
+Example:
+See pynest/examples/mc_neuron.py.
+
+Remarks:
+
+This is a prototype for illustration which has undergone only limited
+testing. Details of the implementation and user-interface will likely
+change. USE AT YOUR OWN PERIL!
+
+@note All parameters that occur for both compartments
+and dendrite are stored as C arrays, with index 0 being soma.
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+References:
+
+\verbatim embed:rst
+.. [1] Meffin H, Burkitt AN, Grayden DB (2004). An analytical
+       model for the large, fluctuating synaptic conductance state typical of
+       neocortical neurons in vivo. Journal of Computational Neuroscience,
+       16:159-175.
+       DOI: https://doi.org/10.1023/B:JCNS.0000014108.03012.81
+.. [2] Bernander O, Douglas RJ, Martin KAC, Koch C (1991). Synaptic background
+       activity influences spatiotemporal integration in single pyramidal
+       cells.  Proceedings of the National Academy of Science USA,
+       88(24):11569-11573.
+       DOI: https://doi.org/10.1073/pnas.88.24.11569
+\endverbatim
+
+Author: Plesser
+
+SeeAlso: iaf_cond_alpha
+
+*/
 class iaf_cond_alpha_mc : public Archiving_Node
 {
 
@@ -161,7 +184,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -183,7 +207,7 @@ private:
   void init_state_( const Node& proto );
   void init_buffers_();
   void calibrate();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // Enumerations and constants specifying structure and properties ----
 
@@ -269,18 +293,22 @@ private:
    */
   struct Parameters_
   {
-    double_t V_th;                //!< Threshold Potential in mV
-    double_t V_reset;             //!< Reset Potential in mV
-    double_t t_ref;               //!< Refractory period in ms
-    double_t g_conn[ NCOMP - 1 ]; //!< Conductances connecting compartments, in nS
-    double_t g_L[ NCOMP ];        //!< Leak Conductance in nS
-    double_t C_m[ NCOMP ];        //!< Membrane Capacitance in pF
-    double_t E_ex[ NCOMP ];       //!< Excitatory reversal Potential in mV
-    double_t E_in[ NCOMP ];       //!< Inhibitory reversal Potential in mV
-    double_t E_L[ NCOMP ];        //!< Leak reversal Potential (aka resting potential) in mV
-    double_t tau_synE[ NCOMP ];   //!< Synaptic Time Constant Excitatory Synapse in ms
-    double_t tau_synI[ NCOMP ];   //!< Synaptic Time Constant for Inhibitory Synapse in ms
-    double_t I_e[ NCOMP ];        //!< Constant Current in pA
+    double V_th;                //!< Threshold Potential in mV
+    double V_reset;             //!< Reset Potential in mV
+    double t_ref;               //!< Refractory period in ms
+    double g_conn[ NCOMP - 1 ]; //!< Conductances connecting compartments,
+                                //!< in nS
+    double g_L[ NCOMP ];        //!< Leak Conductance in nS
+    double C_m[ NCOMP ];        //!< Membrane Capacitance in pF
+    double E_ex[ NCOMP ];       //!< Excitatory reversal Potential in mV
+    double E_in[ NCOMP ];       //!< Inhibitory reversal Potential in mV
+    double E_L[ NCOMP ];        //!< Leak reversal Potential (aka resting potential)
+                                //!< in mV
+    double tau_synE[ NCOMP ];   //!< Synaptic Time Constant Excitatory Synapse
+                                //!< in ms
+    double tau_synI[ NCOMP ];   //!< Synaptic Time Constant for Inhibitory
+                                //!< Synapse in ms
+    double I_e[ NCOMP ];        //!< Constant Current in pA
 
     Parameters_();                                //!< Sets default parameter values
     Parameters_( const Parameters_& );            //!< needed to copy C-arrays
@@ -322,8 +350,8 @@ public:
     static const size_t STATE_VEC_SIZE = STATE_VEC_COMPS * NCOMP;
 
     //! neuron state, must be C-array for GSL solver
-    double_t y_[ STATE_VEC_SIZE ];
-    int_t r_; //!< number of refractory steps remaining
+    double y_[ STATE_VEC_SIZE ];
+    int r_; //!< number of refractory steps remaining
 
     State_( const Parameters_& ); //!< Default initialization
     State_( const State_& );
@@ -354,8 +382,9 @@ private:
    */
   struct Buffers_
   {
-    Buffers_( iaf_cond_alpha_mc& );                  //!<Sets buffer pointers to 0
-    Buffers_( const Buffers_&, iaf_cond_alpha_mc& ); //!<Sets buffer pointers to 0
+    Buffers_( iaf_cond_alpha_mc& ); //!<Sets buffer pointers to 0
+    //! Sets buffer pointers to 0
+    Buffers_( const Buffers_&, iaf_cond_alpha_mc& );
 
     //! Logger for all analog data
     UniversalDataLogger< iaf_cond_alpha_mc > logger_;
@@ -376,7 +405,7 @@ private:
     // but remain unchanged during calibration. Since it is initialized with
     // step_, and the resolution cannot change after nodes have been created,
     // it is safe to place both here.
-    double_t step_;          //!< step size in ms
+    double step_;            //!< step size in ms
     double IntegrationStep_; //!< current integration time step, updated by GSL
 
     /**
@@ -386,7 +415,7 @@ private:
      * It must be a part of Buffers_, since it is initialized once before
      * the first simulation, but not modified before later Simulate calls.
      */
-    double_t I_stim_[ NCOMP ]; //!< External Stimulus in pA
+    double I_stim_[ NCOMP ]; //!< External Stimulus in pA
   };
 
   // Internal variables ---------------------------------------------
@@ -397,12 +426,12 @@ private:
   struct Variables_
   {
     /** initial value to normalise excitatory synaptic conductance */
-    double_t PSConInit_E_[ NCOMP ];
+    double PSConInit_E_[ NCOMP ];
 
     /** initial value to normalise inhibitory synaptic conductance */
-    double_t PSConInit_I_[ NCOMP ];
+    double PSConInit_I_[ NCOMP ];
 
-    int_t RefractoryCounts_;
+    int RefractoryCounts_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
@@ -412,14 +441,14 @@ private:
    * First template argument is component "name", second compartment "name".
    */
   template < State_::StateVecElems_ elem, Compartments_ comp >
-  double_t
+  double
   get_y_elem_() const
   {
     return S_.y_[ S_.idx( comp, elem ) ];
   }
 
   //! Read out number of refractory steps, used by UniversalDataLogger
-  double_t
+  double
   get_r_() const
   {
     return Time::get_resolution().get_ms() * S_.r_;
@@ -456,9 +485,13 @@ iaf_cond_alpha_mc::handles_test_event( SpikeEvent&, rport receptor_type )
   if ( receptor_type < MIN_SPIKE_RECEPTOR || receptor_type >= SUP_SPIKE_RECEPTOR )
   {
     if ( receptor_type < 0 || receptor_type >= SUP_CURR_RECEPTOR )
+    {
       throw UnknownReceptorType( receptor_type, get_name() );
+    }
     else
+    {
       throw IncompatibleReceptorType( receptor_type, get_name(), "SpikeEvent" );
+    }
   }
   return receptor_type - MIN_SPIKE_RECEPTOR;
 }
@@ -469,9 +502,13 @@ iaf_cond_alpha_mc::handles_test_event( CurrentEvent&, rport receptor_type )
   if ( receptor_type < MIN_CURR_RECEPTOR || receptor_type >= SUP_CURR_RECEPTOR )
   {
     if ( receptor_type >= 0 && receptor_type < MIN_CURR_RECEPTOR )
+    {
       throw IncompatibleReceptorType( receptor_type, get_name(), "CurrentEvent" );
+    }
     else
+    {
       throw UnknownReceptorType( receptor_type, get_name() );
+    }
   }
   return receptor_type - MIN_CURR_RECEPTOR;
 }
@@ -482,9 +519,13 @@ iaf_cond_alpha_mc::handles_test_event( DataLoggingRequest& dlr, rport receptor_t
   if ( receptor_type != 0 )
   {
     if ( receptor_type < 0 || receptor_type >= SUP_CURR_RECEPTOR )
+    {
       throw UnknownReceptorType( receptor_type, get_name() );
+    }
     else
+    {
       throw IncompatibleReceptorType( receptor_type, get_name(), "DataLoggingRequest" );
+    }
   }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
@@ -504,17 +545,17 @@ iaf_cond_alpha_mc::get_status( DictionaryDatum& d ) const
    * a seg fault on exit, see #328
    */
   DictionaryDatum receptor_dict_ = new Dictionary();
-  ( *receptor_dict_ )[ Name( "soma_exc" ) ] = SOMA_EXC;
-  ( *receptor_dict_ )[ Name( "soma_inh" ) ] = SOMA_INH;
-  ( *receptor_dict_ )[ Name( "soma_curr" ) ] = I_SOMA;
+  ( *receptor_dict_ )[ names::soma_exc ] = SOMA_EXC;
+  ( *receptor_dict_ )[ names::soma_inh ] = SOMA_INH;
+  ( *receptor_dict_ )[ names::soma_curr ] = I_SOMA;
 
-  ( *receptor_dict_ )[ Name( "proximal_exc" ) ] = PROX_EXC;
-  ( *receptor_dict_ )[ Name( "proximal_inh" ) ] = PROX_INH;
-  ( *receptor_dict_ )[ Name( "proximal_curr" ) ] = I_PROX;
+  ( *receptor_dict_ )[ names::proximal_exc ] = PROX_EXC;
+  ( *receptor_dict_ )[ names::proximal_inh ] = PROX_INH;
+  ( *receptor_dict_ )[ names::proximal_curr ] = I_PROX;
 
-  ( *receptor_dict_ )[ Name( "distal_exc" ) ] = DIST_EXC;
-  ( *receptor_dict_ )[ Name( "distal_inh" ) ] = DIST_INH;
-  ( *receptor_dict_ )[ Name( "distal_curr" ) ] = I_DIST;
+  ( *receptor_dict_ )[ names::distal_exc ] = DIST_EXC;
+  ( *receptor_dict_ )[ names::distal_inh ] = DIST_INH;
+  ( *receptor_dict_ )[ names::distal_curr ] = I_DIST;
 
   ( *d )[ names::receptor_types ] = receptor_dict_;
 }

@@ -23,10 +23,21 @@
 #ifndef NUMERICS_H
 #define NUMERICS_H
 
-#include <limits>
+// Generated includes:
+#include "config.h"
+
+// C++ includes:
+#include <cassert>
 #include <cmath>
+#include <limits>
 
 #if HAVE_EXPM1
+#include <math.h>
+#endif
+
+#if defined( HAVE_STD_ISNAN )
+#include <cmath>
+#elif defined( HAVE_ISNAN )
 #include <math.h>
 #endif
 
@@ -35,6 +46,7 @@ namespace numerics
 
 extern const double e;
 extern const double pi;
+extern const double nan;
 
 /** Supply expm1() function independent of system.
  *  @note Implemented inline for efficiency.
@@ -48,9 +60,13 @@ expm1( double x )
   // compute using Taylor series, see GSL
   // e^x-1 = x + x^2/2! + x^3/3! + ...
   if ( x == 0 )
+  {
     return 0;
+  }
   if ( std::abs( x ) > std::log( 2.0 ) )
+  {
     return std::exp( x ) - 1;
+  }
   else
   {
     double sum = x;
@@ -66,6 +82,20 @@ expm1( double x )
 
     return sum;
   }
+#endif
+}
+
+template < typename T >
+bool
+is_nan( T f )
+{
+#if defined( HAVE_STD_ISNAN )
+  return std::isnan( f );
+#elif defined( HAVE_ISNAN )
+  return isnan( f );
+#else
+  assert( false ); // HAVE_STD_ISNAN or HAVE_ISNAN is required
+  return false;
 #endif
 }
 }

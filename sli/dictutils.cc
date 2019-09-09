@@ -64,10 +64,12 @@ provide_property( DictionaryDatum& d, Name propname, const std::vector< double >
   assert( arrd != 0 );
 
   if ( ( *arrd )->empty() && not prop.empty() ) // not data from before, add
+  {
     ( *arrd )->insert( ( *arrd )->end(), prop.begin(), prop.end() );
+  }
 
-  assert( prop.empty()
-    || **arrd == prop ); // not testing for **arrd.empty() since that implies prop.empty()
+  assert( prop.empty() || **arrd == prop ); // not testing for **arrd.empty()
+                                            // since that implies prop.empty()
 }
 
 
@@ -80,10 +82,12 @@ provide_property( DictionaryDatum& d, Name propname, const std::vector< long >& 
   assert( arrd != 0 );
 
   if ( ( *arrd )->empty() && not prop.empty() ) // not data from before, add
+  {
     ( *arrd )->insert( ( *arrd )->end(), prop.begin(), prop.end() );
+  }
 
-  assert( prop.empty()
-    || **arrd == prop ); // not testing for **arrd.empty() since that implies prop.empty()
+  assert( prop.empty() || **arrd == prop ); // not testing for **arrd.empty()
+                                            // since that implies prop.empty()
 }
 
 void
@@ -95,16 +99,14 @@ accumulate_property( DictionaryDatum& d, Name propname, const std::vector< doubl
   assert( arrd != 0 );
 
   if ( ( *arrd )->empty() ) // first data, copy
+  {
     ( *arrd )->insert( ( *arrd )->end(), prop.begin(), prop.end() );
+  }
   else
   {
     assert( ( *arrd )->size() == prop.size() );
 
     // add contents of prop to **arrd elementwise
-    std::transform( ( *arrd )->begin(),
-      ( *arrd )->end(),
-      prop.begin(),
-      ( *arrd )->begin(),
-      std::plus< double >() );
+    std::transform( ( *arrd )->begin(), ( *arrd )->end(), prop.begin(), ( *arrd )->begin(), std::plus< double >() );
   }
 }

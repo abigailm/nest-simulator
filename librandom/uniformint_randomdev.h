@@ -23,10 +23,15 @@
 #ifndef UNIFORMINT_RANDOMDEV_H
 #define UNIFORMINT_RANDOMDEV_H
 
+// C++ includes:
 #include <cmath>
-#include "randomgen.h"
-#include "randomdev.h"
+
+// Includes from libnestutil:
 #include "lockptr.h"
+
+// Includes from librandom:
+#include "randomdev.h"
+#include "randomgen.h"
 
 /************************************************************/
 /* Class UniformIntRNG                                      */
@@ -48,8 +53,9 @@
 namespace librandom
 {
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::uniform_int - uniform integer random deviate generator
+
 Description: Generates uniformly distributed integers between two given limits
 
   p(n) = 1 / (high - low + 1),   n = low, low+1, ..., high
@@ -59,6 +65,7 @@ Parameters:
   high - largest allowed random number
 
 SeeAlso: CreateRDV, RandomArray, rdevdict
+
 Author: Hans Ekkehard Plesser
 */
 

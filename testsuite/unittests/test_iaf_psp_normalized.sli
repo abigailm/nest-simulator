@@ -21,7 +21,7 @@
  */
 
 
-/* BeginDocumentation
+/** @BeginDocumentation
 Name: testsuite::test_iaf_psp_normalized - check if PSP can be normalized 
 
 Synopsis: (test_iaf_psp_normalized) run -> compare response with desired outcome
@@ -148,7 +148,14 @@ sg <<
      /stop 3.0              % in ms
    >> SetStatus
 
-/iaf_neuron Create /neuron Set
+
+/tau_syn P /tau_syn get def
+P /tau_syn_ex tau_syn put
+P /tau_syn_in tau_syn put
+P /tau_syn undef
+
+
+/iaf_psc_alpha Create /neuron Set
 neuron P SetStatus
 
 

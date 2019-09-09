@@ -19,19 +19,24 @@
  *  along with NEST.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
 #include "exp_randomdev.h"
-#include "sliexceptions.h"
+
+// Includes from sli:
 #include "dictutils.h"
+#include "sliexceptions.h"
 
 void
 librandom::ExpRandomDev::set_status( const DictionaryDatum& d )
 {
   double new_lambda = lambda_;
 
-  updateValue< double >( d, "lambda", new_lambda );
+  updateValue< double >( d, names::lambda, new_lambda );
 
-  if ( new_lambda <= 0. )
-    throw BadParameterValue( "Exponential RDV: lambda > 0 required." );
+  if ( new_lambda == 0. )
+  {
+    throw BadParameterValue( "Exponential RDV: lambda != 0 required." );
+  }
 
   lambda_ = new_lambda;
 }
@@ -39,5 +44,7 @@ librandom::ExpRandomDev::set_status( const DictionaryDatum& d )
 void
 librandom::ExpRandomDev::get_status( DictionaryDatum& d ) const
 {
-  def< double >( d, "lambda", lambda_ );
+  RandomDev::get_status( d );
+
+  def< double >( d, names::lambda, lambda_ );
 }

@@ -20,16 +20,19 @@
  *
  */
 
+#include "slitypecheck.h"
+
+// C++ includes:
 #include <sstream>
 
-#include "slitypecheck.h"
+// Includes from sli:
+#include "arraydatum.h"
 #include "interpret.h"
+#include "iostreamdatum.h"
 #include "namedatum.h"
 #include "triedatum.h"
-#include "arraydatum.h"
-#include "iostreamdatum.h"
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: trie - Create a new type-trie object
 Synopsis: /name -> /name typetrie
 Description: Create a new typetrie with internal
@@ -67,7 +70,7 @@ TrieFunction::execute( SLIInterpreter* i ) const
 }
 
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: addtotrie - Add a function variant to a trie-object
 Synopsis: trie [type-list] obj addtotrie -> trie
 Parameters:
@@ -130,8 +133,7 @@ AddtotrieFunction::execute( SLIInterpreter* i ) const
       message << "In trie " << trie->getname() << ". "
               << "Error at array position " << t - ad->begin() << '.' << std::ends;
       i->message( SLIInterpreter::M_ERROR, "addtotrie", message.str().c_str() );
-      i->message(
-        SLIInterpreter::M_ERROR, "addtotrie", "Array must contain typenames as literals." );
+      i->message( SLIInterpreter::M_ERROR, "addtotrie", "Array must contain typenames as literals." );
       i->message( SLIInterpreter::M_ERROR, "addtotrie", "No change was made to the trie." );
 
       i->raiseerror( i->ArgumentTypeError );
@@ -146,7 +148,7 @@ AddtotrieFunction::execute( SLIInterpreter* i ) const
   i->EStack.pop();
 }
 
-/* BeginDocumentation
+/** @BeginDocumentation
 
    Name: cva_t - Converts a type trie to an equivalent array
 
@@ -232,7 +234,7 @@ TrieInfoFunction::execute( SLIInterpreter* i ) const
   i->OStack.pop( 2 );
 }
 
-/* BeginDocumentation
+/** @BeginDocumentation
 
    Name: cvt_a - Converts an array to the equivalent type trie.
 
@@ -293,7 +295,8 @@ TrieInfoFunction::execute( SLIInterpreter* i ) const
    the original argument:
    /name [array] cvt_a cva_t -> /name [array]
 
-   SeeAlso: cva_t, trie, addtotrie, type, cst, cva, cv1d, cv2d, cvd, cvi, cvlit, cvn, cvs
+   SeeAlso: cva_t, trie, addtotrie, type, cst, cva, cv1d, cv2d, cvd, cvi, cvlit,
+   cvn, cvs
 */
 void
 Cvt_aFunction::execute( SLIInterpreter* i ) const
@@ -313,7 +316,7 @@ Cvt_aFunction::execute( SLIInterpreter* i ) const
   i->OStack.push_move( tmp );
 }
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: type - Return the type of an object
 Synopsis: obj type -> /typename
 Examples: 1 type -> /integertype

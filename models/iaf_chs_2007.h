@@ -23,75 +23,88 @@
 #ifndef IAF_CHS_2007_H
 #define IAF_CHS_2007_H
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
+// Includes from librandom:
 #include "normal_randomdev.h"
+
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
-class Network;
 
-/* BeginDocumentation
-   Name: iaf_chs_2007 - Spike-response model used in Carandini et al 2007.
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
 
-   Description:
-   The membrane potential is the sum of stereotyped events: the postsynaptic
-   potentials (V_syn), waveforms that include a spike and the subsequent
-   after-hyperpolarization (V_spike) and Gaussian-distributed white noise.
+Name: iaf_chs_2007 - Spike-response model used in Carandini et al 2007.
 
-   The postsynaptic potential is described by alpha function where where
-   U_epsp is the maximal amplitude of the EPSP and tau_epsp is the time to
-   peak of the EPSP.
+Description:
 
-   The spike waveform is described as a delta peak followed by a membrane
-   potential reset and exponential decay. U_reset is the magnitude of the
-   reset/after-hyperpolarization and tau_reset is the time constant of
-   recovery from this hyperpolarization.
+The membrane potential is the sum of stereotyped events: the postsynaptic
+potentials (V_syn), waveforms that include a spike and the subsequent
+after-hyperpolarization (V_spike) and Gaussian-distributed white noise.
 
-   The linear subthresold dynamics is integrated by the Exact
-   Integration scheme [1]. The neuron dynamics is solved on the time
-   grid given by the computation step size. Incoming as well as emitted
-   spikes are forced to that grid.
+The postsynaptic potential is described by alpha function where
+U_epsp is the maximal amplitude of the EPSP and tau_epsp is the time to
+peak of the EPSP.
 
-   Remarks:
-   The way the noise term was implemented in the original model makes it
-   unsuitable for simulation in NEST. The workaround was to prepare the
-   noise signal externally prior to simulation. The noise signal,
-   if present, has to be at least as long as the simulation.
+The spike waveform is described as a delta peak followed by a membrane
+potential reset and exponential decay. U_reset is the magnitude of the
+reset/after-hyperpolarization and tau_reset is the time constant of
+recovery from this hyperpolarization.
 
-   Parameters:
-   The following parameters can be set in the status dictionary.
+The linear subthresold dynamics is integrated by the Exact
+Integration scheme [1]. The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
 
-   tau_epsp       double - Membrane time constant in ms.
-   tau_reset      double - Refractory time constant in ms.
-   U_epsp         double - Maximum amplitude of the EPSP. Normalized.
-   U_reset        double - Reset value of the membrane potential. Normalized.
-   U_noise        double - Noise scale. Normalized.
-   noise   vector<double>- Noise signal.
+Remarks:
+The way the noise term was implemented in the original model makes it
+unsuitable for simulation in NEST. The workaround was to prepare the
+noise signal externally prior to simulation. The noise signal,
+if present, has to be at least as long as the simulation.
 
-   References:
-   [1] Carandini M, Horton JC, Sincich LC (2007) Thalamic filtering of retinal
-   spike trains by postsynaptic summation. J Vis 7(14):20,1-11.
-   [2] Rotter S & Diesmann M (1999) Exact simulation of time-invariant linear
-   systems with applications to neuronal modeling. Biologial Cybernetics
-   81:381-402.
+Parameters:
 
-   Sends: SpikeEvent
+The following parameters can be set in the status dictionary.
 
-   Receives: SpikeEvent, DataLoggingRequest
+\verbatim embed:rst
+========== ============== ==================================================
+ tau_epsp  ms             Membrane time constant
+ tau_reset ms             Refractory time constant
+ U_epsp    real           Maximum amplitude of the EPSP, normalized
+ U_reset   real           Reset value of the membrane potential, normalized
+ U_noise   real           Noise scale, normalized
+ noise     list of real   Noise signal
+========== ============== ==================================================
+\endverbatim
 
-   FirstVersion: May 2012
-   Author: Thomas Heiberg, Birgit Kriener
+References:
+
+\verbatim embed:rst
+.. [1] Carandini M, Horton JC, Sincich LC (2007). Thalamic filtering of retinal
+       spike trains by postsynaptic summation. Journal of Vision 7(14):20,1-11.
+       DOI: https://doi.org/10.1167/7.14.20
+.. [2] Rotter S,  Diesmann M (1999). Exact simulation of time-invariant linear
+       systems with applications to neuronal modeling. Biologial Cybernetics
+       81:381-402.
+       DOI: https://doi.org/10.1007/s004220050570
+\endverbatim
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, DataLoggingRequest
+
+FirstVersion: May 2012
+
+Author: Thomas Heiberg, Birgit Kriener
 */
-
-/**
- * Neuron model used in Carandini et al 2007.
- */
 class iaf_chs_2007 : public Archiving_Node
 {
 
@@ -101,7 +114,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -123,7 +137,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( const Time&, const long_t, const long_t );
+  void update( const Time&, const long, const long );
 
   // The next two classes need to be friends to access the State_ class/member
   friend class RecordablesMap< iaf_chs_2007 >;
@@ -137,12 +151,12 @@ private:
   struct State_
   {
     // state variables
-    double_t i_syn_ex_; // postsynaptic current for exc. inputs, variable 1
-    double_t V_syn_;    // psp waveform, variable 2
-    double_t V_spike_;  // post spike reset waveform, variable 3
-    double_t V_m_;      // membrane potential, variable 4
+    double i_syn_ex_; // postsynaptic current for exc. inputs, variable 1
+    double V_syn_;    // psp waveform, variable 2
+    double V_spike_;  // post spike reset waveform, variable 3
+    double V_m_;      // membrane potential, variable 4
 
-    ulong_t position_;
+    unsigned long position_;
 
     State_(); //!< Default initialization
 
@@ -159,31 +173,31 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t tau_epsp_;
+    double tau_epsp_;
 
     /** Refractory time constant in ms. */
-    double_t tau_reset_;
+    double tau_reset_;
 
     /** Resting potential. Normalized = 0.0. */
-    double_t E_L_;
+    double E_L_;
 
     /** Threshold. Normalized = 1.0. */
-    double_t U_th_;
+    double U_th_;
 
     /** Normalized maximum amplitude of the EPSP. */
-    double_t U_epsp_;
+    double U_epsp_;
 
     /** Normalized magnitude of the membrane potential reset. */
-    double_t U_reset_;
+    double U_reset_;
 
     /** Membrane capacitance. Note: Does not have any function currently. */
-    double_t C_;
+    double C_;
 
     /** Noise scale. */
-    double_t U_noise_;
+    double U_noise_;
 
     /** Noise signal. */
-    std::vector< double_t > noise_;
+    std::vector< double > noise_;
 
     Parameters_(); //!< Sets default parameter values
 
@@ -228,14 +242,14 @@ private:
         weight one has an amplitude of 1 mV.
         @note mog - I assume this, not checked.
     */
-    //    double_t PSCInitialValue_;
+    //    double PSCInitialValue_;
 
     // time evolution operator
-    double_t P20_;
-    double_t P11ex_;
-    double_t P21ex_;
-    double_t P22_;
-    double_t P30_;
+    double P20_;
+    double P11ex_;
+    double P21ex_;
+    double P22_;
+    double P30_;
 
     librandom::NormalRandomDev normal_dev_; //!< random deviate generator
   };
@@ -243,7 +257,7 @@ private:
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out the real membrane potential
-  double_t
+  double
   get_V_m_() const
   {
     return S_.V_m_ + P_.E_L_;
@@ -281,7 +295,9 @@ inline port
 iaf_chs_2007::handles_test_event( SpikeEvent&, port receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -289,7 +305,9 @@ inline port
 iaf_chs_2007::handles_test_event( DataLoggingRequest& dlr, port receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

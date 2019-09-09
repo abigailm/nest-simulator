@@ -24,108 +24,124 @@
 #ifndef MAT2_PSC_EXP_H
 #define MAT2_PSC_EXP_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
-#include "universal_data_logger.h"
+#include "event.h"
+#include "nest_types.h"
 #include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
 
-class Network;
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup psc
 
-/* BeginDocumentation
-   Name: mat2_psc_exp - Non-resetting leaky integrate-and-fire neuron model with
-   exponential PSCs and adaptive threshold.
+Name: mat2_psc_exp - Non-resetting leaky integrate-and-fire neuron model with
+exponential PSCs and adaptive threshold.
 
-   Description:
-   mat2_psc_exp is an implementation of a leaky integrate-and-fire model
-   with exponential shaped postsynaptic currents (PSCs). Thus, postsynaptic currents
-   have an infinitely short rise time.
+Description:
 
-   The threshold is lifted when the neuron is fired and then decreases in a fixed
-   time scale toward a fixed level [3].
+mat2_psc_exp is an implementation of a leaky integrate-and-fire model
+with exponential shaped postsynaptic currents (PSCs). Thus, postsynaptic
+currents have an infinitely short rise time.
 
-   The threshold crossing is followed by a total refractory period
-   during which the neuron is not allowed to fire, even if the membrane
-   potential exceeds the threshold. The membrane potential is NOT reset,
-   but continuously integrated.
+The threshold is lifted when the neuron is fired and then decreases in a
+fixed time scale toward a fixed level [3].
 
-   The linear subthresold dynamics is integrated by the Exact
-   Integration scheme [1]. The neuron dynamics is solved on the time
-   grid given by the computation step size. Incoming as well as emitted
-   spikes are forced to that grid.
+The threshold crossing is followed by a total refractory period
+during which the neuron is not allowed to fire, even if the membrane
+potential exceeds the threshold. The membrane potential is NOT reset,
+but continuously integrated.
 
-   An additional state variable and the corresponding differential
-   equation represents a piecewise constant external current.
+The linear subthresold dynamics is integrated by the Exact
+Integration scheme [1]. The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
 
-   The general framework for the consistent formulation of systems with
-   neuron like dynamics interacting by point events is described in
-   [1]. A flow chart can be found in [2].
+An additional state variable and the corresponding differential
+equation represents a piecewise constant external current.
 
-   Remarks:
-   The present implementation uses individual variables for the
-   components of the state vector and the non-zero matrix elements of
-   the propagator. Because the propagator is a lower triangular matrix
-   no full matrix multiplication needs to be carried out and the
-   computation can be done "in place" i.e. no temporary state vector
-   object is required.
+The general framework for the consistent formulation of systems with
+neuron like dynamics interacting by point events is described in
+[1]. A flow chart can be found in [2].
 
-   Parameters:
-   The following parameters can be set in the status dictionary:
+Remarks:
 
-   C_m          double - Capacity of the membrane in pF
-   E_L          double - Resting potential in mV
-   tau_m        double - Membrane time constant in ms
-   tau_syn_ex   double - Time constant of postsynaptic excitatory currents in ms
-   tau_syn_in   double - Time constant of postsynaptic inhibitory currents in ms
-   t_ref        double - Duration of absolute refractory period (no spiking) in ms
-   V_m          double - Membrane potential in mV
-   I_e          double - Constant input current in pA
-   t_spike      double - Point in time of last spike in ms
-   tau_1        double - Short time constant of adaptive threshold in ms
-   tau_2        double - Long time constant of adaptive threshold in ms
-   alpha_1      double - Amplitude of short time threshold adaption in mV [3]
-   alpha_2      double - Amplitude of long time threshold adaption in mV [3]
-   omega        double - Resting spike threshold in mV (absolute value, not relative to E_L as in
-   [3])
+The present implementation uses individual variables for the
+components of the state vector and the non-zero matrix elements of
+the propagator. Because the propagator is a lower triangular matrix
+no full matrix multiplication needs to be carried out and the
+computation can be done "in place" i.e. no temporary state vector
+object is required.
 
-   The following state variables can be read out with the multimeter device:
+Parameters:
 
-   V_m          Non-resetting membrane potential
-   V_th         Two-timescale adaptive threshold
+The following parameters can be set in the status dictionary:
 
-   Remarks:
-   tau_m != tau_syn_{ex,in} is required by the current implementation to avoid a
-   degenerate case of the ODE describing the model [1]. For very similar values,
-   numerics will be unstable.
+\verbatim embed:rst
+============ =======  ========================================================
+ C_m          pF      Capacity of the membrane
+ E_L          mV      Resting potential
+ tau_m        ms      Membrane time constant
+ tau_syn_ex   ms      Time constant of postsynaptic excitatory currents
+ tau_syn_in   ms      Time constant of postsynaptic inhibitory currents
+ t_ref        ms      Duration of absolute refractory period (no spiking)
+ V_m          mV      Membrane potential
+ I_e          pA      Constant input current
+ t_spike      ms      Point in time of last spike
+ tau_1        ms      Short time constant of adaptive threshold
+ tau_2        ms      Long time constant of adaptive threshold
+ alpha_1      mV      Amplitude of short time threshold adaption [3]
+ alpha_2      mV      Amplitude of long time threshold adaption [3]
+ omega        mV      Resting spike threshold (absolute value, not
+                      relative to E_L as in [3])
+============ =======  ========================================================
+\endverbatim
 
-   References:
-   [1] Rotter S & Diesmann M (1999) Exact simulation of
+The following state variables can be read out with the multimeter device:
+\verbatim embed:rst
+====== ====  =================================
+ V_m   mV    Non-resetting membrane potential
+ V_th  mV    Two-timescale adaptive threshold
+====== ====  =================================
+\endverbatim
+
+Remarks:
+
+tau_m != tau_syn_{ex,in} is required by the current implementation to avoid a
+degenerate case of the ODE describing the model [1]. For very similar values,
+numerics will be unstable.
+
+References:
+
+\verbatim embed:rst
+.. [1] Rotter S and Diesmann M (1999). Exact simulation of
        time-invariant linear systems with applications to neuronal
        modeling. Biologial Cybernetics 81:381-402.
-   [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001) State
+       DOI: https://doi.org/10.1007/s004220050570
+.. [2] Diesmann M, Gewaltig M-O, Rotter S, Aertsen A (2001). State
        space analysis of synchronous spiking in cortical neural
        networks. Neurocomputing 38-40:565-571.
-   [3] Kobayashi R, Tsubo Y and Shinomoto S (2009) Made-to-order
+       DOI:https://doi.org/10.1016/S0925-2312(01)00409-X
+.. [3] Kobayashi R, Tsubo Y and Shinomoto S (2009). Made-to-order
        spiking neuron model equipped with a multi-timescale adaptive
-       threshold. Front. Comput. Neurosci. 3:9. doi:10.3389/neuro.10.009.2009
+       threshold. Frontiers in Computuational Neuroscience 3:9.
+       DOI: https://doi.org/10.3389/neuro.10.009.2009
+\endverbatim
+Sends: SpikeEvent
 
-   Sends: SpikeEvent
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
 
-   Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+FirstVersion: Mai 2009
 
-   FirstVersion: Mai 2009
-   Author: Thomas Pfeil (modified iaf_psc_exp model of Moritz Helias)
+Author: Thomas Pfeil (modified iaf_psc_exp model of Moritz Helias)
+
 */
-
-/**
- * Non-resetting leaky integrate-and-fire neuron model with
-   exponential PSCs and adaptive threshold.
- */
 class mat2_psc_exp : public Archiving_Node
 {
 
@@ -135,7 +151,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -157,7 +174,7 @@ private:
   void init_state_( const Node& proto );
   void init_buffers_();
   void calibrate();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // The next two classes need to be friends to access private members
   friend class RecordablesMap< mat2_psc_exp >;
@@ -172,39 +189,39 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t Tau_;
+    double Tau_;
 
     /** Membrane capacitance in pF. */
-    double_t C_;
+    double C_;
 
     /** Refractory period in ms. */
-    double_t tau_ref_;
+    double tau_ref_;
 
     /** Resting potential in mV. */
-    double_t U0_;
+    double E_L_;
 
     /** External current in pA */
-    double_t I_e_;
+    double I_e_;
 
     /** Time constant of excitatory synaptic current in ms. */
-    double_t tau_ex_;
+    double tau_ex_;
 
     /** Time constant of inhibitory synaptic current in ms. */
-    double_t tau_in_;
+    double tau_in_;
 
     /** Short and long time constant of adaptive threshold*/
-    double_t tau_1_;
-    double_t tau_2_;
+    double tau_1_;
+    double tau_2_;
 
     /** Amplitudes of threshold adaption*/
-    double_t alpha_1_;
-    double_t alpha_2_;
+    double alpha_1_;
+    double alpha_2_;
 
     /** Resting threshold in mV
         (relative to resting potential).
-        The real resting threshold is (U0_+omega_).
+        The real resting threshold is (E_L_+omega_).
         Called omega in [3]. */
-    double_t omega_;
+    double omega_;
 
     Parameters_(); //!< Sets default parameter values
 
@@ -224,14 +241,16 @@ private:
   struct State_
   {
     // state variables
-    double_t i_0_;      // synaptic dc input current, variable 0
-    double_t i_syn_ex_; // postsynaptic current for exc. inputs, variable 1
-    double_t i_syn_in_; // postsynaptic current for inh. inputs, variable 1
-    double_t V_m_;      // membrane potential, variable 2
-    double_t V_th_1_;   // short time adaptive threshold (related to tau_1_), variable 1
-    double_t V_th_2_;   // long time adaptive threshold (related to tau_2_), variable 2
+    double i_0_;      //!< synaptic dc input current, variable 0
+    double i_syn_ex_; //!< postsynaptic current for exc. inputs, variable 1
+    double i_syn_in_; //!< postsynaptic current for inh. inputs, variable 1
+    double V_m_;      //!< membrane potential, variable 2
+    //! short time adaptive threshold (related to tau_1_), variable 1
+    double V_th_1_;
+    //! long time adaptive threshold (related to tau_2_), variable 2
+    double V_th_2_;
 
-    int_t r_; // total refractory counter (no spikes can be generated)
+    int r_; //!< total refractory counter (no spikes can be generated)
 
     State_(); //!< Default initialization
 
@@ -277,36 +296,36 @@ private:
     weight one has an amplitude of 1 mV.
     @note mog - I assume this, not checked.
     */
-    //    double_t PSCInitialValue_;
+    //    double PSCInitialValue_;
 
     // time evolution operator of membrane potential
-    double_t P20_; // constant currents
-    double_t P11ex_;
-    double_t P11in_;
-    double_t P21ex_;
-    double_t P21in_;
-    double_t P22_expm1_;
+    double P20_; // constant currents
+    double P11ex_;
+    double P11in_;
+    double P21ex_;
+    double P21in_;
+    double P22_expm1_;
 
     // time evolution operator of dynamic threshold
     // P = ( exp(-h/tau_1)   0               )
     //    ( 0                 exp(-h/tau_2) )
-    double_t P11th_;
-    double_t P22th_;
+    double P11th_;
+    double P22th_;
 
-    int_t RefractoryCountsTot_;
+    int RefractoryCountsTot_;
   };
   // ----------------------------------------------------------------
 
   //! Read out state variables, used by UniversalDataLogger
-  double_t
+  double
   get_V_m_() const
   {
-    return S_.V_m_ + P_.U0_;
+    return S_.V_m_ + P_.E_L_;
   }
-  double_t
+  double
   get_V_th_() const
   {
-    return P_.U0_ + P_.omega_ + S_.V_th_1_ + S_.V_th_2_;
+    return P_.E_L_ + P_.omega_ + S_.V_th_1_ + S_.V_th_2_;
   }
 
   // ----------------------------------------------------------------
@@ -343,7 +362,9 @@ inline port
 mat2_psc_exp::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -351,7 +372,9 @@ inline port
 mat2_psc_exp::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -359,7 +382,9 @@ inline port
 mat2_psc_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

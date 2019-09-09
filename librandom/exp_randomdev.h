@@ -23,24 +23,39 @@
 #ifndef EXP_RANDOMDEV_H
 #define EXP_RANDOMDEV_H
 
+// C++ includes:
 #include <cmath>
-#include "randomgen.h"
-#include "randomdev.h"
+
+// Includes from libnestutil:
 #include "lockptr.h"
+
+// Includes from librandom:
+#include "randomdev.h"
+#include "randomgen.h"
 
 namespace librandom
 {
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::exponential - exponential random deviate generator
-Description: Generates exponentially distributed random numbers.
 
-  p(x) = lambda exp(-lambda*x), x >= 0.
+Description: Generates exponentially distributed random numbers.
+Negative values of lambda are allowed and generate a distribution
+of negative numbers.
+
+For lambda > 0:
+  p(x) = lambda exp(-lambda*x), for x >= 0
+  p(x) = 0, for x < 0
+
+For lambda < 0:
+  p(x) = 0, for x > 0
+  p(x) = |lambda| exp ( -|lambda| |x| ), for x <= 0
 
 Parameters:
  lambda - rate parameter (default: 1.0)
 
 SeeAlso: CreateRDV, RandomArray, rdevdict
+
 Author: Hans Ekkehard Plesser
 */
 

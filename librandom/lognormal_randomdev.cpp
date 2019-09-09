@@ -20,11 +20,17 @@
  *
  */
 
-#include <cmath>
-#include "config.h"
 #include "lognormal_randomdev.h"
-#include "sliexceptions.h"
+
+// C++ includes:
+#include <cmath>
+
+// Generated includes:
+#include "config.h"
+
+// Includes from sli:
 #include "dictutils.h"
+#include "sliexceptions.h"
 
 // by default, init as exponential density with mean 1
 librandom::LognormalRandomDev::LognormalRandomDev( RngPtr r_source )
@@ -48,11 +54,13 @@ librandom::LognormalRandomDev::set_status( const DictionaryDatum& d )
   double new_mu = mu_;
   double new_sigma = sigma_;
 
-  updateValue< double >( d, "mu", new_mu );
-  updateValue< double >( d, "sigma", new_sigma );
+  updateValue< double >( d, names::mu, new_mu );
+  updateValue< double >( d, names::sigma, new_sigma );
 
   if ( new_sigma < 0. )
+  {
     throw BadParameterValue( "Lognormal RDV: sigma >= 0 required." );
+  }
 
   mu_ = new_mu;
   sigma_ = new_sigma;
@@ -61,8 +69,10 @@ librandom::LognormalRandomDev::set_status( const DictionaryDatum& d )
 void
 librandom::LognormalRandomDev::get_status( DictionaryDatum& d ) const
 {
-  def< double >( d, "mu", mu_ );
-  def< double >( d, "sigma", sigma_ );
+  RandomDev::get_status( d );
+
+  def< double >( d, names::mu, mu_ );
+  def< double >( d, names::sigma, sigma_ );
 }
 
 double librandom::LognormalRandomDev::operator()( RngPtr r ) const
@@ -83,9 +93,10 @@ double librandom::LognormalRandomDev::operator()( RngPtr r ) const
     V2 = 2 * r->drand() - 1;
     S = V1 * V1 + V2 * V2;
   } while ( S >= 1 );
-
   if ( S != 0 )
+  {
     S = V1 * std::sqrt( -2 * std::log( S ) / S );
+  }
 
   return std::exp( mu_ + sigma_ * S );
 }

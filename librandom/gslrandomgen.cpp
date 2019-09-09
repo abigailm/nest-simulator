@@ -22,7 +22,7 @@
 
 #include "gslrandomgen.h"
 
-#ifdef HAVE_GSL_1_2
+#ifdef HAVE_GSL
 
 // nothing if GSL 1.2 or later not available
 
@@ -52,7 +52,7 @@ librandom::GslRandomGen::add_gsl_rngs( Dictionary& rngdict )
     assert( *t != NULL );
     const std::string name = std::string( "gsl_" ) + ( *t )->name;
 
-    if ( !rngdict.known( name ) ) // avoid multiple insertion
+    if ( not rngdict.known( name ) ) // avoid multiple insertion
     {
       GslRNGFactory* f = new GslRNGFactory( *t );
       assert( f != NULL );

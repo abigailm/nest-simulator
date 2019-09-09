@@ -24,112 +24,120 @@
 #ifndef IAF_TUM_2000_H
 #define IAF_TUM_2000_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
-
+#include "event.h"
+#include "nest_types.h"
+#include "ring_buffer.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-class Network;
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
 
-/* BeginDocumentation
-   Name: iaf_tum_2000 - Leaky integrate-and-fire neuron model with exponential PSCs.
+Name: iaf_tum_2000 - Leaky integrate-and-fire neuron model with exponential
+                    PSCs.
 
-   Description:
+Description:
 
-   iaf_tum_2000 is an implementation of a leaky integrate-and-fire model
-   with exponential shaped postsynaptic currents (PSCs) according to [1].
-   The postsynaptic currents have an infinitely short rise time.
-   In particular, this model allows setting an absolute and relative
-   refractory time separately, as requied by [1].
+iaf_tum_2000 is an implementation of a leaky integrate-and-fire model
+with exponential shaped postsynaptic currents (PSCs) according to [1].
+The postsynaptic currents have an infinitely short rise time.
+In particular, this model allows setting an absolute and relative
+refractory time separately, as required by [1].
 
-   The threshold crossing is followed by an absolute refractory period (tau_abs)
-   during which the membrane potential is clamped to the resting potential.
-   During the total refractory period, the membrane potential evolves,
-   but the neuron will not emit a spike, even if the membrane potential
-   reaches threshold. The total refratory time must be larger or equal to
-   the absolute refractory time. If equal, the refractoriness of the model
-   if equivalent to the other models of NEST.
+The threshold crossing is followed by an absolute refractory period
+(t_ref_abs) during which the membrane potential is clamped to the resting
+potential. During the total refractory period (t_ref_tot), the membrane
+potential evolves, but the neuron will not emit a spike, even if the
+membrane potential reaches threshold. The total refractory time must be
+larger or equal to the absolute refractory time. If equal, the
+refractoriness of the model if equivalent to the other models of NEST.
 
-   The linear subthresold dynamics is integrated by the Exact
-   Integration scheme [2]. The neuron dynamics is solved on the time
-   grid given by the computation step size. Incoming as well as emitted
-   spikes are forced to that grid.
+The linear subthreshold dynamics is integrated by the Exact
+Integration scheme [2]. The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
 
-   An additional state variable and the corresponding differential
-   equation represents a piecewise constant external current.
+An additional state variable and the corresponding differential
+equation represents a piecewise constant external current.
 
-   The general framework for the consistent formulation of systems with
-   neuron like dynamics interacting by point events is described in
-   [2]. A flow chart can be found in [3].
+The general framework for the consistent formulation of systems with
+neuron like dynamics interacting by point events is described in
+[2]. A flow chart can be found in [3].
 
-   Remarks:
+Remarks:
 
-   The present implementation uses individual variables for the
-   components of the state vector and the non-zero matrix elements of
-   the propagator.  Because the propagator is a lower triangular matrix
-   no full matrix multiplication needs to be carried out and the
-   computation can be done "in place" i.e. no temporary state vector
-   object is required.
+The present implementation uses individual variables for the
+components of the state vector and the non-zero matrix elements of
+the propagator.  Because the propagator is a lower triangular matrix
+no full matrix multiplication needs to be carried out and the
+computation can be done "in place" i.e. no temporary state vector
+object is required.
 
-   The template support of recent C++ compilers enables a more succinct
-   formulation without loss of runtime performance already at minimal
-   optimization levels. A future version of iaf_tum_2000 will probably
-   address the problem of efficient usage of appropriate vector and
-   matrix objects.
+The template support of recent C++ compilers enables a more succinct
+formulation without loss of runtime performance already at minimal
+optimization levels. A future version of iaf_tum_2000 will probably
+address the problem of efficient usage of appropriate vector and
+matrix objects.
 
 
-   Parameters:
+Parameters:
 
-   The following parameters can be set in the status dictionary.
+The following parameters can be set in the status dictionary.
+\verbatim embed:rst
+===========  ====== ========================================================
+ E_L          mV     Resting membrane potenial
+ C_m          pF     Capacity of the membrane
+ tau_m        ms     Membrane time constant
+ tau_syn_ex   ms     Time constant of postsynaptic excitatory currents
+ tau_syn_in   ms     Time constant of postsynaptic inhibitory currents
+ t_ref_abs    ms     Duration of absolute refractory period (V_m = V_reset)
+ t_ref_tot    ms     Duration of total refractory period (no spiking)
+ V_m          mV     Membrane potential
+ V_th         mV     Spike threshold
+ V_reset      mV     Reset membrane potential after a spike
+ I_e          pA     Constant input current
+ t_spike      ms     Point in time of last spike
+===========  ====== ========================================================
+\endverbatim
 
-   E_L          double - Resting membrane potential in mV.
-   C_m          double - Capacity of the membrane in pF
-   tau_m        double - Membrane time constant in ms.
-   tau_syn_ex   double - Time constant of postsynaptic excitatory currents in ms
-   tau_syn_in   double - Time constant of postsynaptic inhibitory currents in ms
-   t_ref_abs    double - Duration of absolute refractory period (V_m = V_reset) in ms.
-   t_ref_tot    double - Duration of total refractory period (no spiking) in ms.
-   V_m          double - Membrane potential in mV
-   V_th         double - Spike threshold in mV.
-   V_reset      double - Reset membrane potential after a spike in mV.
-   I_e          double - Constant input current in pA.
-   t_spike      double - Point in time of last spike in ms.
+Remarks:
 
-   Remarks:
-   If tau_m is very close to tau_syn_ex or tau_syn_in, the model
-   will numerically behave as if tau_m is equal to tau_syn_ex or
-   tau_syn_in, respectively, to avoid numerical instabilities.
-   For details, please see IAF_Neruons_Singularity.ipynb in
-   the NEST source code (docs/model_details).
+If tau_m is very close to tau_syn_ex or tau_syn_in, the model
+will numerically behave as if tau_m is equal to tau_syn_ex or
+tau_syn_in, respectively, to avoid numerical instabilities.
+For details, please see IAF_neurons_singularity.ipynb in
+the NEST source code (docs/model_details).
 
-   References:
-   [1] Misha Tsodyks, Asher Uziel, and Henry Markram (2000) Synchrony Generation in Recurrent
-   Networks with Frequency-Dependent Synapses, The Journal of Neuroscience, 2000, Vol. 20 RC50 p.
-   1-5
-   [2] Rotter S & Diesmann M (1999) Exact simulation of time-invariant linear
-   systems with applications to neuronal modeling. Biologial Cybernetics
-   81:381-402.
-   [3] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001) State space
-   analysis of synchronous spiking in cortical neural networks.
-   Neurocomputing 38-40:565-571.
+References:
 
-   Sends: SpikeEvent
+\verbatim embed:rst
+.. [1] Tsodyks M, Uziel A, Markram H (2000). Synchrony generation in recurrent
+       networks with frequency-dependent synapses. The Journal of Neuroscience,
+       20,RC50:1-5. URL: https://infoscience.epfl.ch/record/183402
+.. [2] Rotter S,  Diesmann M (1999). Exact simulation of
+       time-invariant linear systems with applications to neuronal
+       modeling. Biologial Cybernetics 81:381-402.
+       DOI: https://doi.org/10.1007/s004220050570
+.. [3] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001). State
+       space analysis of synchronous spiking in cortical neural
+       networks. Neurocomputing 38-40:565-571.
+       DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
+\endverbatim
 
-   Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+Sends: SpikeEvent
 
-   FirstVersion: March 2006
-   Author: Moritz Helias
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+FirstVersion: March 2006
+
+Author: Moritz Helias
 */
-
-/**
- * Leaky integrate-and-fire neuron with exponential PSCs.
- */
 class iaf_tum_2000 : public Archiving_Node
 {
 
@@ -139,7 +147,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -162,7 +171,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // The next two classes need to be friends to access the State_ class/member
   friend class RecordablesMap< iaf_tum_2000 >;
@@ -177,33 +186,33 @@ private:
   {
 
     /** Membrane time constant in ms. */
-    double_t Tau_;
+    double Tau_;
 
     /** Membrane capacitance in pF. */
-    double_t C_;
+    double C_;
 
     /** Refractory period in ms. */
-    double_t tau_ref_tot_;
-    double_t tau_ref_abs_;
+    double tau_ref_tot_;
+    double tau_ref_abs_;
 
     /** Resting potential in mV. */
-    double_t U0_;
+    double E_L_;
 
     /** External current in pA */
-    double_t I_e_;
+    double I_e_;
 
     /** Threshold, RELATIVE TO RESTING POTENTAIL(!).
-        I.e. the real threshold is (U0_+Theta_). */
-    double_t Theta_;
+        I.e. the real threshold is (E_L_+Theta_). */
+    double Theta_;
 
     /** reset value of the membrane potential */
-    double_t V_reset_;
+    double V_reset_;
 
     /** Time constant of excitatory synaptic current in ms. */
-    double_t tau_ex_;
+    double tau_ex_;
 
     /** Time constant of inhibitory synaptic current in ms. */
-    double_t tau_in_;
+    double tau_in_;
 
     Parameters_(); //!< Sets default parameter values
 
@@ -223,13 +232,14 @@ private:
   struct State_
   {
     // state variables
-    double_t i_0_;      // synaptic dc input current, variable 0
-    double_t i_syn_ex_; // postsynaptic current for exc. inputs, variable 1
-    double_t i_syn_in_; // postsynaptic current for inh. inputs, variable 1
-    double_t V_m_;      // membrane potential, variable 2
+    double i_0_;      //!< synaptic dc input current, variable 0
+    double i_syn_ex_; //!< postsynaptic current for exc. inputs, variable 1
+    double i_syn_in_; //!< postsynaptic current for inh. inputs, variable 1
+    double V_m_;      //!< membrane potential, variable 2
 
-    int_t r_abs_; // absolute refractory counter (no membrane potential propagation)
-    int_t r_tot_; // total refractory counter (no spikes can be generated)
+    //! absolute refractory counter (no membrane potential propagation)
+    int r_abs_;
+    int r_tot_; //!< total refractory counter (no spikes can be generated)
 
     State_(); //!< Default initialization
 
@@ -274,34 +284,34 @@ private:
         weight one has an amplitude of 1 mV.
         @note mog - I assume this, not checked.
     */
-    //    double_t PSCInitialValue_;
+    //    double PSCInitialValue_;
 
     // time evolution operator
-    double_t P20_;
-    double_t P11ex_;
-    double_t P11in_;
-    double_t P21ex_;
-    double_t P21in_;
-    double_t P22_;
+    double P20_;
+    double P11ex_;
+    double P11in_;
+    double P21ex_;
+    double P21in_;
+    double P22_;
 
-    int_t RefractoryCountsAbs_;
-    int_t RefractoryCountsTot_;
+    int RefractoryCountsAbs_;
+    int RefractoryCountsTot_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out the real membrane potential
-  double_t
+  double
   get_V_m_() const
   {
     return S_.V_m_;
   }
-  double_t
+  double
   get_I_syn_ex_() const
   {
     return S_.i_syn_ex_;
   }
-  double_t
+  double
   get_I_syn_in_() const
   {
     return S_.i_syn_in_;
@@ -339,7 +349,9 @@ inline port
 iaf_tum_2000::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -347,7 +359,9 @@ inline port
 iaf_tum_2000::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -355,7 +369,9 @@ inline port
 iaf_tum_2000::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

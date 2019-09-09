@@ -23,65 +23,24 @@
 #ifndef IAF_CHXK_2008_H
 #define IAF_CHXK_2008_H
 
+// Generated includes:
 #include "config.h"
 
 #ifdef HAVE_GSL
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
-
+// C includes:
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv.h>
 
-/* BeginDocumentation
-Name: iaf_chxk_2008 - Conductance based leaky integrate-and-fire neuron model used in
-Casti et al 2008.
-
-Description:
-iaf_chxk_2008 is an implementation of a spiking neuron using IAF dynamics with
-conductance-based synapses [1]. It is modeled after iaf_cond_alpha with the addition
-of after hyperpolarization current instead of a membrane potential reset.
-Incoming spike events induce a post-synaptic change
-of conductance modeled by an alpha function. The alpha function
-is normalized such that an event of weight 1.0 results in a peak current of 1 nS
-at t = tau_syn.
-
-Parameters:
-The following parameters can be set in the status dictionary.
-
-V_m        double - Membrane potential in mV
-E_L        double - Leak reversal potential in mV.
-C_m        double - Capacity of the membrane in pF
-V_th       double - Spike threshold in mV.
-E_ex       double - Excitatory reversal potential in mV.
-E_in       double - Inhibitory reversal potential in mV.
-g_L        double - Leak conductance in nS.
-tau_ex     double - Rise time of the excitatory synaptic alpha function in ms.
-tau_in     double - Rise time of the inhibitory synaptic alpha function in ms.
-I_e        double - Constant input current in pA.
-tau_ahp    double - Afterhyperpolarization (AHP) time constant in ms.
-E_ahp	   double - AHP potential in mV.
-g_ahp	   double - AHP conductance in nS.
-ahp_bug	   bool   - Defaults to false. If true, behaves like original model implementation.
-
-References:
-[1] Casti A, Hayot F, Xiao Y, and Kaplan E (2008) A simple model of retina-LGN transmission.
-    J Comput Neurosci 24:235-252.
-
-Sends: SpikeEvent
-
-Receives: SpikeEvent, CurrentEvent
-
-Author: Heiberg
-
-SeeAlso: iaf_cond_alpha
-*/
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
@@ -97,9 +56,63 @@ namespace nest
  */
 extern "C" int iaf_chxk_2008_dynamics( double, const double*, double*, void* );
 
-/**
- * Integrate-and-fire neuron model with two conductance-based synapses.
- */
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup cond
+
+Name: iaf_chxk_2008 - Conductance based leaky integrate-and-fire neuron model
+                      used in Casti et al 2008.
+
+Description:
+
+iaf_chxk_2008 is an implementation of a spiking neuron using IAF dynamics with
+conductance-based synapses [1]. It is modeled after iaf_cond_alpha with the
+addition of after hyper-polarization current instead of a membrane potential
+reset. Incoming spike events induce a post-synaptic change of conductance
+modeled by an alpha function. The alpha function is normalized such that an
+event of weight 1.0 results in a peak current of 1 nS at \f$ t = tau_{syn} \f$.
+
+Parameters:
+
+The following parameters can be set in the status dictionary.
+
+\verbatim embed:rst
+========  ======= ===========================================================
+ V_m      mV      Membrane potential
+ E_L      mV      Leak reversal potential
+ C_m      pF      Capacity of the membrane
+ V_th     mV      Spike threshold
+ E_ex     mV      Excitatory reversal potential
+ E_in     mV      Inhibitory reversal potential
+ g_L      nS      Leak conductance
+ tau_ex   ms      Rise time of the excitatory synaptic alpha function
+ tau_in   ms      Rise time of the inhibitory synaptic alpha function
+ I_e      pA      Constant input current
+ tau_ahp  ms      Afterhyperpolarization (AHP) time constant
+ E_ahp    mV      AHP potential
+ g_ahp    nS      AHP conductance
+ ahp_bug  boolean Defaults to false. If true, behaves like original
+                  model implementation
+========  ======= ===========================================================
+\endverbatim
+
+References:
+
+\verbatim embed:rst
+.. [1] Casti A, Hayot F, Xiao Y, Kaplan E (2008) A simple model of retina-LGN
+       transmission. Journal of Computational Neuroscience 24:235-252.
+       DOI: https://doi.org/10.1007/s10827-007-0053-7
+\endverbatim
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, CurrentEvent
+
+Author: Heiberg
+
+SeeAlso: iaf_cond_alpha
+*/
 class iaf_chxk_2008 : public Archiving_Node
 {
 
@@ -112,7 +125,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -140,7 +154,7 @@ private:
   void init_state_( const Node& proto );
   void init_buffers_();
   void calibrate();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // END Boilerplate function declarations ----------------------------
 
@@ -159,20 +173,21 @@ private:
   //! Model parameters
   struct Parameters_
   {
-    double_t V_th;     //!< Threshold Potential in mV
-    double_t g_L;      //!< Leak Conductance in nS
-    double_t C_m;      //!< Membrane Capacitance in pF
-    double_t E_ex;     //!< Excitatory reversal Potential in mV
-    double_t E_in;     //!< Inhibitory reversal Potential in mV
-    double_t E_L;      //!< Leak reversal Potential (a.k.a. resting potential) in mV
-    double_t tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
-    double_t tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
-    double_t I_e;      //!< Constant Current in pA
-    double_t tau_ahp;  //!< Afterhyperpolarization (AHP) time constant
-    double_t g_ahp;    //!< AHP conductance
-    double_t E_ahp;    //!< AHP potential
-    bool ahp_bug;      //!< If true, discard AHP conductance value from previous spikes
-    Parameters_();     //!< Set default parameter values
+    double V_th;     //!< Threshold Potential in mV
+    double g_L;      //!< Leak Conductance in nS
+    double C_m;      //!< Membrane Capacitance in pF
+    double E_ex;     //!< Excitatory reversal Potential in mV
+    double E_in;     //!< Inhibitory reversal Potential in mV
+    double E_L;      //!< Leak reversal Potential (a.k.a. resting potential) in mV
+    double tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
+    double tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
+    double I_e;      //!< Constant Current in pA
+    double tau_ahp;  //!< Afterhyperpolarization (AHP) time constant
+    double g_ahp;    //!< AHP conductance
+    double E_ahp;    //!< AHP potential
+    bool ahp_bug;    //!< If true, discard AHP conductance value from previous
+                     //!< spikes
+    Parameters_();   //!< Set default parameter values
 
     void get( DictionaryDatum& ) const; //!< Store current values in dictionary
     void set( const DictionaryDatum& ); //!< Set values from dictionary
@@ -208,10 +223,10 @@ public:
     };
 
     //! state vector, must be C-array for GSL solver
-    double_t y[ STATE_VEC_SIZE ];
+    double y[ STATE_VEC_SIZE ];
 
     //!< number of refractory steps remaining
-    int_t r;
+    int r;
 
     State_( const Parameters_& ); //!< Default initialization
     State_( const State_& );
@@ -258,7 +273,7 @@ private:
     // but remain unchanged during calibration. Since it is initialized with
     // step_, and the resolution cannot change after nodes have been created,
     // it is safe to place both here.
-    double_t step_;          //!< step size in ms
+    double step_;            //!< step size in ms
     double IntegrationStep_; //!< current integration time step, updated by GSL
 
     /**
@@ -268,7 +283,7 @@ private:
      * It must be a part of Buffers_, since it is initialized once before
      * the first simulation, but not modified before later Simulate calls.
      */
-    double_t I_stim_;
+    double I_stim_;
   };
 
   // Variables class -------------------------------------------------------
@@ -283,49 +298,49 @@ private:
      * Impulse to add to DG_EXC on spike arrival to evoke unit-amplitude
      * conductance excursion.
      */
-    double_t PSConInit_E;
+    double PSConInit_E;
 
     /**
      * Impulse to add to DG_INH on spike arrival to evoke unit-amplitude
      * conductance excursion.
      */
-    double_t PSConInit_I;
+    double PSConInit_I;
 
     /**
      * Impulse to add to DG_AHP on spike generation to evoke unit-amplitude
      * conductance excursion.
      */
-    double_t PSConInit_AHP;
+    double PSConInit_AHP;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out state vector elements, used by UniversalDataLogger
   template < State_::StateVecElems elem >
-  double_t
+  double
   get_y_elem_() const
   {
     return S_.y[ elem ];
   }
 
   //! Read out remaining refractory time, used by UniversalDataLogger
-  double_t
+  double
   get_r_() const
   {
     return Time::get_resolution().get_ms() * S_.r;
   }
 
-  double_t
+  double
   get_I_syn_exc_() const
   {
     return S_.y[ State_::G_EXC ] * ( S_.y[ State_::V_M ] - P_.E_ex );
   }
-  double_t
+  double
   get_I_syn_inh_() const
   {
     return S_.y[ State_::G_INH ] * ( S_.y[ State_::V_M ] - P_.E_in );
   }
-  double_t
+  double
   get_I_ahp_() const
   {
     return S_.y[ State_::G_AHP ] * ( S_.y[ State_::V_M ] - P_.E_ahp );
@@ -360,7 +375,9 @@ inline port
 iaf_chxk_2008::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -368,7 +385,9 @@ inline port
 iaf_chxk_2008::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -376,7 +395,9 @@ inline port
 iaf_chxk_2008::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

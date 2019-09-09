@@ -21,8 +21,10 @@
  */
 
 #include "tokenarray.h"
-#include "integerdatum.h"
+
+// Includes from sli:
 #include "doubledatum.h"
+#include "integerdatum.h"
 #include "stringdatum.h"
 #include "tokenutils.h"
 
@@ -168,7 +170,9 @@ std::ostream& operator<<( std::ostream& out, const TokenArray& a )
 {
 
   for ( Token* t = a.begin(); t < a.end(); ++t )
+  {
     out << *t << ' ';
+  }
 
   return out;
 }

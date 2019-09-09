@@ -21,11 +21,16 @@
  */
 
 #include "poisson_generator.h"
-#include "network.h"
-#include "dict.h"
-#include "doubledatum.h"
-#include "dictutils.h"
+
+// Includes from nestkernel:
+#include "event_delivery_manager_impl.h"
 #include "exceptions.h"
+#include "kernel_manager.h"
+
+// Includes from sli:
+#include "dict.h"
+#include "dictutils.h"
+#include "doubledatum.h"
 
 /* ----------------------------------------------------------------
  * Default constructors defining default parameter
@@ -52,7 +57,9 @@ nest::poisson_generator::Parameters_::set( const DictionaryDatum& d )
 {
   updateValue< double >( d, names::rate, rate_ );
   if ( rate_ < 0 )
+  {
     throw BadProperty( "The rate cannot be negative." );
+  }
 }
 
 
@@ -61,14 +68,14 @@ nest::poisson_generator::Parameters_::set( const DictionaryDatum& d )
  * ---------------------------------------------------------------- */
 
 nest::poisson_generator::poisson_generator()
-  : Node()
+  : DeviceNode()
   , device_()
   , P_()
 {
 }
 
 nest::poisson_generator::poisson_generator( const poisson_generator& n )
-  : Node( n )
+  : DeviceNode( n )
   , device_( n.device_ )
   , P_( n.P_ )
 {
@@ -108,29 +115,33 @@ nest::poisson_generator::calibrate()
  * ---------------------------------------------------------------- */
 
 void
-nest::poisson_generator::update( Time const& T, const long_t from, const long_t to )
+nest::poisson_generator::update( Time const& T, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < Scheduler::get_min_delay() );
+  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
   assert( from < to );
 
   if ( P_.rate_ <= 0 )
-    return;
-
-  for ( long_t lag = from; lag < to; ++lag )
   {
-    if ( !device_.is_active( T + Time::step( lag ) ) )
+    return;
+  }
+
+  for ( long lag = from; lag < to; ++lag )
+  {
+    if ( not device_.is_active( T + Time::step( lag ) ) )
+    {
       continue; // no spike at this lag
+    }
 
     DSSpikeEvent se;
-    network()->send( *this, se, lag );
+    kernel().event_delivery_manager.send( *this, se, lag );
   }
 }
 
 void
 nest::poisson_generator::event_hook( DSSpikeEvent& e )
 {
-  librandom::RngPtr rng = net_->get_rng( get_thread() );
-  long_t n_spikes = V_.poisson_dev_.ldev( rng );
+  librandom::RngPtr rng = kernel().rng_manager.get_rng( get_thread() );
+  long n_spikes = V_.poisson_dev_.ldev( rng );
 
   if ( n_spikes > 0 ) // we must not send events with multiplicity 0
   {

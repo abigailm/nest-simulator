@@ -23,10 +23,15 @@
 #ifndef GAMMA_RANDOMDEV_H
 #define GAMMA_RANDOMDEV_H
 
+// C++ includes:
 #include <cmath>
-#include "randomgen.h"
-#include "randomdev.h"
+
+// Includes from libnestutil:
 #include "lockptr.h"
+
+// Includes from librandom:
+#include "randomdev.h"
+#include "randomgen.h"
 
 /************************************************************/
 /* Class GammaRNG                                           */
@@ -56,8 +61,8 @@
 /* Author:                                                  */
 /*  Hans Ekkehard Plesser                                   */
 /*                                                          */
-/* References:						    */
-/*  [0] always reserved for Stroustrup		            */
+/* References:                                              */
+/*  [0] always reserved for Stroustrup                      */
 /*  [1] L. Devroye, "Non-Uniform Random Variate Generation",*/
 /*      Springer, 1986                                      */
 /*                                                          */
@@ -66,8 +71,9 @@
 namespace librandom
 {
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::gamma - gamma random deviate generator
+
 Description:
    Generates gamma-distributed random numbers.
 
@@ -78,6 +84,7 @@ Parameters:
    b - scale parameter (default: 1)
 
 SeeAlso: CreateRDV, RandomArray, rdevdict
+
 Author: Hans Ekkehard Plesser
 */
 

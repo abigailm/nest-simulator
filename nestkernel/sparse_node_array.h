@@ -23,11 +23,13 @@
 #ifndef SPARSE_NODE_ARRAY_H
 #define SPARSE_NODE_ARRAY_H
 
+// C++ includes:
 #include <cassert>
-#include <vector>
 #include <map>
+#include <vector>
 
-#include "nest.h"
+// Includes from nestkernel:
+#include "nest_types.h"
 
 namespace nest
 {
@@ -52,15 +54,24 @@ class Node;
  */
 class SparseNodeArray
 {
-private:
-  struct NodeEntry_
+public:
+  struct NodeEntry
   {
-    NodeEntry_( Node&, index );
+    NodeEntry( Node&, index );
+
+    // Accessor functions here are mostly in place to make things "look nice".
+    // Since SparseNodeArray only exposes access to const_interator, iterators
+    // could anyways not be used to change entry contents.
+    // TODO: But we may want to re-think this.
+    Node* get_node() const;
+    index get_gid() const;
+
     Node* node_;
     index gid_; //!< store gid locally for faster searching
   };
 
-public:
+  typedef std::vector< SparseNodeArray::NodeEntry >::const_iterator const_iterator;
+
   //! Create empty spare node array
   SparseNodeArray();
 
@@ -117,6 +128,12 @@ public:
   Node* get_node_by_index( size_t ) const;
 
   /**
+   * Get constant iterators for safe iteration of SparseNodeArray.
+   */
+  const_iterator begin() const;
+  const_iterator end() const;
+
+  /**
    * Return largest GID in global network.
    * @see size
    */
@@ -125,7 +142,7 @@ public:
   std::map< long, size_t > get_step_ctr() const;
 
 private:
-  std::vector< NodeEntry_ > nodes_;           //!< stores local node information
+  std::vector< NodeEntry > nodes_;            //!< stores local node information
   index max_gid_;                             //!< largest GID in network
   index local_min_gid_;                       //!< smallest local GID
   index local_max_gid_;                       //!< largest local GID
@@ -134,6 +151,18 @@ private:
 };
 
 } // namespace nest
+
+inline nest::SparseNodeArray::const_iterator
+nest::SparseNodeArray::begin() const
+{
+  return nodes_.begin();
+}
+
+inline nest::SparseNodeArray::const_iterator
+nest::SparseNodeArray::end() const
+{
+  return nodes_.end();
+}
 
 inline size_t
 nest::SparseNodeArray::size() const
@@ -175,6 +204,18 @@ inline std::map< long, size_t >
 nest::SparseNodeArray::get_step_ctr() const
 {
   return step_ctr_;
+}
+
+inline nest::Node*
+nest::SparseNodeArray::NodeEntry::get_node() const
+{
+  return node_;
+}
+
+inline nest::index
+nest::SparseNodeArray::NodeEntry::get_gid() const
+{
+  return gid_;
 }
 
 #endif /* SPARSE_NODE_ARRAY_H */

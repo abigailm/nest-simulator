@@ -23,61 +23,24 @@
 #ifndef IAF_COND_EXP_H
 #define IAF_COND_EXP_H
 
+// Generated includes:
 #include "config.h"
 
 #ifdef HAVE_GSL
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
-
+// External includes:
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv.h>
 
-/* BeginDocumentation
-Name: iaf_cond_exp - Simple conductance based leaky integrate-and-fire neuron model.
-
-Description:
-iaf_cond_exp is an implementation of a spiking neuron using IAF dynamics with
-conductance-based synapses. Incoming spike events induce a post-synaptic change
-of conductance modelled by an exponential function. The exponential function
-is normalised such that an event of weight 1.0 results in a peak conductance of 1 nS.
-
-Parameters:
-The following parameters can be set in the status dictionary.
-
-V_m        double - Membrane potential in mV
-E_L        double - Leak reversal potential in mV.
-C_m        double - Capacity of the membrane in pF
-t_ref      double - Duration of refractory period in ms.
-V_th       double - Spike threshold in mV.
-V_reset    double - Reset potential of the membrane in mV.
-E_ex       double - Excitatory reversal potential in mV.
-E_in       double - Inhibitory reversal potential in mV.
-g_L        double - Leak conductance in nS;
-tau_syn_ex double - Time constant of the excitatory synaptic exponential function in ms.
-tau_syn_in double - Time constant of the inhibitory synaptic exponential function in ms.
-I_e        double - Constant external input current in pA.
-
-Sends: SpikeEvent
-
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
-
-References:
-
-Meffin, H., Burkitt, A. N., & Grayden, D. B. (2004). An analytical
-model for the large, fluctuating synaptic conductance state typical of
-neocortical neurons in vivo. J.  Comput. Neurosci., 16, 159-175.
-
-Author: Sven Schrader
-
-SeeAlso: iaf_psc_delta, iaf_psc_exp, iaf_cond_exp
-*/
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
 namespace nest
 {
@@ -93,6 +56,60 @@ namespace nest
  */
 extern "C" int iaf_cond_exp_dynamics( double, const double*, double*, void* );
 
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup cond
+
+Name: iaf_cond_exp - Simple conductance based leaky integrate-and-fire neuron
+                     model.
+
+Description:
+
+iaf_cond_exp is an implementation of a spiking neuron using IAF dynamics with
+conductance-based synapses. Incoming spike events induce a post-synaptic change
+of conductance modelled by an exponential function. The exponential function
+is normalised such that an event of weight 1.0 results in a peak conductance of
+1 nS.
+
+Parameters:
+
+The following parameters can be set in the status dictionary.
+\verbatim embed:rst
+=========== ======  =======================================================
+ V_m        mV      Membrane potential
+ E_L        mV      Leak reversal potential
+ C_m        pF      Capacity of the membrane
+ t_ref      ms      Duration of refractory period
+ V_th       mV      Spike threshold
+ V_reset    mV      Reset potential of the membrane
+ E_ex       mV      Excitatory reversal potential
+ E_in       mV      Inhibitory reversal potential
+ g_L        nS      Leak conductance
+ tau_syn_ex ms      Rise time of the excitatory synaptic alpha function
+ tau_syn_in ms      Rise time of the inhibitory synaptic alpha function
+ I_e        pA      Constant input current
+=========== ======  =======================================================
+\endverbatim
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+References:
+
+\verbatim embed:rst
+.. [1] Meffin H, Burkitt AN, Grayden DB (2004). An analytical
+       model for the large, fluctuating synaptic conductance state typical of
+       neocortical neurons in vivo. Journal of Computational Neuroscience,
+       16:159-175.
+       DOI: https://doi.org/10.1023/B:JCNS.0000014108.03012.81
+\endverbatim
+
+Author: Sven Schrader
+
+SeeAlso: iaf_psc_delta, iaf_psc_exp, iaf_cond_exp
+*/
 class iaf_cond_exp : public Archiving_Node
 {
 
@@ -103,7 +120,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -125,7 +143,7 @@ private:
   void init_state_( const Node& proto );
   void init_buffers_();
   void calibrate();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // END Boilerplate function declarations ----------------------------
 
@@ -144,17 +162,17 @@ private:
   //! Model parameters
   struct Parameters_
   {
-    double_t V_th_;    //!< Threshold Potential in mV
-    double_t V_reset_; //!< Reset Potential in mV
-    double_t t_ref_;   //!< Refractory period in ms
-    double_t g_L;      //!< Leak Conductance in nS
-    double_t C_m;      //!< Membrane Capacitance in pF
-    double_t E_ex;     //!< Excitatory reversal Potential in mV
-    double_t E_in;     //!< Inhibitory reversal Potential in mV
-    double_t E_L;      //!< Leak reversal Potential (aka resting potential) in mV
-    double_t tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
-    double_t tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
-    double_t I_e;      //!< Constant Current in pA
+    double V_th_;    //!< Threshold Potential in mV
+    double V_reset_; //!< Reset Potential in mV
+    double t_ref_;   //!< Refractory period in ms
+    double g_L;      //!< Leak Conductance in nS
+    double C_m;      //!< Membrane Capacitance in pF
+    double E_ex;     //!< Excitatory reversal Potential in mV
+    double E_in;     //!< Inhibitory reversal Potential in mV
+    double E_L;      //!< Leak reversal Potential (aka resting potential) in mV
+    double tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
+    double tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
+    double I_e;      //!< Constant Current in pA
 
     Parameters_(); //!< Sets default parameter values
 
@@ -182,8 +200,9 @@ public:
       STATE_VEC_SIZE
     };
 
-    double_t y_[ STATE_VEC_SIZE ]; //!< neuron state, must be C-array for GSL solver
-    int_t r_;                      //!< number of refractory steps remaining
+    //! neuron state, must be C-array for GSL solver
+    double y_[ STATE_VEC_SIZE ];
+    int r_; //!< number of refractory steps remaining
 
     State_( const Parameters_& ); //!< Default initialization
     State_( const State_& );
@@ -222,7 +241,7 @@ private:
     // but remain unchanged during calibration. Since it is initialized with
     // step_, and the resolution cannot change after nodes have been created,
     // it is safe to place both here.
-    double_t step_;          //!< step size in ms
+    double step_;            //!< step size in ms
     double IntegrationStep_; //!< current integration time step, updated by GSL
 
     /**
@@ -232,7 +251,7 @@ private:
      * It must be a part of Buffers_, since it is initialized once before
      * the first simulation, but not modified before later Simulate calls.
      */
-    double_t I_stim_;
+    double I_stim_;
   };
 
   // ----------------------------------------------------------------
@@ -242,14 +261,14 @@ private:
    */
   struct Variables_
   {
-    int_t RefractoryCounts_;
+    int RefractoryCounts_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out state vector elements, used by UniversalDataLogger
   template < State_::StateVecElems elem >
-  double_t
+  double
   get_y_elem_() const
   {
     return S_.y_[ elem ];
@@ -279,7 +298,9 @@ inline port
 iaf_cond_exp::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -287,7 +308,9 @@ inline port
 iaf_cond_exp::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -295,7 +318,9 @@ inline port
 iaf_cond_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

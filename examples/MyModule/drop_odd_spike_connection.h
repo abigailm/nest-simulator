@@ -23,15 +23,19 @@
 #ifndef DROP_ODD_SPIKE_CONNECTION_H
 #define DROP_ODD_SPIKE_CONNECTION_H
 
+// Includes from nestkernel:
 #include "connection.h"
 
 
-/* BeginDocumentation
+namespace mynest
+{
+
+/** @BeginDocumentation
   Name: drop_odd_spike - Synapse dropping spikes with odd time stamps.
 
   Description:
-  This synapse will not deliver any spikes with odd time stamps, while spikes with even
-  time stamps go through unchanged.
+  This synapse will not deliver any spikes with odd time stamps, while spikes
+  with even time stamps go through unchanged.
 
   Transmits: SpikeEvent
 
@@ -40,21 +44,11 @@
 
   SeeAlso: synapsedict
 */
-
-namespace mynest
-{
-
-/**
- * Connection class for illustration purposes.
- *
- * For a discussion of how synapses are created and represented in NEST 2.6,
- * please see Kunkel et al, Front Neuroinform 8:78 (2014), Sec 3.3.
- */
 template < typename targetidentifierT >
 class DropOddSpikeConnection : public nest::Connection< targetidentifierT >
 {
 private:
-  nest::double_t weight_; //!< Synaptic weight
+  double weight_; //!< Synaptic weight
 
 public:
   //! Type to use for representing common synapse properties
@@ -117,21 +111,16 @@ public:
    * This function is a boilerplate function that should be included unchanged
    * in all synapse models. It is called before a connection is added to check
    * that the connection is legal. It is a wrapper that allows us to call
-   * the "real" `check_connection_()` method with the `ConnTestDummyNode dummy_target;` class
-   * for this connection type. This avoids a virtual function call for better
-   * performance.
+   * the "real" `check_connection_()` method with the `ConnTestDummyNode
+   * dummy_target;` class for this connection type. This avoids a virtual
+   * function call for better performance.
    *
    * @param s  Source node for connection
    * @param t  Target node for connection
    * @param receptor_type  Receptor type for connection
-   * @param lastspike Time of most recent spike of presynaptic (sender) neuron, not used here
    */
   void
-  check_connection( nest::Node& s,
-    nest::Node& t,
-    nest::rport receptor_type,
-    nest::double_t,
-    const CommonPropertiesType& )
+  check_connection( nest::Node& s, nest::Node& t, nest::rport receptor_type, const CommonPropertiesType& )
   {
     ConnTestDummyNode dummy_target;
     ConnectionBase::check_connection_( dummy_target, s, t, receptor_type );
@@ -141,17 +130,13 @@ public:
    * Send an event to the receiver of this connection.
    * @param e The event to send
    * @param t Thread
-   * @param t_lastspike Point in time of last spike sent.
    * @param cp Common properties to all synapses.
    */
-  void send( nest::Event& e,
-    nest::thread t,
-    nest::double_t t_lastspike,
-    const CommonPropertiesType& cp );
+  void send( nest::Event& e, nest::thread t, const CommonPropertiesType& cp );
 
-  // The following methods contain mostly fixed code to forward the corresponding
-  // tasks to corresponding methods in the base class and the w_ data member holding
-  // the weight.
+  // The following methods contain mostly fixed code to forward the
+  // corresponding tasks to corresponding methods in the base class and the w_
+  // data member holding the weight.
 
   //! Store connection status information in dictionary
   void get_status( DictionaryDatum& d ) const;
@@ -166,7 +151,7 @@ public:
 
   //! Allows efficient initialization on contstruction
   void
-  set_weight( nest::double_t w )
+  set_weight( double w )
   {
     weight_ = w;
   }
@@ -175,18 +160,17 @@ public:
 
 template < typename targetidentifierT >
 inline void
-DropOddSpikeConnection< targetidentifierT >::send( nest::Event& e,
-  nest::thread t,
-  nest::double_t last,
-  const CommonPropertiesType& props )
+DropOddSpikeConnection< targetidentifierT >::send( nest::Event& e, nest::thread t, const CommonPropertiesType& props )
 {
   if ( e.get_stamp().get_steps() % 2 ) // stamp is odd, drop it
+  {
     return;
+  }
 
   // Even time stamp, we send the spike using the normal sending mechanism
   // send the spike to the target
   e.set_weight( weight_ );
-  e.set_delay( ConnectionBase::get_delay_steps() );
+  e.set_delay_steps( ConnectionBase::get_delay_steps() );
   e.set_receiver( *ConnectionBase::get_target( t ) );
   e.set_rport( ConnectionBase::get_rport() );
   e(); // this sends the event
@@ -197,17 +181,16 @@ void
 DropOddSpikeConnection< targetidentifierT >::get_status( DictionaryDatum& d ) const
 {
   ConnectionBase::get_status( d );
-  def< nest::double_t >( d, nest::names::weight, weight_ );
-  def< nest::long_t >( d, nest::names::size_of, sizeof( *this ) );
+  def< double >( d, nest::names::weight, weight_ );
+  def< long >( d, nest::names::size_of, sizeof( *this ) );
 }
 
 template < typename targetidentifierT >
 void
-DropOddSpikeConnection< targetidentifierT >::set_status( const DictionaryDatum& d,
-  nest::ConnectorModel& cm )
+DropOddSpikeConnection< targetidentifierT >::set_status( const DictionaryDatum& d, nest::ConnectorModel& cm )
 {
   ConnectionBase::set_status( d, cm );
-  updateValue< nest::double_t >( d, nest::names::weight, weight_ );
+  updateValue< double >( d, nest::names::weight, weight_ );
 }
 
 } // namespace

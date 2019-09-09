@@ -25,31 +25,32 @@
 /*
     SLI's dictionary stack
 */
-#include <typeinfo>
-#include "dictdatum.h"
+
+// C++ includes:
 #include <list>
+#include <typeinfo>
+
+// Includes from sli:
+#include "dictdatum.h"
 #include "sliexceptions.h"
 
 
-/***************************************************************
+/*************************************************************
 
 Problems:
 
-- is ist better to uses dictionaries as references to common
+- is it better to uses dictionaries as references to common
   objects like in PS. What is the exact meaning of undef and
   where in our current situation (read RedBook).
 - more efficient implementation exploiting
   the name ids (documented elsewhere).
 
-
-
-    History:
-            (1) using list<Dictionary>
-               MD, 23.6.1, Freiburg
-            (0) first version (single dictionary)
-               MOG, MD, June 1997, Freiburg
-***************************************************************
-*/
+  History:
+    (1) using list<Dictionary>
+        MD, 23.6.1, Freiburg
+    (0) first version (single dictionary)
+        MOG, MD, June 1997, Freiburg
+**************************************************************/
 
 /**
  * The macro DICTSTACK_CACHE switches on two caches:
@@ -93,7 +94,9 @@ public:
   {
     Name::handle_t key = n.toIndex();
     if ( key >= cache_.size() )
+    {
       cache_.resize( Name::num_handles() + 100, 0 );
+    }
     cache_[ key ] = result;
   }
 
@@ -102,7 +105,9 @@ public:
   {
     Name::handle_t key = n.toIndex();
     if ( key >= basecache_.size() )
+    {
       basecache_.resize( Name::num_handles() + 100, 0 );
+    }
     basecache_[ key ] = result;
   }
 
@@ -115,7 +120,9 @@ public:
   {
     Name::handle_t key = n.toIndex();
     if ( key < cache_.size() )
+    {
       cache_[ key ] = 0;
+    }
   }
 
   void
@@ -123,14 +130,18 @@ public:
   {
     Name::handle_t key = n.toIndex();
     if ( key < basecache_.size() )
+    {
       basecache_[ key ] = 0;
+    }
   }
 
   void
   clear_dict_from_cache( DictionaryDatum d )
   {
     for ( TokenMap::iterator i = d->begin(); i != d->end(); ++i )
+    {
       clear_token_from_cache( i->first );
+    }
   }
 
 
@@ -142,9 +153,10 @@ public:
   clear_cache()
   {
     const size_t cache_size = cache_.size();
-
     for ( size_t i = 0; i < cache_size; ++i )
+    {
       cache_[ i ] = 0;
+    }
   }
 
 #endif
@@ -156,7 +168,7 @@ public:
     {
       return lookup2( n );
     }
-    catch ( UndefinedName )
+    catch ( UndefinedName& )
     {
       return VoidToken;
     }
@@ -171,7 +183,9 @@ public:
     {
       const Token* result = cache_[ key ];
       if ( result )
+      {
         return *result;
+      }
     }
 #endif
 
@@ -204,7 +218,9 @@ public:
     {
       const Token* result = basecache_[ key ];
       if ( result )
+      {
         return *result;
+      }
     }
 #endif
     TokenMap::const_iterator where = base_->find( n );
@@ -218,7 +234,9 @@ public:
       return where->second;
     }
     else
+    {
       return VoidToken;
+    }
   }
 
   /** Test for a name searching all dictionaries on the stack.
@@ -232,7 +250,9 @@ public:
     {
       const Token* result = cache_[ key ];
       if ( result )
+      {
         return true;
+      }
     }
 #endif
     std::list< DictionaryDatum >::const_iterator i( d.begin() );
@@ -262,7 +282,9 @@ public:
     {
       const Token* result = basecache_[ key ];
       if ( result )
+      {
         return true;
+      }
     }
 #endif
     TokenMap::const_iterator where = base_->find( n );
@@ -287,7 +309,8 @@ public:
    */
   void def( const Name&, const Token& );
 
-  /** Unbind a previously defined Name from its token. Seach in all dictionaries.
+  /** Unbind a previously defined Name from its token. Seach in all
+   * dictionaries.
    */
   void undef( const Name& );
 

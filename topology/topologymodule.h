@@ -23,18 +23,23 @@
 #ifndef TOPOLOGYMODULE_H
 #define TOPOLOGYMODULE_H
 
-#include "slimodule.h"
-#include "network.h"
-#include "position.h"
-#include "ntree.h"
+// Includes from nestkernel:
 #include "exceptions.h"
+
+// Includes from sli:
+#include "lockptr.h"
+#include "slimodule.h"
+
+// Includes from topology:
 #include "generic_factory.h"
+#include "ntree.h"
+#include "position.h"
 
 namespace nest
 {
-class Parameter;
-class AbstractMask;
 class AbstractLayer;
+class AbstractMask;
+class TopologyParameter;
 
 template < int D >
 class Layer;
@@ -42,11 +47,10 @@ class Layer;
 class TopologyModule : public SLIModule
 {
 public:
-  TopologyModule( Network& );
+  TopologyModule();
   ~TopologyModule();
 
   /**
-   * Initialize module by registering models with the network.
    * @param SLIInterpreter* SLI interpreter, must know modeldict
    */
   void init( SLIInterpreter* );
@@ -187,10 +191,11 @@ public:
     void execute( SLIInterpreter* ) const;
   } cvdict_Mfunction;
 
-  /**
-   * Return a reference to the network managed by the topology module.
-   */
-  static Network& get_network();
+  class SelectNodesByMask_L_a_MFunction : public SLIFunction
+  {
+  public:
+    void execute( SLIInterpreter* ) const;
+  } selectnodesbymask_L_a_Mfunction;
 
   typedef GenericFactory< AbstractMask > MaskFactory;
   typedef GenericFactory< AbstractMask >::CreatorFunction MaskCreatorFunction;
@@ -235,8 +240,7 @@ public:
    *          as value, and optionally an anchor.
    * @returns Either the MaskDatum given as argument, or a new mask.
    */
-  static lockPTRDatum< AbstractMask, &TopologyModule::MaskType > /*MaskDatum*/ create_mask(
-    const Token& t );
+  static lockPTRDatum< AbstractMask, &TopologyModule::MaskType > /*MaskDatum*/ create_mask( const Token& t );
 
   /**
    * Create a new Mask object using the mask factory.
@@ -246,8 +250,8 @@ public:
    */
   static AbstractMask* create_mask( const Name& name, const DictionaryDatum& d );
 
-  typedef GenericFactory< Parameter > ParameterFactory;
-  typedef GenericFactory< Parameter >::CreatorFunction ParameterCreatorFunction;
+  typedef GenericFactory< TopologyParameter > ParameterFactory;
+  typedef GenericFactory< TopologyParameter >::CreatorFunction ParameterCreatorFunction;
 
   /**
    * Register an Parameter subclass as a new parameter type with the
@@ -282,8 +286,8 @@ public:
    * @returns Either the ParameterDatum given as argument, or a new
    *          parameter.
    */
-  static lockPTRDatum< Parameter,
-    &TopologyModule::ParameterType > /*ParameterDatum*/ create_parameter( const Token& );
+  static lockPTRDatum< TopologyParameter, &TopologyModule::ParameterType > /*ParameterDatum*/ create_parameter(
+    const Token& );
 
   /**
    * Create a new Parameter object using the parameter factory.
@@ -292,7 +296,7 @@ public:
    *             type.
    * @returns dynamically allocated new Parameter object.
    */
-  static Parameter* create_parameter( const Name& name, const DictionaryDatum& d );
+  static TopologyParameter* create_parameter( const Name& name, const DictionaryDatum& d );
 
 private:
   /**
@@ -304,13 +308,8 @@ private:
    * Return a reference to the parameter factory class.
    */
   static ParameterFactory& parameter_factory_();
-
-  /**
-   * - @c net must be static, so that the execute() members of the
-   *   SliFunction classes in the module can access the network.
-   */
-  static Network* net_;
 };
+
 
 /**
  * Exception to be thrown if the wrong argument type
@@ -328,15 +327,8 @@ public:
   {
   }
 
-  std::string message();
+  std::string message() const;
 };
-
-inline Network&
-TopologyModule::get_network()
-{
-  assert( net_ != 0 );
-  return *net_;
-}
 
 template < class T >
 inline bool

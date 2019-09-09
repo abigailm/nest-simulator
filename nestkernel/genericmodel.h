@@ -23,8 +23,11 @@
 #ifndef GENERICMODEL_H
 #define GENERICMODEL_H
 
-#include "model.h"
+// C++ includes:
 #include <new>
+
+// Includes from nestkernel:
+#include "model.h"
 
 namespace nest
 {
@@ -41,8 +44,7 @@ template < typename ElementT >
 class GenericModel : public Model
 {
 public:
-  GenericModel( const std::string& );
-  GenericModel( const char[] );
+  GenericModel( const std::string&, const std::string& deprecation_info );
 
   /**
    * Create copy of model with new name.
@@ -55,7 +57,6 @@ public:
   Model* clone( const std::string& ) const;
 
   bool has_proxies();
-  bool potential_global_receiver();
   bool one_node_per_process();
   bool is_off_grid();
   /**
@@ -74,9 +75,21 @@ public:
    */
   port send_test_event( Node&, rport, synindex, bool );
 
+  void sends_secondary_event( GapJunctionEvent& ge );
+
+  SignalType sends_signal() const;
+
+  void sends_secondary_event( InstantaneousRateConnectionEvent& re );
+
+  void sends_secondary_event( DiffusionConnectionEvent& de );
+
+  void sends_secondary_event( DelayedRateConnectionEvent& re );
+
   Node const& get_prototype() const;
 
   void set_model_id( int );
+
+  void deprecation_warning( const std::string& );
 
 private:
   void set_status_( DictionaryDatum );
@@ -98,20 +111,24 @@ private:
    * Prototype node from which all instances are constructed.
    */
   ElementT proto_;
+
+  /**
+   * String containing deprecation information; empty if model not deprecated.
+   */
+  std::string deprecation_info_;
+
+  /**
+   * False until deprecation warning has been issued once
+   */
+  bool deprecation_warning_issued_;
 };
 
 template < typename ElementT >
-GenericModel< ElementT >::GenericModel( const std::string& name )
+GenericModel< ElementT >::GenericModel( const std::string& name, const std::string& deprecation_info )
   : Model( name )
   , proto_()
-{
-  set_threads();
-}
-
-template < typename ElementT >
-GenericModel< ElementT >::GenericModel( const char name[] )
-  : Model( std::string( name ) )
-  , proto_()
+  , deprecation_info_( deprecation_info )
+  , deprecation_warning_issued_( false )
 {
   set_threads();
 }
@@ -120,6 +137,8 @@ template < typename ElementT >
 GenericModel< ElementT >::GenericModel( const GenericModel& oldmod, const std::string& newname )
   : Model( newname )
   , proto_( oldmod.proto_ )
+  , deprecation_info_( oldmod.deprecation_info_ )
+  , deprecation_warning_issued_( false )
 {
   set_type_id( oldmod.get_type_id() );
   set_threads();
@@ -156,13 +175,6 @@ GenericModel< ElementT >::has_proxies()
 
 template < typename ElementT >
 inline bool
-GenericModel< ElementT >::potential_global_receiver()
-{
-  return proto_.potential_global_receiver();
-}
-
-template < typename ElementT >
-inline bool
 GenericModel< ElementT >::one_node_per_process()
 {
   return proto_.one_node_per_process();
@@ -177,12 +189,44 @@ GenericModel< ElementT >::is_off_grid()
 
 template < typename ElementT >
 inline port
-GenericModel< ElementT >::send_test_event( Node& target,
-  rport receptor,
-  synindex syn_id,
-  bool dummy_target )
+GenericModel< ElementT >::send_test_event( Node& target, rport receptor, synindex syn_id, bool dummy_target )
 {
   return proto_.send_test_event( target, receptor, syn_id, dummy_target );
+}
+
+template < typename ElementT >
+inline void
+GenericModel< ElementT >::sends_secondary_event( GapJunctionEvent& ge )
+{
+  return proto_.sends_secondary_event( ge );
+}
+
+template < typename ElementT >
+inline void
+GenericModel< ElementT >::sends_secondary_event( InstantaneousRateConnectionEvent& re )
+{
+  return proto_.sends_secondary_event( re );
+}
+
+template < typename ElementT >
+inline void
+GenericModel< ElementT >::sends_secondary_event( DiffusionConnectionEvent& de )
+{
+  return proto_.sends_secondary_event( de );
+}
+
+template < typename ElementT >
+inline void
+GenericModel< ElementT >::sends_secondary_event( DelayedRateConnectionEvent& re )
+{
+  return proto_.sends_secondary_event( re );
+}
+
+template < typename ElementT >
+inline nest::SignalType
+GenericModel< ElementT >::sends_signal() const
+{
+  return proto_.sends_signal();
 }
 
 template < typename ElementT >
@@ -197,7 +241,7 @@ DictionaryDatum
 GenericModel< ElementT >::get_status_()
 {
   DictionaryDatum d = proto_.get_status_base();
-  ( *d )[ "elementsize" ] = sizeof( ElementT );
+  ( *d )[ names::elementsize ] = sizeof( ElementT );
   return d;
 }
 
@@ -220,80 +264,6 @@ void
 GenericModel< ElementT >::set_model_id( int i )
 {
   proto_.set_model_id( i );
-}
-
-
-/**
- * Register a model prototype with the network.
- * This function must be called exactly once for each model class to make
- * it known to the network. The natural place for a call to this function
- * is in a *module.cpp file.
- * @param reference to network
- * @param name under which model is to be known in simulator
- * @return Model ID assigned by network
- *
- * @see register_private_prototype_model, register_prototype_connection
- */
-template < class ModelT >
-index
-register_model( Network& net, const std::string& name, bool private_model = false )
-{
-  Model* prototype = new GenericModel< ModelT >( name );
-  assert( prototype != 0 );
-  return net.register_model( *prototype, private_model );
-}
-
-/**
- * Register a pre-configured model prototype with the network.
- * This function must be called exactly once for each model class to make
- * it known to the network. The natural place for a call to this function
- * is in a *module.cpp file.
- *
- * Pre-configured models are models based on the same class, as
- * another model, but have different parameter settings; e.g.,
- * voltmeter is a pre-configured multimeter.
- *
- * @param reference to network
- * @param name under which model is to be known in simulator
- * @param dictionary to use to pre-configure model
- * @param register as private model if true
- * @return Model ID assigned by network
- *
- * @see register_private_prototype_model, register_prototype_connection
- */
-template < class ModelT >
-index
-register_preconf_model( Network& net,
-  const std::string& name,
-  Dictionary& conf,
-  bool private_model = false )
-{
-  Model* prototype = new GenericModel< ModelT >( name );
-  assert( prototype != 0 );
-  conf.clear_access_flags();
-  prototype->set_status( conf );
-  std::string missed;
-  assert( conf.all_accessed( missed ) ); // we only get here from C++ code, no need for exception
-  return net.register_model( *prototype, private_model );
-}
-
-/**
- * Register a private model prototype with the network.
- * Private model prototypes differ from normal ones in that they are not
- * visible in the modeldict. This is important for node types that serve
- * only as in-/output elements of layers, but cannot "live" independently.
- * @param reference to network
- * @param name under which model is to be known in simulator
- * @return Model ID assigned by network
- *
- * @see register_prototype_model, register_prototype_connection,
- *      layerdc_node, layerdc_generator
- */
-template < class ModelT >
-index
-register_private_model( Network& net, const std::string& name )
-{
-  return register_model< ModelT >( net, name, true );
 }
 }
 #endif

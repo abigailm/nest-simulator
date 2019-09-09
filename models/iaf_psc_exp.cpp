@@ -20,18 +20,26 @@
  *
  */
 
-#include "exceptions.h"
 #include "iaf_psc_exp.h"
-#include "network.h"
-#include "dict.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-#include "dictutils.h"
+
+// C++ includes:
+#include <limits>
+
+// Includes from libnestutil:
 #include "numerics.h"
-#include "universal_data_logger_impl.h"
 #include "propagator_stability.h"
 
-#include <limits>
+// Includes from nestkernel:
+#include "event_delivery_manager_impl.h"
+#include "exceptions.h"
+#include "kernel_manager.h"
+#include "universal_data_logger_impl.h"
+
+// Includes from sli:
+#include "dict.h"
+#include "dictutils.h"
+#include "doubledatum.h"
+#include "integerdatum.h"
 
 /* ----------------------------------------------------------------
  * Recordables map
@@ -51,8 +59,8 @@ RecordablesMap< iaf_psc_exp >::create()
   insert_( names::V_m, &iaf_psc_exp::get_V_m_ );
   insert_( names::weighted_spikes_ex, &iaf_psc_exp::get_weighted_spikes_ex_ );
   insert_( names::weighted_spikes_in, &iaf_psc_exp::get_weighted_spikes_in_ );
-  insert_( names::input_currents_ex, &iaf_psc_exp::get_input_currents_ex_ );
-  insert_( names::input_currents_in, &iaf_psc_exp::get_input_currents_in_ );
+  insert_( names::I_syn_ex, &iaf_psc_exp::get_I_syn_ex_ );
+  insert_( names::I_syn_in, &iaf_psc_exp::get_I_syn_in_ );
 }
 }
 
@@ -61,20 +69,23 @@ RecordablesMap< iaf_psc_exp >::create()
  * ---------------------------------------------------------------- */
 
 nest::iaf_psc_exp::Parameters_::Parameters_()
-  : Tau_( 10.0 )            // in ms
-  , C_( 250.0 )             // in pF
-  , t_ref_( 2.0 )           // in ms
-  , U0_( -70.0 )            // in mV
-  , I_e_( 0.0 )             // in pA
-  , Theta_( -55.0 - U0_ )   // relative U0_
-  , V_reset_( -70.0 - U0_ ) // in mV
-  , tau_ex_( 2.0 )          // in ms
-  , tau_in_( 2.0 )          // in ms
+  : Tau_( 10.0 )             // in ms
+  , C_( 250.0 )              // in pF
+  , t_ref_( 2.0 )            // in ms
+  , E_L_( -70.0 )            // in mV
+  , I_e_( 0.0 )              // in pA
+  , Theta_( -55.0 - E_L_ )   // relative E_L_
+  , V_reset_( -70.0 - E_L_ ) // in mV
+  , tau_ex_( 2.0 )           // in ms
+  , tau_in_( 2.0 )           // in ms
+  , rho_( 0.01 )             // in 1/s
+  , delta_( 0.0 )            // in mV
 {
 }
 
 nest::iaf_psc_exp::State_::State_()
   : i_0_( 0.0 )
+  , i_1_( 0.0 )
   , i_syn_ex_( 0.0 )
   , i_syn_in_( 0.0 )
   , V_m_( 0.0 )
@@ -89,34 +100,45 @@ nest::iaf_psc_exp::State_::State_()
 void
 nest::iaf_psc_exp::Parameters_::get( DictionaryDatum& d ) const
 {
-  def< double >( d, names::E_L, U0_ ); // resting potential
+  def< double >( d, names::E_L, E_L_ ); // resting potential
   def< double >( d, names::I_e, I_e_ );
-  def< double >( d, names::V_th, Theta_ + U0_ ); // threshold value
-  def< double >( d, names::V_reset, V_reset_ + U0_ );
+  def< double >( d, names::V_th, Theta_ + E_L_ ); // threshold value
+  def< double >( d, names::V_reset, V_reset_ + E_L_ );
   def< double >( d, names::C_m, C_ );
   def< double >( d, names::tau_m, Tau_ );
   def< double >( d, names::tau_syn_ex, tau_ex_ );
   def< double >( d, names::tau_syn_in, tau_in_ );
   def< double >( d, names::t_ref, t_ref_ );
+  def< double >( d, names::rho, rho_ );
+  def< double >( d, names::delta, delta_ );
 }
 
 double
 nest::iaf_psc_exp::Parameters_::set( const DictionaryDatum& d )
 {
-  // if U0_ is changed, we need to adjust all variables defined relative to U0_
-  const double ELold = U0_;
-  updateValue< double >( d, names::E_L, U0_ );
-  const double delta_EL = U0_ - ELold;
+  // if E_L_ is changed, we need to adjust all variables defined relative to
+  // E_L_
+  const double ELold = E_L_;
+  updateValue< double >( d, names::E_L, E_L_ );
+  const double delta_EL = E_L_ - ELold;
 
   if ( updateValue< double >( d, names::V_reset, V_reset_ ) )
-    V_reset_ -= U0_;
+  {
+    V_reset_ -= E_L_;
+  }
   else
+  {
     V_reset_ -= delta_EL;
+  }
 
   if ( updateValue< double >( d, names::V_th, Theta_ ) )
-    Theta_ -= U0_;
+  {
+    Theta_ -= E_L_;
+  }
   else
+  {
     Theta_ -= delta_EL;
+  }
 
   updateValue< double >( d, names::I_e, I_e_ );
   updateValue< double >( d, names::C_m, C_ );
@@ -124,18 +146,34 @@ nest::iaf_psc_exp::Parameters_::set( const DictionaryDatum& d )
   updateValue< double >( d, names::tau_syn_ex, tau_ex_ );
   updateValue< double >( d, names::tau_syn_in, tau_in_ );
   updateValue< double >( d, names::t_ref, t_ref_ );
-
   if ( V_reset_ >= Theta_ )
+  {
     throw BadProperty( "Reset potential must be smaller than threshold." );
-
+  }
   if ( C_ <= 0 )
+  {
     throw BadProperty( "Capacitance must be strictly positive." );
-
+  }
   if ( Tau_ <= 0 || tau_ex_ <= 0 || tau_in_ <= 0 )
+  {
     throw BadProperty( "Membrane and synapse time constants must be strictly positive." );
-
+  }
   if ( t_ref_ < 0 )
+  {
     throw BadProperty( "Refractory time must not be negative." );
+  }
+
+  updateValue< double >( d, "rho", rho_ );
+  if ( rho_ < 0 )
+  {
+    throw BadProperty( "Stochastic firing intensity must not be negative." );
+  }
+
+  updateValue< double >( d, "delta", delta_ );
+  if ( delta_ < 0 )
+  {
+    throw BadProperty( "Width of threshold region must not be negative." );
+  }
 
   return delta_EL;
 }
@@ -143,16 +181,20 @@ nest::iaf_psc_exp::Parameters_::set( const DictionaryDatum& d )
 void
 nest::iaf_psc_exp::State_::get( DictionaryDatum& d, const Parameters_& p ) const
 {
-  def< double >( d, names::V_m, V_m_ + p.U0_ ); // Membrane potential
+  def< double >( d, names::V_m, V_m_ + p.E_L_ ); // Membrane potential
 }
 
 void
 nest::iaf_psc_exp::State_::set( const DictionaryDatum& d, const Parameters_& p, double delta_EL )
 {
   if ( updateValue< double >( d, names::V_m, V_m_ ) )
-    V_m_ -= p.U0_;
+  {
+    V_m_ -= p.E_L_;
+  }
   else
+  {
     V_m_ -= delta_EL;
+  }
 }
 
 nest::iaf_psc_exp::Buffers_::Buffers_( iaf_psc_exp& n )
@@ -211,8 +253,8 @@ void
 nest::iaf_psc_exp::calibrate()
 {
   B_.currents_.resize( 2 );
-
-  B_.logger_.init(); // ensures initialization in case mm connected after Simulate
+  // ensures initialization in case mm connected after Simulate
+  B_.logger_.init();
 
   const double h = Time::get_resolution().get_ms();
 
@@ -241,42 +283,50 @@ nest::iaf_psc_exp::calibrate()
   V_.P20_ = P_.Tau_ / P_.C_ * ( 1.0 - V_.P22_ );
   // P20_ = h/C_;
 
-  // TauR specifies the length of the absolute refractory period as
-  // a double_t in ms. The grid based iaf_psc_exp can only handle refractory
+  // t_ref_ specifies the length of the absolute refractory period as
+  // a double in ms. The grid based iaf_psc_exp can only handle refractory
   // periods that are integer multiples of the computation step size (h).
   // To ensure consistency with the overall simulation scheme such conversion
   // should be carried out via objects of class nest::Time. The conversion
   // requires 2 steps:
-  //     1. A time object r is constructed defining  representation of
-  //        TauR in tics. This representation is then converted to computation time
-  //        steps again by a strategy defined by class nest::Time.
-  //     2. The refractory time in units of steps is read out get_steps(), a member
-  //        function of class nest::Time.
+  //     1. A time object r is constructed, defining representation of
+  //        t_ref_ in tics. This representation is then converted to computation
+  //        time steps again by a strategy defined by class nest::Time.
+  //     2. The refractory time in units of steps is read out get_steps(), a
+  //        member function of class nest::Time.
   //
-  // Choosing a TauR that is not an integer multiple of the computation time
-  // step h will leed to accurate (up to the resolution h) and self-consistent
-  // results. However, a neuron model capable of operating with real valued spike
-  // time may exhibit a different effective refractory time.
-  //
+  // Choosing a t_ref_ that is not an integer multiple of the computation time
+  // step h will lead to accurate (up to the resolution h) and self-consistent
+  // results. However, a neuron model capable of operating with real valued
+  // spike time may exhibit a different effective refractory time.
 
   V_.RefractoryCounts_ = Time( Time::ms( P_.t_ref_ ) ).get_steps();
-  assert( V_.RefractoryCounts_ >= 0 ); // since t_ref_ >= 0, this can only fail in error
+  // since t_ref_ >= 0, this can only fail in error
+  assert( V_.RefractoryCounts_ >= 0 );
+
+  V_.rng_ = kernel().rng_manager.get_rng( get_thread() );
 }
 
 void
-nest::iaf_psc_exp::update( const Time& origin, const long_t from, const long_t to )
+nest::iaf_psc_exp::update( const Time& origin, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < Scheduler::get_min_delay() );
+  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
   assert( from < to );
 
+  const double h = Time::get_resolution().get_ms();
+
   // evolve from timestep 'from' to timestep 'to' with steps of h each
-  for ( long_t lag = from; lag < to; ++lag )
+  for ( long lag = from; lag < to; ++lag )
   {
     if ( S_.r_ref_ == 0 ) // neuron not refractory, so evolve V
-      S_.V_m_ = S_.V_m_ * V_.P22_ + S_.i_syn_ex_ * V_.P21ex_ + S_.i_syn_in_ * V_.P21in_
-        + ( P_.I_e_ + S_.i_0_ ) * V_.P20_;
+    {
+      S_.V_m_ =
+        S_.V_m_ * V_.P22_ + S_.i_syn_ex_ * V_.P21ex_ + S_.i_syn_in_ * V_.P21in_ + ( P_.I_e_ + S_.i_0_ ) * V_.P20_;
+    }
     else
-      --S_.r_ref_; // neuron is absolute refractory
+    {
+      --S_.r_ref_;
+    } // neuron is absolute refractory
 
     // exponential decaying PSCs
     S_.i_syn_ex_ *= V_.P11ex_;
@@ -285,7 +335,8 @@ nest::iaf_psc_exp::update( const Time& origin, const long_t from, const long_t t
     // add evolution of presynaptic input current
     S_.i_syn_ex_ += ( 1. - V_.P11ex_ ) * S_.i_1_;
 
-    // the spikes arriving at T+1 have an immediate effect on the state of the neuron
+    // the spikes arriving at T+1 have an immediate effect on the state of the
+    // neuron
 
     V_.weighted_spikes_ex_ = B_.spikes_ex_.get_value( lag );
     V_.weighted_spikes_in_ = B_.spikes_in_.get_value( lag );
@@ -293,7 +344,8 @@ nest::iaf_psc_exp::update( const Time& origin, const long_t from, const long_t t
     S_.i_syn_ex_ += V_.weighted_spikes_ex_;
     S_.i_syn_in_ += V_.weighted_spikes_in_;
 
-    if ( S_.V_m_ >= P_.Theta_ ) // threshold crossing
+    if ( ( P_.delta_ < 1e-10 and S_.V_m_ >= P_.Theta_ )                   // deterministic threshold crossing
+      or ( P_.delta_ > 1e-10 and V_.rng_->drand() < phi_() * h * 1e-3 ) ) // stochastic threshold crossing
     {
       S_.r_ref_ = V_.RefractoryCounts_;
       S_.V_m_ = P_.V_reset_;
@@ -301,7 +353,7 @@ nest::iaf_psc_exp::update( const Time& origin, const long_t from, const long_t t
       set_spiketime( Time::step( origin.get_steps() + lag + 1 ) );
 
       SpikeEvent se;
-      network()->send( *this, se, lag );
+      kernel().event_delivery_manager.send( *this, se, lag );
     }
 
     // set new input current
@@ -316,32 +368,36 @@ nest::iaf_psc_exp::update( const Time& origin, const long_t from, const long_t t
 void
 nest::iaf_psc_exp::handle( SpikeEvent& e )
 {
-  assert( e.get_delay() > 0 );
+  assert( e.get_delay_steps() > 0 );
 
   if ( e.get_weight() >= 0.0 )
-    B_.spikes_ex_.add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ),
+  {
+    B_.spikes_ex_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
       e.get_weight() * e.get_multiplicity() );
+  }
   else
-    B_.spikes_in_.add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ),
+  {
+    B_.spikes_in_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
       e.get_weight() * e.get_multiplicity() );
+  }
 }
 
 void
 nest::iaf_psc_exp::handle( CurrentEvent& e )
 {
-  assert( e.get_delay() > 0 );
+  assert( e.get_delay_steps() > 0 );
 
-  const double_t c = e.get_current();
-  const double_t w = e.get_weight();
+  const double c = e.get_current();
+  const double w = e.get_weight();
 
   // add weighted current; HEP 2002-10-04
   if ( 0 == e.get_rport() )
   {
-    B_.currents_[ 0 ].add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ), w * c );
+    B_.currents_[ 0 ].add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), w * c );
   }
   if ( 1 == e.get_rport() )
   {
-    B_.currents_[ 1 ].add_value( e.get_rel_delivery_steps( network()->get_slice_origin() ), w * c );
+    B_.currents_[ 1 ].add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), w * c );
   }
 }
 

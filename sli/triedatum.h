@@ -22,12 +22,18 @@
 
 #ifndef TYPEDFUNCTIONDATUM_H
 #define TYPEDFUNCTIONDATUM_H
+
+// C++ includes:
 #include <typeinfo>
-#include "slifunction.h"
-#include "interpret.h"
-#include "typechk.h"
+
+// Includes from libnestutil:
 #include "allocator.h"
+
+// Includes from sli:
 #include "datum.h"
+#include "interpret.h"
+#include "slifunction.h"
+#include "typechk.h"
 
 class TrieDatum : public TypedDatum< &SLIInterpreter::Trietype >
 {
@@ -130,14 +136,18 @@ public:
   static void* operator new( size_t size )
   {
     if ( size != memory.size_of() )
+    {
       return ::operator new( size );
+    }
     return memory.alloc();
   }
 
   static void operator delete( void* p, size_t size )
   {
     if ( p == NULL )
+    {
       return;
+    }
     if ( size != memory.size_of() )
     {
       ::operator delete( p );

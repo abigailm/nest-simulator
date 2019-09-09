@@ -20,18 +20,22 @@
  *
  */
 
-#include <algorithm>
 #include "token.h"
+
+// C++ includes:
+#include <algorithm>
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "booldatum.h"
 #include "datum.h"
+#include "doubledatum.h"
+#include "integerdatum.h"
 #include "name.h"
+#include "namedatum.h"
+#include "stringdatum.h"
 #include "tokenarray.h"
 #include "tokenutils.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-#include "namedatum.h"
-#include "booldatum.h"
-#include "stringdatum.h"
-#include "arraydatum.h"
 
 
 /***********************************************************/
@@ -64,6 +68,13 @@ Token::Token( unsigned long value )
 {
   p = new IntegerDatum( value );
 }
+
+#ifdef HAVE_32BIT_ARCH
+Token::Token( uint64_t value )
+{
+  p = new IntegerDatum( value );
+}
+#endif
 
 Token::Token( double value )
 {
@@ -151,24 +162,34 @@ Token::info( std::ostream& out ) const
     p->info( out );
   }
   else
+  {
     out << "<NULL token>\n";
+  }
 }
 
 void
 Token::pprint( std::ostream& out ) const
 {
-  if ( !p )
+  if ( not p )
+  {
     out << "<Null token>";
+  }
   else
+  {
     p->pprint( out );
+  }
 }
 
 std::ostream& operator<<( std::ostream& o, const Token& c )
 {
-  if ( !c )
+  if ( not c )
+  {
     o << "<Null token>";
+  }
   else
+  {
     c->print( o );
+  }
   return o;
 }
 
@@ -181,7 +202,7 @@ Token::matches_as_string( const Token& rhs ) const
     const std::string& right = getValue< std::string >( rhs );
     return left == right;
   }
-  catch ( TypeMismatch )
+  catch ( TypeMismatch& )
   {
     return false;
   }

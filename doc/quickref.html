@@ -354,10 +354,6 @@ facilities.</p>
       <td>Simulate n milliseconds.</td>
     </tr>
     <tr>
-      <td width="25%"><a href="help/cc/ResumeSimulation.html">ResumeSimulation</a></td>
-      <td>Resume an interrupted simulation.</td>
-    </tr>
-    <tr>
       <td width="25%"><a href="help/cc/ResetKernel.html">ResetKernel</a></td>
       <td>Put the simulation kernel back to its initial state.</td>
     </tr>
@@ -456,15 +452,12 @@ properties.</p>
 <table class="commands">
   <tbody>
     <tr>
-      <td width="25%">
-        <a href="help/cc/iaf_neuron.html">iaf_neuron</a>,
-        <a href="help/cc/iaf_psc_alpha.html">iaf_psc_alpha</a>
-      </td>
-      <td>Leaky integrate-and-fire neuron model.</td>
+      <td width="25%"><a href="help/cc/iaf_psc_alpha.html">iaf_psc_alpha</a></td>
+      <td>Leaky integrate-and-fire neuron model with alpha shaped PSCs.</td>
     </tr>
     <tr>
       <td width="25%"><a href="help/cc/iaf_psc_delta.html">iaf_psc_delta</a></td>
-      <td>Leaky integrate-and-fire neuron model.</td>
+      <td>Leaky integrate-and-fire neuron model with delta shaped PSCs.</td>
     </tr>
     <tr>
       <td width="25%"><a href="help/cc/iaf_psc_exp.html">iaf_psc_exp</a></td>
@@ -488,11 +481,15 @@ properties.</p>
     </tr>
     <tr>
       <td width="25%"><a href="help/cc/hh_psc_alpha.html">hh_psc_alpha</a></td>
-      <td>Hodgkin Huxley neuron model.</td>
+      <td>Hodgkin-Huxley neuron model.</td>
+    </tr>
+    <tr>
+      <td width="25%"><a href="help/cc/hh_psc_alpha_gap.html">hh_psc_alpha_gap</a></td>
+      <td>Hodgkin-Huxley neuron model with gap-junction support.</td>
     </tr>
     <tr>
       <td width="25%"><a href="help/cc/hh_cond_exp_traub.html">hh_cond_exp_traub</a></td>
-      <td>Hodgin Huxley based model, Traub modified.</td>
+      <td>Hodgkin-Huxley model for Brette et al (2007) review.</td>
     </tr>
   </tbody>
 </table>
@@ -610,24 +607,8 @@ connected to their targets like a neuron.</p>
       <td>Connect two network nodes.</td>
     </tr>
     <tr>
-      <td width="25%"><a href="help/cc/ConvergentConnect.html">ConvergentConnect</a></td>
-      <td>Connect many source nodes to one target node.</td>
-    </tr>
-    <tr>
-      <td width="25%"><a href="help/cc/DivergentConnect.html">DivergentConnect</a></td>
-      <td>Connect one source node to many target nodes.</td>
-    </tr>
-    <tr>
-      <td width="25%"><a href="help/sli/RandomConvergentConnect.html">RandomConvergentConnect</a></td>
-      <td>Randomly connect one source node to many target nodes.</td>
-    </tr>
-    <tr>
-      <td width="25%"><a href="help/sli/RandomDivergentConnect.html">RandomDivergentConnect</a></td>
-      <td>Randomly connect one source node to many target nodes.</td>
-    </tr>
-    <tr>
-      <td width="25%"><a href="help/sli/BinomialConvergentConnect.html">BinomialConvergentConnect</a></td>
-      <td>Connect a target to a binomial number of sources.</td>
+      <td width="25%"><a href="help/sli/DataConnect.html">DataConnect</a></td>
+      <td>Build connections from explicit specifications.</td>
     </tr>
   </tbody>
 </table>
@@ -725,7 +706,7 @@ connected to their targets like a neuron.</p>
 <table class="commands">
   <tbody>
     <tr>
-      <td width="25%"><a href="help/sli/FindConnections.html">FindConnections</a></td>
+      <td width="25%"><a href="help/sli/GetConnections.html">GetConnections</a></td>
       <td>Find connections that fulfil the given criteria.</td>
     </tr>
     <tr>
@@ -3476,7 +3457,7 @@ not be restored to the state before the procedure was called.</p>
 </table>
 
 <p style="text-align:center">
-  &copy; 2004 <a href="http://www.nest-initiative.org">The NEST Initiative</a>
+  &copy; 2004 <a href="https://www.nest-initiative.org">The NEST Initiative</a>
 </p>
 
 </body>

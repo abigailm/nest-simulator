@@ -22,12 +22,19 @@
 
 #ifndef MODEL_H
 #define MODEL_H
-#include <string>
 
+// C++ includes:
 #include <new>
+#include <string>
 #include <vector>
-#include "node.h"
+
+// Includes from libnestutil:
 #include "allocator.h"
+
+// Includes from nestkernel:
+#include "node.h"
+
+// Includes from sli:
 #include "dictutils.h"
 
 namespace nest
@@ -125,7 +132,6 @@ public:
   size_t mem_capacity();
 
   virtual bool has_proxies() = 0;
-  virtual bool potential_global_receiver() = 0;
   virtual bool one_node_per_process() = 0;
   virtual bool is_off_grid() = 0;
 
@@ -147,6 +153,19 @@ public:
 
   virtual port send_test_event( Node&, rport, synindex, bool ) = 0;
 
+  virtual void sends_secondary_event( GapJunctionEvent& ge ) = 0;
+  virtual void sends_secondary_event( InstantaneousRateConnectionEvent& re ) = 0;
+  virtual void sends_secondary_event( DiffusionConnectionEvent& de ) = 0;
+  virtual void sends_secondary_event( DelayedRateConnectionEvent& re ) = 0;
+
+  /**
+   * Check what type of signal this model is sending.
+   * Required so that proxynode can formward this call
+   * to model that in turn delegates the call to the underlying
+   * prototype.
+   */
+  virtual SignalType sends_signal() const = 0;
+
   /**
    * Return the size of the prototype.
    */
@@ -161,6 +180,13 @@ public:
    * Set the model id on the prototype.
    */
   virtual void set_model_id( int ) = 0;
+
+  /**
+   * Issue deprecation warning on first call if model is deprecated.
+   *
+   * @param calling function
+   */
+  virtual void deprecation_warning( const std::string& ) = 0;
 
   /**
    * Set the model id on the prototype.

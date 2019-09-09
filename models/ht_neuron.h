@@ -23,93 +23,29 @@
 #ifndef HT_NEURON_H
 #define HT_NEURON_H
 
-#include "archiving_node.h"
-#include <vector>
+// Generated includes:
+#include "config.h"
+
+#ifdef HAVE_GSL
+
+// C++ includes:
 #include <string>
-#include "stringdatum.h"
+#include <vector>
 
-#ifdef HAVE_GSL_1_11
-
-#include "ring_buffer.h"
-#include "connection.h"
-#include "universal_data_logger.h"
-#include "recordables_map.h"
-
+// C includes:
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv.h>
 
-/* BeginDocumentation
-   Name: ht_neuron - Neuron model after Hill & Tononi (2005).
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
 
-   Description:
-   This model neuron implements a slightly modified version of the
-   neuron model described in [1]. The most important properties are:
-
-   - Integrate-and-fire with threshold that is increased on spiking
-     and decays back to an equilibrium value.
-   - No hard reset, but repolarizing potassium current.
-   - AMPA, NMDA, GABA_A, and GABA_B conductance-based synapses with
-     beta-function (difference of two exponentials) time course.
-   - Intrinsic currents I_h (pacemaker), I_T (low-threshold calcium),
-     I_Na(p) (persistent sodium), and I_KNa (depolarization-activated
-     potassium).
-
-   In comparison to the model described in the paper, the following
-   modifications were mare:
-
-   - NMDA conductance is given by g(t) = g_peak * m(V), where
-
-       m(V) = 1 / ( 1 + exp( - ( V - NMDA_Vact ) / NMDA_Sact ) )
-
-     This is an approximation to the NMDA model used in [2].
-
-   - Several apparent typographical errors in the descriptions of
-     the intrinsic currents were fixed, hopefully in a meaningful
-     way.
-
-   I'd like to thank Sean Hill for giving me access to his
-   simulator source code.
-
-   See examples/hilltononi for usage examples.
-
-   Warning:
-   THIS MODEL NEURON HAS NOT BEEN TESTED EXTENSIVELY!
-
-   Parameters:
-   V_m  -  membrane potential
-   spike_duration - duration of re-polarizing potassium current
-   Tau_m - membrane time constant applying to all currents but repolarizing K-current
-           (see [1, p 1677])
-   Tau_spike - membrane time constant applying to repolarizing K-current
-   Theta, Theta_eq, Tau_theta - Threshold, equilibrium value, time constant
-   g_KL, E_K, g_NaL, E_Na - conductances and reversal potentials for K and Na leak currents
-
-   {AMPA,NMDA,GABA_A,GABA_B}_{E_rev,g_peak,Tau_1,Tau_2}
-   - reversal potentials, peak conductances and time constants for synapses
-     (Tau_1: rise time, Tau_2: decay time, Tau_1 < Tau_2)
-
-   NMDA_Sact, NMDA_Vact - Parameters for voltage dependence of NMDA-synapse, see eq. above
-
-   {h,T,NaP,KNa}_{E_rev,g_peak} - reversal potential and peak conductance for intrinsic currents
-
-   receptor_types - dictionary mapping synapse names to ports on neuron model
-   recordables - list of recordable quantities.
-
-   Author: Hans Ekkehard Plesser
-
-   Sends: SpikeEvent
-
-   Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
-
-   FirstVersion: October 2009
-
-   References:
-   [1] S Hill and G Tononi (2005). J Neurophysiol 93:1671-1698.
-   [2] ED Lumer, GM Edelman, and G Tononi (1997). Cereb Cortex 7:207-227.
-
-   SeeAlso: ht_synapse
-*/
+// Includes from sli:
+#include "stringdatum.h"
 
 namespace nest
 {
@@ -125,6 +61,104 @@ namespace nest
  */
 extern "C" int ht_neuron_dynamics( double, const double*, double*, void* );
 
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup ht_neuron
+
+Name: ht_neuron - Neuron model after Hill & Tononi (2005).
+
+Description:
+
+This model neuron implements a slightly modified version of the
+neuron model described in [1]. The most important properties are:
+
+- Integrate-and-fire with threshold adaptive threshold.
+- Repolarizing potassium current instead of hard reset.
+- AMPA, NMDA, GABA_A, and GABA_B conductance-based synapses with
+  beta-function (difference of exponentials) time course.
+- Voltage-dependent NMDA with instantaneous or two-stage unblocking [1, 2].
+- Intrinsic currents I_h, I_T, I_Na(p), and I_KNa.
+- Synaptic "minis" are not implemented.
+
+Documentation and Examples:
+- docs/model_details/HillTononiModels.ipynb
+- pynest/examples/intrinsic_currents_spiking.py
+- pynest/examples/intrinsic_currents_subthreshold.py
+
+Parameters:
+
+\verbatim embed:rst
+=============== ======= ===========================================================
+ V_m            mV      Membrane potential
+ tau_m          ms      Membrane time constant applying to all currents except
+                        repolarizing K-current (see [1], p 1677)
+ t_ref          ms      Refractory time and duration of post-spike repolarizing
+                        potassium current (t_spike in [1])
+ tau_spike      ms      Membrane time constant for post-spike repolarizing
+                        potassium current
+ voltage_clamp  boolean If true, clamp voltage to value at beginning of simulation
+                        (default: false, mainly for testing)
+ theta          mV      Threshold
+ theta_eq       mV      Equilibrium value
+ tau_theta      ms      Time constant
+ g_KL           nS      Conductance for potassium leak current
+ E_K            mV      Reversal potential for potassium leak currents
+ g_NaL          nS      Conductance for sodium leak currents
+ E_Na           mV      Reversal potential for Na leak currents
+ tau_D_KNa      ms      Relaxation time constant for I_KNa
+ receptor_types         Dictionary mapping synapse names to ports on neuron model
+ recordables            List of recordable quantities
+=============== ======= ===========================================================
+
++------------------------------------------------------------+
+|{E_rev,g_peak,tau_rise,tau_decay}_{AMPA,NMDA,GABA_A,GABA_B} |
++------------------------------------------------------------+
+| Reversal potentials, peak conductances and time constants  |
+| for synapses (tau_rise/tau_decay correspond to tau_1/tau_2 |
+| in the paper)                                              |
++------------------------------------------------------------+
+
++------------------------+------------------------------------------------+
+|V_act_NMDA, S_act_NMDA, |  Parameters for voltage dependence of NMDA-    |
+|tau_Mg_{fast, slow}_NMDA|  conductance, see above                        |
++------------------------+------------------------------------------------+
+
+============================ =================================================
+nstant_unblock_NMDA          Instantaneous NMDA unblocking (default: false)
+{E_rev,g_peak}_{h,T,NaP,KNa} Reversal potential and peak conductance for
+                             intrinsic currents
+equilibrate                  If given and true, time-dependent activation
+                             and inactivation state variables (h, m) of
+                             intrinsic currents and NMDA channels are set
+                             to their equilibrium values during this
+                             SetStatus call; otherwise they retain their
+                             present values.
+============================ =================================================
+\endverbatim
+
+@Note Conductances are unitless in this model and currents are in mV.
+
+Author: Hans Ekkehard Plesser
+
+Sends: SpikeEvent
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+FirstVersion: October 2009; full revision November 2016
+
+References:
+
+\verbatim embed:rst
+.. [1] Hill S, Tononi G (2005). Modeling sleep and wakefulness in the
+       thalamocortical system. Journal of Neurophysiology. 93:1671-1698.
+       DOI: https://doi.org/10.1152/jn.00915.2004
+.. [2] Vargas-Caballero M, Robinson HPC (2003). A slow fraction of Mg2+
+       unblock of NMDA receptors limits their  contribution to spike generation
+       in cortical pyramidal neurons. Journal of Neurophysiology 89:2778-2783.
+       DOI: https://doi.org/10.1152/jn.01038.2002
+\endverbatim
+
+SeeAlso: ht_connection
+*/
 class ht_neuron : public Archiving_Node
 {
 public:
@@ -134,7 +168,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -172,9 +207,9 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
-  double_t get_synapse_constant( double_t, double_t, double_t );
+  double get_synapse_constant( double, double, double );
 
   // END Boilerplate function declarations ----------------------------
 
@@ -190,61 +225,68 @@ private:
    */
   struct Parameters_
   {
-    // Leaks
-    double_t E_Na;  // 30 mV
-    double_t E_K;   // -90 mV
-    double_t g_NaL; // 0.2
-    double_t g_KL;  // 1.0 - 1.85
-    double_t Tau_m; // ms
-
-    // Dynamic threshold
-    double_t Theta_eq;  // mV
-    double_t Tau_theta; // ms
-
-    // Spike potassium current
-    double_t Tau_spike; // ms
-    double_t t_spike;   // ms
-
     Parameters_();
 
     void get( DictionaryDatum& ) const; //!< Store current values in dictionary
     void set( const DictionaryDatum& ); //!< Set values from dicitonary
 
+    // Note: Conductances are unitless
+    // Leaks
+    double E_Na; // mV
+    double E_K;  // mV
+    double g_NaL;
+    double g_KL;
+    double tau_m; // ms
+
+    // Dynamic threshold
+    double theta_eq;  // mV
+    double tau_theta; // ms
+
+    // Post-spike potassium current
+    double tau_spike; // ms, membrane time constant for this current
+    double t_ref;     // ms, refractory time
+
     // Parameters for synapse of type AMPA, GABA_A, GABA_B and NMDA
-    double_t AMPA_g_peak;
-    double_t AMPA_Tau_1; // ms
-    double_t AMPA_Tau_2; // ms
-    double_t AMPA_E_rev; // mV
+    double g_peak_AMPA;
+    double tau_rise_AMPA;  // ms
+    double tau_decay_AMPA; // ms
+    double E_rev_AMPA;     // mV
 
-    double_t NMDA_g_peak;
-    double_t NMDA_Tau_1; // ms
-    double_t NMDA_Tau_2; // ms
-    double_t NMDA_E_rev; // mV
-    double_t NMDA_Vact;  //!< mV, inactive for V << Vact, inflection of sigmoid
-    double_t NMDA_Sact;  //!< mV, scale of inactivation
+    double g_peak_NMDA;
+    double tau_rise_NMDA;    // ms
+    double tau_decay_NMDA;   // ms
+    double E_rev_NMDA;       // mV
+    double V_act_NMDA;       // mV, inactive for V << Vact, inflection of sigmoid
+    double S_act_NMDA;       // mV, scale of inactivation
+    double tau_Mg_slow_NMDA; // ms
+    double tau_Mg_fast_NMDA; // ms
+    bool instant_unblock_NMDA;
 
-    double_t GABA_A_g_peak;
-    double_t GABA_A_Tau_1; // ms
-    double_t GABA_A_Tau_2; // ms
-    double_t GABA_A_E_rev; // mV
+    double g_peak_GABA_A;
+    double tau_rise_GABA_A;  // ms
+    double tau_decay_GABA_A; // ms
+    double E_rev_GABA_A;     // mV
 
-    double_t GABA_B_g_peak;
-    double_t GABA_B_Tau_1; // ms
-    double_t GABA_B_Tau_2; // ms
-    double_t GABA_B_E_rev; // mV
+    double g_peak_GABA_B;
+    double tau_rise_GABA_B;  // ms
+    double tau_decay_GABA_B; // ms
+    double E_rev_GABA_B;     // mV
 
     // parameters for intrinsic currents
-    double_t NaP_g_peak;
-    double_t NaP_E_rev; // mV
+    double g_peak_NaP;
+    double E_rev_NaP; // mV
 
-    double_t KNa_g_peak;
-    double_t KNa_E_rev; // mV
+    double g_peak_KNa;
+    double E_rev_KNa; // mV
+    double tau_D_KNa; // ms
 
-    double_t T_g_peak;
-    double_t T_E_rev; // mV
+    double g_peak_T;
+    double E_rev_T; // mV
 
-    double_t h_g_peak;
-    double_t h_E_rev; // mV
+    double g_peak_h;
+    double E_rev_h; // mV
+
+    bool voltage_clamp;
   };
 
   // ----------------------------------------------------------------
@@ -256,47 +298,50 @@ public:
   struct State_
   {
 
-    // y_ = [V, Theta, Synapses]
+    // y_ = [V, theta, Synapses]
     enum StateVecElems_
     {
-      VM = 0,
+      V_M = 0,
       THETA,
       DG_AMPA,
       G_AMPA,
-      DG_NMDA,
-      G_NMDA,
+      DG_NMDA_TIMECOURSE,
+      G_NMDA_TIMECOURSE,
       DG_GABA_A,
       G_GABA_A,
       DG_GABA_B,
-      G_GABA_B,
-      IKNa_D,
-      IT_m,
-      IT_h,
-      Ih_m,
+      G_GABA_B, // DO NOT INSERT ANYTHING UP TO HERE, WILL MIX UP
+                // SPIKE DELIVERY
+      m_fast_NMDA,
+      m_slow_NMDA,
+      m_Ih,
+      D_IKNa,
+      m_IT,
+      h_IT,
       STATE_VEC_SIZE
     };
 
-    double_t y_[ STATE_VEC_SIZE ]; //!< neuron state, must be C-array for GSL solver
+    //! neuron state, must be C-array for GSL solver
+    double y_[ STATE_VEC_SIZE ];
 
-    // Timer (counter) for potassium current.
-    int_t r_potassium_;
+    /** Timer (counter) for spike-activated repolarizing potassium current.
+     * Neuron is absolutely refractory during this period.
+     */
+    long ref_steps_;
 
-    bool g_spike_; // active / not active
+    double I_NaP_; //!< Persistent Na current; member only to allow recording
+    double I_KNa_; //!< Depol act. K current; member only to allow recording
+    double I_T_;   //!< Low-thresh Ca current; member only to allow recording
+    double I_h_;   //!< Pacemaker current; member only to allow recording
 
-    double_t I_NaP_; //!< Persistent Na current; member only to allow recording
-    double_t I_KNa_; //!< Depol act. K current; member only to allow recording
-    double_t I_T_;   //!< Low-thresh Ca current; member only to allow recording
-    double_t I_h_;   //!< Pacemaker current; member only to allow recording
-
-    State_();
-    State_( const Parameters_& p );
+    State_( const ht_neuron&, const Parameters_& p );
     State_( const State_& s );
     ~State_();
 
     State_& operator=( const State_& s );
 
     void get( DictionaryDatum& ) const;
-    void set( const DictionaryDatum&, const Parameters_& );
+    void set( const DictionaryDatum&, const ht_neuron& );
   };
 
 private:
@@ -331,8 +376,8 @@ private:
     // but remain unchanged during calibration. Since it is initialized with
     // step_, and the resolution cannot change after nodes have been created,
     // it is safe to place both here.
-    double_t step_;          //!< step size in ms
-    double IntegrationStep_; //!< current integration time step, updated by GSL
+    double step_;             //!< step size in ms
+    double integration_step_; //!< current integration time step, updated by GSL
 
     /**
      * Input current injected by CurrentEvent.
@@ -341,7 +386,7 @@ private:
      * It must be a part of Buffers_, since it is initialized once before
      * the first simulation, but not modified before later Simulate calls.
      */
-    double_t I_stim_;
+    double I_stim_;
   };
 
   // ----------------------------------------------------------------
@@ -352,50 +397,89 @@ private:
   struct Variables_
   {
     //! size of conductance steps for arriving spikes
-    std::vector< double_t > cond_steps_;
+    std::vector< double > cond_steps_;
 
     //! Duration of potassium current.
-    int_t PotassiumRefractoryCounts_;
+    int PotassiumRefractoryCounts_;
+
+    //! Voltage at beginning of simulation, for clamping
+    double V_clamp_;
   };
 
 
   // readout functions, can use template for vector elements
   template < State_::StateVecElems_ elem >
-  double_t
+  double
   get_y_elem_() const
   {
     return S_.y_[ elem ];
   }
-  double_t
-  get_r_potassium_() const
-  {
-    return S_.r_potassium_;
-  }
-  double_t
-  get_g_spike_() const
-  {
-    return S_.g_spike_;
-  }
-  double_t
+  double
   get_I_NaP_() const
   {
     return S_.I_NaP_;
   }
-  double_t
+  double
   get_I_KNa_() const
   {
     return S_.I_KNa_;
   }
-  double_t
+  double
   get_I_T_() const
   {
     return S_.I_T_;
   }
-  double_t
+  double
   get_I_h_() const
   {
     return S_.I_h_;
   }
+
+  double get_g_NMDA_() const;
+
+  /**
+   * NMDA activation for given parameters
+   * Needs to take parameter values explicitly since it is called from
+   * _dynamics.
+   */
+  double m_NMDA_( double V, double m_eq, double m_fast, double m_slow ) const;
+
+  /**
+   * Return equilibrium value of I_h activation
+   *
+   * @param V Membrane potential for which to evaluate
+   *        (may differ from y_[V_M] when clamping)
+   */
+  double m_eq_h_( double V ) const;
+
+  /**
+   * Return equilibrium value of I_T activation
+   *
+   * @param V Membrane potential for which to evaluate
+   *        (may differ from y_[V_M] when clamping)
+   */
+  double m_eq_T_( double V ) const;
+
+  /**
+   * Return equilibrium value of I_T inactivation
+   *
+   * @param V Membrane potential for which to evaluate
+   *        (may differ from y_[V_M] when clamping)
+   */
+  double h_eq_T_( double V ) const;
+
+  /**
+   * Return steady-state magnesium unblock ratio.
+   *
+   * Receives V_m as argument since it is called from ht_neuron_dyamics
+   * with temporary state values.
+   */
+  double m_eq_NMDA_( double V ) const;
+
+  /**
+   * Steady-state "D" value for given voltage.
+   */
+  double D_eq_KNa_( double V ) const;
 
   static RecordablesMap< ht_neuron > recordablesMap_;
 
@@ -421,27 +505,32 @@ ht_neuron::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   assert( B_.spike_inputs_.size() == 4 );
 
-  if ( !( INF_SPIKE_RECEPTOR < receptor_type && receptor_type < SUP_SPIKE_RECEPTOR ) )
+  if ( not( INF_SPIKE_RECEPTOR < receptor_type && receptor_type < SUP_SPIKE_RECEPTOR ) )
   {
     throw UnknownReceptorType( receptor_type, get_name() );
     return 0;
   }
   else
+  {
     return receptor_type - 1;
+  }
 
 
   /*
 if (receptor_type != 0)
-throw UnknownReceptorType(receptor_type, get_name());
+{
+  throw UnknownReceptorType(receptor_type, get_name());
+}
 return 0;*/
 }
 
 inline port
 ht_neuron::handles_test_event( CurrentEvent&, rport receptor_type )
 {
-
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -449,7 +538,9 @@ inline port
 ht_neuron::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 }

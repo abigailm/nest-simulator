@@ -23,10 +23,20 @@
 #ifndef CONNECTOR_MODEL_H
 #define CONNECTOR_MODEL_H
 
-#include "nest_time.h"
-#include "dictutils.h"
-#include "nest.h"
+// C++ includes:
 #include <cmath>
+#include <string>
+
+// Includes from libnestutil:
+#include "numerics.h"
+
+// Includes from nestkernel:
+#include "event.h"
+#include "nest_time.h"
+#include "nest_types.h"
+
+// Includes from sli:
+#include "dictutils.h"
 
 namespace nest
 {
@@ -39,45 +49,40 @@ class ConnectorModel
 {
 
 public:
-  ConnectorModel( Network& net, const std::string );
+  ConnectorModel( const std::string,
+    const bool is_primary,
+    const bool has_delay,
+    const bool requires_symmetric,
+    const bool supports_wfr,
+    const bool requires_clopath_archiving );
   ConnectorModel( const ConnectorModel&, const std::string );
   virtual ~ConnectorModel()
   {
   }
 
-  size_t get_num_connections() const;
-
-  const Time&
-  get_min_delay() const
-  {
-    return min_delay_;
-  }
-  const Time&
-  get_max_delay() const
-  {
-    return max_delay_;
-  }
-
-  void update_delay_extrema( const double_t mindelay_cand, const double_t maxdelay_cand );
-
   /**
-   * NAN is a special value in cmath, which describes double values that
-   * are not a number. If delay or weight is omitted in an add_connection call,
-   * NAN indicates this and weight/delay are set only, if they are valid.
+   * Adds a connection.
+   *
+   * @param src Source node
+   * @param tgt Target node
+   * @param hetconn Connector vector
+   * @param syn_id Synapse id
+   * @param d Parameter dictionary to configure the synapse
+   * @param delay Delay of the connection
+   * @param weight Weight of the connection
+   *
+   * Delay and weight have the default value NAN, a special value, which
+   * describes double values that are not a number. If delay or weight is
+   * omitted, NAN indicates this and weight/delay are set only if they are
+   * valid.
    */
-  virtual ConnectorBase* add_connection( Node& src,
+  virtual void add_connection( Node& src,
     Node& tgt,
-    ConnectorBase* conn,
-    synindex syn_id,
-    double_t delay = NAN,
-    double_t weight = NAN ) = 0;
-  virtual ConnectorBase* add_connection( Node& src,
-    Node& tgt,
-    ConnectorBase* conn,
-    synindex syn_id,
-    DictionaryDatum& d,
-    double_t delay = NAN,
-    double_t weight = NAN ) = 0;
+    std::vector< ConnectorBase* >& hetconn,
+    const synindex syn_id,
+    const DictionaryDatum& d,
+    const double delay = NAN,
+    const double weight = NAN ) = 0;
 
   virtual ConnectorModel* clone( std::string ) const = 0;
 
@@ -88,26 +93,16 @@ public:
 
   virtual const CommonSynapseProperties& get_common_properties() const = 0;
 
+  /**
+   * Checks to see if illegal parameters are given in syn_spec.
+   */
+  virtual void check_synapse_params( const DictionaryDatum& ) const = 0;
+
+  virtual SecondaryEvent* get_event() const = 0;
+
   virtual void set_syn_id( synindex syn_id ) = 0;
 
-
-  /**
-   * Raise exception if delay value in milliseconds is invalid.
-   *
-   * @note Not const, since it may update delay extrema as a side-effect.
-   */
-  void assert_valid_delay_ms( double_t );
-
-  /**
-   * Raise exception if either of the two delays in steps is invalid.
-   *
-   * @note Setting continuous delays requires testing d and d+1. This function
-   *       implements this more efficiently than two calls to assert_valid_delay().
-   * @note This test accepts the delays in steps, as this makes more sense when
-   *       working with continuous delays.
-   * @note Not const, since it may update delay extrema as a side-effect.
-   */
-  void assert_two_valid_delays_steps( long_t, long_t );
+  virtual std::vector< SecondaryEvent* > create_event( size_t n ) const = 0;
 
   std::string
   get_name() const
@@ -116,26 +111,50 @@ public:
   }
 
   bool
-  get_user_set_delay_extrema() const
+  is_primary() const
   {
-    return user_set_delay_extrema_;
+    return is_primary_;
   }
 
-  Network&
-  network() const
+  bool
+  has_delay() const
   {
-    return net_;
+    return has_delay_;
+  }
+
+  bool
+  requires_symmetric() const
+  {
+    return requires_symmetric_;
+  }
+
+  bool
+  requires_clopath_archiving() const
+  {
+    return requires_clopath_archiving_;
+  }
+
+  bool
+  supports_wfr() const
+  {
+    return supports_wfr_;
   }
 
 protected:
-  Network& net_;                   //!< The Network instance.
-  Time min_delay_;                 //!< Minimal delay of all created synapses.
-  Time max_delay_;                 //!< Maximal delay of all created synapses.
-  size_t num_connections_;         //!< The number of connections registered with this type
-  bool default_delay_needs_check_; //!< Flag indicating, that the default delay must be checked
-  bool user_set_delay_extrema_;    //!< Flag indicating if the user set the delay extrema.
-  bool used_default_delay_;
+  //! name of the ConnectorModel
   std::string name_;
+  //! indicates whether the default delay must be checked
+  bool default_delay_needs_check_;
+  //! indicates whether this ConnectorModel belongs to a primary connection
+  bool is_primary_;
+  //! indicates whether ConnectorModel has a delay
+  bool has_delay_;
+  //! indicates that ConnectorModel requires symmetric connections
+  bool requires_symmetric_;
+  //! indicates whether connection can be used during wfr update
+  bool supports_wfr_;
+  //! indicates that ConnectorModel requires Clopath archiving
+  bool requires_clopath_archiving_;
 
 }; // ConnectorModel
 
@@ -143,13 +162,22 @@ protected:
 template < typename ConnectionT >
 class GenericConnectorModel : public ConnectorModel
 {
+private:
   typename ConnectionT::CommonPropertiesType cp_;
+  //! used to create secondary events that belong to secondary connections
+  typename ConnectionT::EventType* pev_;
+
   ConnectionT default_connection_;
   rport receptor_type_;
 
 public:
-  GenericConnectorModel( Network& net, const std::string name )
-    : ConnectorModel( net, name )
+  GenericConnectorModel( const std::string name,
+    bool is_primary,
+    bool has_delay,
+    bool requires_symmetric,
+    bool supports_wfr,
+    bool requires_clopath_archiving )
+    : ConnectorModel( name, is_primary, has_delay, requires_symmetric, supports_wfr, requires_clopath_archiving )
     , receptor_type_( 0 )
   {
   }
@@ -157,24 +185,19 @@ public:
   GenericConnectorModel( const GenericConnectorModel& cm, const std::string name )
     : ConnectorModel( cm, name )
     , cp_( cm.cp_ )
+    , pev_( cm.pev_ )
     , default_connection_( cm.default_connection_ )
     , receptor_type_( cm.receptor_type_ )
   {
   }
 
-  ConnectorBase* add_connection( Node& src,
+  void add_connection( Node& src,
     Node& tgt,
-    ConnectorBase* conn,
-    synindex syn_id,
-    double_t weight,
-    double_t delay );
-  ConnectorBase* add_connection( Node& src,
-    Node& tgt,
-    ConnectorBase* conn,
-    synindex syn_id,
-    DictionaryDatum& d,
-    double_t weight,
-    double_t delay );
+    std::vector< ConnectorBase* >& hetconn,
+    const synindex syn_id,
+    const DictionaryDatum& d,
+    const double delay,
+    const double weight );
 
   ConnectorModel* clone( std::string ) const;
 
@@ -182,6 +205,12 @@ public:
 
   void get_status( DictionaryDatum& ) const;
   void set_status( const DictionaryDatum& );
+
+  void
+  check_synapse_params( const DictionaryDatum& syn_spec ) const
+  {
+    default_connection_.check_synapse_params( syn_spec );
+  }
 
   typename ConnectionT::CommonPropertiesType const&
   get_common_properties() const
@@ -191,30 +220,103 @@ public:
 
   void set_syn_id( synindex syn_id );
 
+  virtual typename ConnectionT::EventType*
+  get_event() const
+  {
+    assert( false );
+    return 0;
+  }
+
   ConnectionT const&
   get_default_connection() const
   {
     return default_connection_;
   }
 
+  virtual std::vector< SecondaryEvent* > create_event( size_t ) const
+  {
+    // Should not be called for a ConnectorModel belonging to a primary
+    // connection. Only required for secondary connection types.
+    assert( false );
+    std::vector< SecondaryEvent* > prototype_events;
+    return prototype_events;
+  }
+
 private:
   void used_default_delay();
 
-  ConnectorBase* add_connection( Node& src,
+  void add_connection_( Node& src,
     Node& tgt,
-    ConnectorBase* conn,
-    synindex syn_id,
+    std::vector< ConnectorBase* >& hetconn,
+    const synindex syn_id,
     ConnectionT& c,
-    rport receptor_type );
+    const rport receptor_type );
 
 }; // GenericConnectorModel
 
-inline size_t
-ConnectorModel::get_num_connections() const
+template < typename ConnectionT >
+class GenericSecondaryConnectorModel : public GenericConnectorModel< ConnectionT >
 {
-  return num_connections_;
-}
+private:
+  //! used to create secondary events that belong to secondary connections
+  typename ConnectionT::EventType* pev_;
 
+public:
+  GenericSecondaryConnectorModel( const std::string name,
+    const bool has_delay,
+    const bool requires_symmetric,
+    const bool supports_wfr )
+    : GenericConnectorModel< ConnectionT >( name,
+        /*is _primary=*/false,
+        has_delay,
+        requires_symmetric,
+        supports_wfr,
+        /*requires_clopath_archiving=*/false )
+    , pev_( 0 )
+  {
+    pev_ = new typename ConnectionT::EventType();
+  }
+
+  GenericSecondaryConnectorModel( const GenericSecondaryConnectorModel& cm, const std::string name )
+    : GenericConnectorModel< ConnectionT >( cm, name )
+  {
+    pev_ = new typename ConnectionT::EventType( *cm.pev_ );
+  }
+
+
+  ConnectorModel*
+  clone( std::string name ) const
+  {
+    return new GenericSecondaryConnectorModel( *this, name ); // calls copy construtor
+  }
+
+  std::vector< SecondaryEvent* >
+  create_event( size_t n ) const
+  {
+    std::vector< SecondaryEvent* > prototype_events( n, NULL );
+    for ( size_t i = 0; i < n; i++ )
+    {
+      prototype_events[ i ] = new typename ConnectionT::EventType();
+    }
+
+    return prototype_events;
+  }
+
+
+  ~GenericSecondaryConnectorModel()
+  {
+    if ( pev_ != 0 )
+    {
+      delete pev_;
+    }
+  }
+
+  typename ConnectionT::EventType*
+  get_event() const
+  {
+    return pev_;
+  }
+};
 
 } // namespace nest
 

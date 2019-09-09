@@ -23,19 +23,23 @@
 #ifndef PIF_PSC_ALPHA_H
 #define PIF_PSC_ALPHA_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "ring_buffer.h"
 #include "universal_data_logger.h"
+
+// Includes from sli:
 #include "dictdatum.h"
 
 namespace mynest
 {
 
-/* BeginDocumentation
-Name: pif_psc_alpha - Perfect integrate-and-fire neuron model with alpha PSC synapse.
+/** @BeginDocumentation
+Name: pif_psc_alpha - Perfect integrate-and-fire neuron model with alpha PSC
+                      synapse.
 
 Description:
 pif_psc_alpha implements a non-leaky integrate-and-fire neuron with
@@ -47,11 +51,13 @@ The dynamics of the neuron are defined by
 
    C_m dV/dt  = I_syn(t) + I_e
 
-   I_syn(t)   = Sum_{t_{j,k} < t} w_j x (t-t_{j,k}) x e/tau_syn x e^{-(t-t_{j,k})/tau_syn}
+   I_syn(t)   = Sum_{t_{j,k} < t} w_j x (t-t_{j,k}) x e/tau_syn x
+                                                        e^{-(t-t_{j,k})/tau_syn}
 
 where t_{j,k} is the time of the k-th spike arriving from neuron j, and w_j is
-the weight of the synapse from neuron j onto the present neuron. The alpha function
-is normalized by amplitude, i.e., the maximum input current for any spike is w_j.
+the weight of the synapse from neuron j onto the present neuron. The alpha
+function is normalized by amplitude, i.e., the maximum input current for any
+spike is w_j.
 
 Parameters:
 C_m      double - Membrane capacitance, in pF
@@ -81,21 +87,20 @@ Hans Ekkehard Plesser, based on iaf_psc_alpha
 
 SeeAlso: iaf_psc_delta, iaf_psc_exp, iaf_psc_alpha
 */
-
-/**
- * Non-leaky integrate-and-fire neuron with alpha-shaped PSCs.
- */
 class pif_psc_alpha : public nest::Archiving_Node
 {
 public:
   /**
-   * The constructor is only used to create the model prototype in the model manager.
+   * The constructor is only used to create the model prototype in the model
+   * manager.
    */
   pif_psc_alpha();
 
   /**
-   * The copy constructor is used to create model copies and instances of the model.
-   * @node The copy constructor needs to initialize the parameters and the state.
+   * The copy constructor is used to create model copies and instances of the
+   * model.
+   * @node The copy constructor needs to initialize the parameters and the
+   * state.
    *       Initialization of buffers and interal variables is deferred to
    *       @c init_buffers_() and @c calibrate().
    */
@@ -145,7 +150,7 @@ private:
   void calibrate();
 
   //! Take neuron through given time interval
-  void update( nest::Time const&, const nest::long_t, const nest::long_t );
+  void update( nest::Time const&, const long, const long );
 
   // The next two classes need to be friends to access the State_ class/member
   friend class nest::RecordablesMap< pif_psc_alpha >;
@@ -163,8 +168,8 @@ private:
    *       all its members are copied properly by the default copy constructor
    *       and assignment operator. Important:
    *       - If Parameters_ contained @c Time members, you need to define the
-   *         assignment operator to recalibrate all members of type @c Time . You
-   *         may also want to define the assignment operator.
+   *         assignment operator to recalibrate all members of type @c Time .
+   *         You may also want to define the assignment operator.
    *       - If Parameters_ contained members that cannot copy themselves, such
    *         as C-style arrays, you need to define the copy constructor and
    *         assignment operator to copy those members.
@@ -194,14 +199,15 @@ private:
    * These are the state variables that are advanced in time by calls to
    * @c update(). In many models, some or all of them can be set by the user
    * through @c SetStatus. The state variables are initialized from the model
-   * prototype when the node is created. State variables are reset by @c ResetNetwork.
+   * prototype when the node is created. State variables are reset by @c
+   * ResetNetwork.
    *
    * @note State_ need neither copy constructor nor @c operator=(), since
    *       all its members are copied properly by the default copy constructor
    *       and assignment operator. Important:
    *       - If State_ contained @c Time members, you need to define the
-   *         assignment operator to recalibrate all members of type @c Time . You
-   *         may also want to define the assignment operator.
+   *         assignment operator to recalibrate all members of type @c Time .
+   *         You may also want to define the assignment operator.
    *       - If State_ contained members that cannot copy themselves, such
    *         as C-style arrays, you need to define the copy constructor and
    *         assignment operator to copy those members.
@@ -218,8 +224,8 @@ private:
      * Construct new default State_ instance based on values in Parameters_.
      * This c'tor is called by the no-argument c'tor of the neuron model. It
      * takes a reference to the parameters instance of the model, so that the
-     * state can be initialized in accordance with parameters, e.g., initializing
-     * the membrane potential with the resting potential.
+     * state can be initialized in accordance with parameters, e.g.,
+     * initializing the membrane potential with the resting potential.
      */
     State_( const Parameters_& );
 
@@ -240,9 +246,10 @@ private:
    * Buffers must be initialized by @c init_buffers_(), which is called before
    * @c calibrate() on the first call to @c Simulate after the start of NEST,
    * ResetKernel or ResetNetwork.
-   * @node Buffers_ needs neither constructor, copy constructor or assignment operator,
-   *       since it is initialized by @c init_nodes_(). If Buffers_ has members that
-   *       cannot destroy themselves, Buffers_ will need a destructor.
+   * @node Buffers_ needs neither constructor, copy constructor or assignment
+   *       operator, since it is initialized by @c init_nodes_(). If Buffers_
+   *       has members that cannot destroy themselves, Buffers_ will need a
+   *       destructor.
    */
   struct Buffers_
   {
@@ -250,7 +257,8 @@ private:
     Buffers_( const Buffers_&, pif_psc_alpha& );
 
     nest::RingBuffer spikes;   //!< Buffer incoming spikes through delay, as sum
-    nest::RingBuffer currents; //!< Buffer incoming currents through delay, as sum
+    nest::RingBuffer currents; //!< Buffer incoming currents through delay,
+                               //!< as sum
 
     //! Logger for all analog data
     nest::UniversalDataLogger< pif_psc_alpha > logger_;
@@ -260,9 +268,10 @@ private:
    * Internal variables of the neuron.
    * These variables must be initialized by @c calibrate, which is called before
    * the first call to @c update() upon each call to @c Simulate.
-   * @node Variables_ needs neither constructor, copy constructor or assignment operator,
-   *       since it is initialized by @c calibrate(). If Variables_ has members that
-   *       cannot destroy themselves, Variables_ will need a destructor.
+   * @node Variables_ needs neither constructor, copy constructor or assignment
+   *       operator, since it is initialized by @c calibrate(). If Variables_
+   *       has members that cannot destroy themselves, Variables_ will need a
+   *       destructor.
    */
   struct Variables_
   {
@@ -283,7 +292,7 @@ private:
    * @{
    */
   //! Read out the real membrane potential
-  nest::double_t
+  double
   get_V_m_() const
   {
     return S_.V_m;
@@ -296,8 +305,8 @@ private:
    * which are one instance each of the parameters, state, buffers and variables
    * structures. Experience indicates that the state and variables member should
    * be next to each other to achieve good efficiency (caching).
-   * @note Devices require one additional data member, an instance of the @c Device
-   *       child class they belong to.
+   * @note Devices require one additional data member, an instance of the @c
+   *       Device child class they belong to.
    * @{
    */
   Parameters_ P_; //!< Free parameters.
@@ -312,10 +321,7 @@ private:
 };
 
 inline nest::port
-mynest::pif_psc_alpha::send_test_event( nest::Node& target,
-  nest::port receptor_type,
-  nest::synindex,
-  bool )
+mynest::pif_psc_alpha::send_test_event( nest::Node& target, nest::port receptor_type, nest::synindex, bool )
 {
   // You should usually not change the code in this function.
   // It confirms that the target of connection @c c accepts @c SpikeEvent on
@@ -333,7 +339,9 @@ mynest::pif_psc_alpha::handles_test_event( nest::SpikeEvent&, nest::port recepto
   // to handle @c SpikeEvent on port 0. You need to extend the function
   // if you want to differentiate between input ports.
   if ( receptor_type != 0 )
+  {
     throw nest::UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -345,7 +353,9 @@ mynest::pif_psc_alpha::handles_test_event( nest::CurrentEvent&, nest::port recep
   // to handle @c CurrentEvent on port 0. You need to extend the function
   // if you want to differentiate between input ports.
   if ( receptor_type != 0 )
+  {
     throw nest::UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -358,7 +368,9 @@ mynest::pif_psc_alpha::handles_test_event( nest::DataLoggingRequest& dlr, nest::
   // The function also tells the built-in UniversalDataLogger that this node
   // is recorded from and that it thus needs to collect data during simulation.
   if ( receptor_type != 0 )
+  {
     throw nest::UnknownReceptorType( receptor_type, get_name() );
+  }
 
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }

@@ -23,14 +23,14 @@
 #include "ring_buffer.h"
 
 nest::RingBuffer::RingBuffer()
-  : buffer_( Scheduler::get_min_delay() + Scheduler::get_max_delay(), 0.0 )
+  : buffer_( kernel().connection_manager.get_min_delay() + kernel().connection_manager.get_max_delay(), 0.0 )
 {
 }
 
 void
 nest::RingBuffer::resize()
 {
-  size_t size = Scheduler::get_min_delay() + Scheduler::get_max_delay();
+  size_t size = kernel().connection_manager.get_min_delay() + kernel().connection_manager.get_max_delay();
   if ( buffer_.size() != size )
   {
     buffer_.resize( size );
@@ -47,14 +47,14 @@ nest::RingBuffer::clear()
 
 
 nest::MultRBuffer::MultRBuffer()
-  : buffer_( Scheduler::get_min_delay() + Scheduler::get_max_delay(), 0.0 )
+  : buffer_( kernel().connection_manager.get_min_delay() + kernel().connection_manager.get_max_delay(), 0.0 )
 {
 }
 
 void
 nest::MultRBuffer::resize()
 {
-  size_t size = Scheduler::get_min_delay() + Scheduler::get_max_delay();
+  size_t size = kernel().connection_manager.get_min_delay() + kernel().connection_manager.get_max_delay();
   if ( buffer_.size() != size )
   {
     buffer_.resize( size );
@@ -70,14 +70,14 @@ nest::MultRBuffer::clear()
 
 
 nest::ListRingBuffer::ListRingBuffer()
-  : buffer_( Scheduler::get_min_delay() + Scheduler::get_max_delay() )
+  : buffer_( kernel().connection_manager.get_min_delay() + kernel().connection_manager.get_max_delay() )
 {
 }
 
 void
 nest::ListRingBuffer::resize()
 {
-  size_t size = Scheduler::get_min_delay() + Scheduler::get_max_delay();
+  size_t size = kernel().connection_manager.get_min_delay() + kernel().connection_manager.get_max_delay();
   if ( buffer_.size() != size )
   {
     buffer_.resize( size );

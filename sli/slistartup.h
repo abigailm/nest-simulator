@@ -23,16 +23,39 @@
 #ifndef SLISTARTUP_H
 #define SLISTARTUP_H
 
+// C++ includes:
 #include <string>
-#include "sliconfig.h"
-#include "slimodule.h"
-#include "token.h"
-#include "slifunction.h"
-#include "name.h"
-#include "compose.hpp"
 
+// Generated includes:
 #include "dirent.h"
 #include "errno.h"
+#include "config.h"
+
+// Includes from libnestutil:
+#include "compose.hpp"
+
+// Includes from sli:
+#include "name.h"
+#include "slifunction.h"
+#include "slimodule.h"
+#include "token.h"
+
+// Exit codes
+#define EXITCODE_UNKNOWN_ERROR 10
+#define EXITCODE_USERABORT 15
+#define EXITCODE_EXCEPTION 125
+#define EXITCODE_SCRIPTERROR 126
+#define EXITCODE_FATAL 127
+
+// The range 200-215 is reserved for test skipping exitcodes. Any new codes must
+// also be added to testsuite/do_tests_sh.in.
+#define EXITCODE_SKIPPED 200
+#define EXITCODE_SKIPPED_NO_MPI 201
+#define EXITCODE_SKIPPED_HAVE_MPI 202
+#define EXITCODE_SKIPPED_NO_THREADING 203
+#define EXITCODE_SKIPPED_NO_GSL 204
+#define EXITCODE_SKIPPED_NO_MUSIC 205
+
 
 class SLIStartup : public SLIModule
 {
@@ -40,6 +63,7 @@ class SLIStartup : public SLIModule
   const std::string slilibpath;
   std::string slihomepath;
   std::string slidocdir;
+  std::string sliprefix;
 
   std::string locateSLIInstallationPath( void );
   bool checkpath( std::string const&, std::string& ) const;
@@ -52,15 +76,10 @@ class SLIStartup : public SLIModule
 
 public:
   Name argv_name;
-  Name prgname_name;
+  Name version_name;
   Name exitcode_name;
-  Name prgmajor_name;
-  Name prgminor_name;
-  Name prgpatch_name;
   Name prgbuilt_name;
   Name prefix_name;
-  Name prgsourcedir_name;
-  Name prgbuilddir_name;
   Name prgdatadir_name;
   Name prgdocdir_name;
 
@@ -93,6 +112,12 @@ public:
 
   Name exitcodes_name;
   Name exitcode_success_name;
+  Name exitcode_skipped_name;
+  Name exitcode_skipped_no_mpi_name;
+  Name exitcode_skipped_have_mpi_name;
+  Name exitcode_skipped_no_threading_name;
+  Name exitcode_skipped_no_gsl_name;
+  Name exitcode_skipped_no_music_name;
   Name exitcode_scripterror_name;
   Name exitcode_abort_name;
   Name exitcode_userabort_name;

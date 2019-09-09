@@ -20,12 +20,16 @@
  *
  */
 
-#include "network.h"
-#include "dictdatum.h"
-#include "connector_model.h"
-#include "common_synapse_properties.h"
 #include "stdp_pl_connection_hom.h"
+
+// Includes from nestkernel:
+#include "common_synapse_properties.h"
+#include "connector_model.h"
 #include "event.h"
+
+// Includes from sli:
+#include "dictdatum.h"
+
 
 namespace nest
 {
@@ -37,6 +41,7 @@ namespace nest
 STDPPLHomCommonProperties::STDPPLHomCommonProperties()
   : CommonSynapseProperties()
   , tau_plus_( 20.0 )
+  , tau_plus_inv_( 1. / tau_plus_ )
   , lambda_( 0.1 )
   , alpha_( 1.0 )
   , mu_( 0.4 )
@@ -48,10 +53,10 @@ STDPPLHomCommonProperties::get_status( DictionaryDatum& d ) const
 {
   CommonSynapseProperties::get_status( d );
 
-  def< double_t >( d, "tau_plus", tau_plus_ );
-  def< double_t >( d, "lambda", lambda_ );
-  def< double_t >( d, "alpha", alpha_ );
-  def< double_t >( d, "mu", mu_ );
+  def< double >( d, names::tau_plus, tau_plus_ );
+  def< double >( d, names::lambda, lambda_ );
+  def< double >( d, names::alpha, alpha_ );
+  def< double >( d, names::mu, mu_ );
 }
 
 void
@@ -59,10 +64,18 @@ STDPPLHomCommonProperties::set_status( const DictionaryDatum& d, ConnectorModel&
 {
   CommonSynapseProperties::set_status( d, cm );
 
-  updateValue< double_t >( d, "tau_plus", tau_plus_ );
-  updateValue< double_t >( d, "lambda", lambda_ );
-  updateValue< double_t >( d, "alpha", alpha_ );
-  updateValue< double_t >( d, "mu", mu_ );
+  updateValue< double >( d, names::tau_plus, tau_plus_ );
+  if ( tau_plus_ > 0. )
+  {
+    tau_plus_inv_ = 1. / tau_plus_;
+  }
+  else
+  {
+    throw BadProperty( "tau_plus > 0. required." );
+  }
+  updateValue< double >( d, names::lambda, lambda_ );
+  updateValue< double >( d, names::alpha, alpha_ );
+  updateValue< double >( d, names::mu, mu_ );
 }
 
 } // of namespace nest

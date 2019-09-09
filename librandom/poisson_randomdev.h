@@ -23,12 +23,16 @@
 #ifndef POISSON_RANDOMDEV_H
 #define POISSON_RANDOMDEV_H
 
+// C++ includes:
 #include <cmath>
 #include <vector>
 
-#include "randomgen.h"
-#include "randomdev.h"
+// Includes from libnestutil:
 #include "lockptr.h"
+
+// Includes from librandom:
+#include "randomdev.h"
+#include "randomgen.h"
 
 /************************************************************/
 /* Class PoissonRNG                                         */
@@ -81,8 +85,9 @@
 namespace librandom
 {
 
-/*BeginDocumentation
+/** @BeginDocumentation
 Name: rdevdict::poisson - poisson random deviate generator
+
 Description:
    Generates poisson distributed random numbers.
 
@@ -92,6 +97,7 @@ Parameters:
    lambda - distribution parameter, lambda
 
 SeeAlso: CreateRDV, RandomArray, rdevdict
+
 Author: Hans Ekkehard Plesser
 */
 

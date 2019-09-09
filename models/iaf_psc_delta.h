@@ -23,108 +23,116 @@
 #ifndef IAF_PSC_DELTA_H
 #define IAF_PSC_DELTA_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "ring_buffer.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-class Network;
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup iaf
+@ingroup psc
 
-/* BeginDocumentation
-   Name: iaf_psc_delta - Leaky integrate-and-fire neuron model.
+Name: iaf_psc_delta - Leaky integrate-and-fire neuron model.
 
-   Description:
+Description:
 
-   iaf_psc_delta is an implementation of a leaky integrate-and-fire model
-   where the potential jumps on each spike arrival.
+iaf_psc_delta is an implementation of a leaky integrate-and-fire model
+where the potential jumps on each spike arrival.
 
-   The threshold crossing is followed by an absolute refractory period
-   during which the membrane potential is clamped to the resting potential.
+The threshold crossing is followed by an absolute refractory period
+during which the membrane potential is clamped to the resting potential.
 
-   Spikes arriving while the neuron is refractory, are discarded by
-   default. If the property "refractory_input" is set to true, such
-   spikes are added to the membrane potential at the end of the
-   refractory period, dampened according to the interval between
-   arrival and end of refractoriness.
+Spikes arriving while the neuron is refractory, are discarded by
+default. If the property "refractory_input" is set to true, such
+spikes are added to the membrane potential at the end of the
+refractory period, dampened according to the interval between
+arrival and end of refractoriness.
 
-   The linear subthresold dynamics is integrated by the Exact
-   Integration scheme [1]. The neuron dynamics is solved on the time
-   grid given by the computation step size. Incoming as well as emitted
-   spikes are forced to that grid.
+The linear subthresold dynamics is integrated by the Exact
+Integration scheme [1]. The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
 
-   An additional state variable and the corresponding differential
-   equation represents a piecewise constant external current.
+An additional state variable and the corresponding differential
+equation represents a piecewise constant external current.
 
-   The general framework for the consistent formulation of systems with
-   neuron like dynamics interacting by point events is described in
-   [1].  A flow chart can be found in [2].
+The general framework for the consistent formulation of systems with
+neuron like dynamics interacting by point events is described in
+[1].  A flow chart can be found in [2].
 
-   Critical tests for the formulation of the neuron model are the
-   comparisons of simulation results for different computation step
-   sizes. sli/testsuite/nest contains a number of such tests.
+Critical tests for the formulation of the neuron model are the
+comparisons of simulation results for different computation step
+sizes. sli/testsuite/nest contains a number of such tests.
 
-   The iaf_psc_delta is the standard model used to check the consistency
-   of the nest simulation kernel because it is at the same time complex
-   enough to exhibit non-trivial dynamics and simple enough compute
-   relevant measures analytically.
+The iaf_psc_delta is the standard model used to check the consistency
+of the nest simulation kernel because it is at the same time complex
+enough to exhibit non-trivial dynamics and simple enough compute
+relevant measures analytically.
 
-   Remarks:
+Remarks:
 
-   The present implementation uses individual variables for the
-   components of the state vector and the non-zero matrix elements of
-   the propagator.  Because the propagator is a lower triangular matrix
-   no full matrix multiplication needs to be carried out and the
-   computation can be done "in place" i.e. no temporary state vector
-   object is required.
+The present implementation uses individual variables for the
+components of the state vector and the non-zero matrix elements of
+the propagator.  Because the propagator is a lower triangular matrix
+no full matrix multiplication needs to be carried out and the
+computation can be done "in place" i.e. no temporary state vector
+object is required.
 
-   The template support of recent C++ compilers enables a more succinct
-   formulation without loss of runtime performance already at minimal
-   optimization levels. A future version of iaf_psc_delta will probably
-   address the problem of efficient usage of appropriate vector and
-   matrix objects.
+The template support of recent C++ compilers enables a more succinct
+formulation without loss of runtime performance already at minimal
+optimization levels. A future version of iaf_psc_delta will probably
+address the problem of efficient usage of appropriate vector and
+matrix objects.
 
 
-   Parameters:
+Parameters:
 
-   The following parameters can be set in the status dictionary.
+The following parameters can be set in the status dictionary.
 
-   V_m        double - Membrane potential in mV
-   E_L        double - Resting membrane potential in mV.
-   C_m        double - Capacitance of the membrane in pF
-   tau_m      double - Membrane time constant in ms.
-   t_ref      double - Duration of refractory period in ms.
-   V_th       double - Spike threshold in mV.
-   V_reset    double - Reset potential of the membrane in mV.
-   I_e        double - Constant input current in pA.
-   V_min      double - Absolute lower value for the membrane potential in mV
+\verbatim embed:rst
+================= ======= ======================================================
+ V_m              mV      Membrane potential
+ E_L              mV      Resting membrane potential
+ C_m              pF      Capacity of the membrane
+ tau_m            ms      Membrane time constant
+ t_ref            ms      Duration of refractory period
+ V_th             mV      Spike threshold
+ V_reset          mV      Reset potential of the membrane
+ I_e              pA      Constant input current
+ V_min            mV      Absolute lower value for the membrane potenial
+ refractory_input boolean If true, do not discard input during
+                          refractory period. Default: false
+================= ======= ======================================================
+\endverbatim
 
-   refractory_input bool - If true, do not discard input during
-   refractory period. Default: false.
+References:
 
-   References:
-   [1] Rotter S & Diesmann M (1999) Exact digital simulation of time-invariant
-   linear systems with applications to neuronal modeling. Biologial Cybernetics
-   81:381-402.
-   [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001) State space
-   analysis of synchronous spiking in cortical neural networks.
-   Neurocomputing 38-40:565-571.
+\verbatim embed:rst
+.. [1] Rotter S,  Diesmann M (1999). Exact simulation of
+       time-invariant linear systems with applications to neuronal
+       modeling. Biologial Cybernetics 81:381-402.
+       DOI: https://doi.org/10.1007/s004220050570
+.. [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001). State
+       space analysis of synchronous spiking in cortical neural
+       networks. Neurocomputing 38-40:565-571.
+       DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
+\endverbatim
 
-   Sends: SpikeEvent
+Sends: SpikeEvent
 
-   Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
 
-   Author:  September 1999, Diesmann, Gewaltig
-   SeeAlso: iaf_psc_alpha, iaf_psc_exp, iaf_neuron, iaf_psc_delta_canon
+Author:  September 1999, Diesmann, Gewaltig
+
+SeeAlso: iaf_psc_alpha, iaf_psc_exp, iaf_psc_delta_ps
 */
-
-/**
- * Leaky integrate-and-fire neuron with delta-shaped PSCs.
- */
 class iaf_psc_delta : public Archiving_Node
 {
 
@@ -134,7 +142,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -157,7 +166,7 @@ private:
   void init_buffers_();
   void calibrate();
 
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // The next two classes need to be friends to access the State_ class/member
   friend class RecordablesMap< iaf_psc_delta >;
@@ -171,32 +180,33 @@ private:
   struct Parameters_
   {
     /** Membrane time constant in ms. */
-    double_t tau_m_;
+    double tau_m_;
 
     /** Membrane capacitance in pF. */
-    double_t c_m_;
+    double c_m_;
 
     /** Refractory period in ms. */
-    double_t t_ref_;
+    double t_ref_;
 
     /** Resting potential in mV. */
-    double_t E_L_;
+    double E_L_;
 
     /** External DC current */
-    double_t I_e_;
+    double I_e_;
 
     /** Threshold, RELATIVE TO RESTING POTENTAIL(!).
-        I.e. the real threshold is (U0_+V_th_). */
-    double_t V_th_;
+        I.e. the real threshold is (E_L_+V_th_). */
+    double V_th_;
 
     /** Lower bound, RELATIVE TO RESTING POTENTAIL(!).
         I.e. the real lower bound is (V_min_+V_th_). */
-    double_t V_min_;
+    double V_min_;
 
     /** reset value of the membrane potential */
-    double_t V_reset_;
+    double V_reset_;
 
-    bool with_refr_input_; //!< spikes arriving during refractory period are counted
+    bool with_refr_input_; //!< spikes arriving during refractory period are
+                           //!< counted
 
     Parameters_(); //!< Sets default parameter values
 
@@ -215,15 +225,16 @@ private:
    */
   struct State_
   {
-    double_t y0_;
-    double_t y3_; //!< This is the membrane potential RELATIVE TO RESTING POTENTIAL.
+    double y0_;
+    //! This is the membrane potential RELATIVE TO RESTING POTENTIAL.
+    double y3_;
 
-    int_t r_; //!< Number of refractory steps remaining
+    int r_; //!< Number of refractory steps remaining
 
     /** Accumulate spikes arriving during refractory period, discounted for
         decay until end of refractory period.
     */
-    double_t refr_spikes_buffer_;
+    double refr_spikes_buffer_;
 
     State_(); //!< Default initialization
 
@@ -263,16 +274,16 @@ private:
   struct Variables_
   {
 
-    double_t P30_;
-    double_t P33_;
+    double P30_;
+    double P33_;
 
-    int_t RefractoryCounts_;
+    int RefractoryCounts_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out the real membrane potential
-  double_t
+  double
   get_V_m_() const
   {
     return S_.y3_ + P_.E_L_;
@@ -310,7 +321,9 @@ inline port
 iaf_psc_delta::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -318,7 +331,9 @@ inline port
 iaf_psc_delta::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -326,7 +341,9 @@ inline port
 iaf_psc_delta::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

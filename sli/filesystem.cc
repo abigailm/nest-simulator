@@ -19,19 +19,28 @@
  *  along with NEST.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-#include <cassert>
+
 #include "filesystem.h"
-#include "arraydatum.h"
-#include "stringdatum.h"
-#include <errno.h>
+
+// C includes:
 #include <dirent.h>
+#include <errno.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <fstream>
+#include <unistd.h>
+
+// C++ includes:
+#include <cassert>
 #include <ctime>
+#include <fstream>
+#include <mutex>
+// Includes from libnestutil:
 #include "compose.hpp"
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "stringdatum.h"
 
 
 void
@@ -85,7 +94,9 @@ FilesystemModule::FileNamesFunction::execute( SLIInterpreter* i ) const
     i->OStack.push_move( array_token );
   }
   else
+  {
     i->raiseerror( i->BadIOError );
+  }
 }
 
 void
@@ -96,7 +107,7 @@ FilesystemModule::SetDirectoryFunction::execute( SLIInterpreter* i ) const
   assert( sd != NULL );
   int s = chdir( sd->c_str() );
   i->OStack.pop();
-  if ( !s )
+  if ( not s )
   {
     i->OStack.push( i->baselookup( i->true_name ) );
   }
@@ -107,11 +118,11 @@ FilesystemModule::SetDirectoryFunction::execute( SLIInterpreter* i ) const
   i->EStack.pop();
 }
 
-/* BeginDocumentation
+/** @BeginDocumentation
  Name: Directory - Return current working directory
  Synopsis: Directory -> string
- Description: Returns name of current working directory. This is where all ls, filestream etc.
- operations are done per default.
+ Description: Returns name of current working directory. This is where all ls,
+ filestream etc. operations are done per default.
  Parameters: string : Name of current working directory
  Examples: Directory = -> /home/MyAccount/SNiFF/synod2
  Bugs: -
@@ -131,7 +142,9 @@ FilesystemModule::DirectoryFunction::execute( SLIInterpreter* i ) const
   while ( getcwd( path_buffer, size - 1 ) == NULL )
   { // try again with a bigger buffer!
     if ( errno != ERANGE )
+    {
       i->raiseerror( i->BadIOError ); // size wasn't reason
+    }
     delete[] path_buffer;
     size += SIZE;
     path_buffer = new char[ size ];
@@ -152,7 +165,7 @@ FilesystemModule::MoveFileFunction::execute( SLIInterpreter* i ) const
   assert( src != NULL );
   assert( dst != NULL );
   int s = link( src->c_str(), dst->c_str() );
-  if ( !s )
+  if ( not s )
   {
     s = unlink( src->c_str() );
     if ( s ) // failed to remove old link: undo everything
@@ -162,7 +175,7 @@ FilesystemModule::MoveFileFunction::execute( SLIInterpreter* i ) const
     };
   };
   i->OStack.pop( 2 );
-  if ( !s )
+  if ( not s )
   {
     i->OStack.push( i->baselookup( i->true_name ) );
   }
@@ -183,7 +196,7 @@ FilesystemModule::CopyFileFunction::execute( SLIInterpreter* i ) const
   assert( dst != NULL );
 
   std::ofstream deststream( dst->c_str() );
-  if ( !deststream )
+  if ( not deststream )
   {
     i->message( SLIInterpreter::M_ERROR, "CopyFile", "Could not create destination file." );
     i->raiseerror( i->BadIOError );
@@ -191,7 +204,7 @@ FilesystemModule::CopyFileFunction::execute( SLIInterpreter* i ) const
   }
 
   std::ifstream sourcestream( src->c_str() );
-  if ( !sourcestream )
+  if ( not sourcestream )
   {
     i->message( SLIInterpreter::M_ERROR, "CopyFile", "Could not open source file." );
     i->raiseerror( i->BadIOError );
@@ -201,7 +214,7 @@ FilesystemModule::CopyFileFunction::execute( SLIInterpreter* i ) const
   // copy while file in one call (see Josuttis chap 13.9 (File Access), p. 631)
   deststream << sourcestream.rdbuf();
 
-  if ( !deststream )
+  if ( not deststream )
   {
     i->message( SLIInterpreter::M_ERROR, "CopyFile", "Error copying file." );
     i->raiseerror( i->BadIOError );
@@ -222,7 +235,7 @@ FilesystemModule::DeleteFileFunction::execute( SLIInterpreter* i ) const
   assert( sd != NULL );
   int s = unlink( sd->c_str() );
   i->OStack.pop();
-  if ( !s )
+  if ( not s )
   {
     i->OStack.push( i->baselookup( i->true_name ) );
   }
@@ -241,7 +254,7 @@ FilesystemModule::MakeDirectoryFunction::execute( SLIInterpreter* i ) const
   assert( sd != NULL );
   int s = mkdir( sd->c_str(), S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP );
   i->OStack.pop();
-  if ( !s )
+  if ( not s )
   {
     i->OStack.push( i->baselookup( i->true_name ) );
   }
@@ -260,7 +273,7 @@ FilesystemModule::RemoveDirectoryFunction::execute( SLIInterpreter* i ) const
   assert( sd != NULL );
   int s = rmdir( sd->c_str() );
   i->OStack.pop();
-  if ( !s )
+  if ( not s )
   {
     i->OStack.push( i->baselookup( i->true_name ) );
   }
@@ -271,7 +284,7 @@ FilesystemModule::RemoveDirectoryFunction::execute( SLIInterpreter* i ) const
   i->EStack.pop();
 }
 
-/* BeginDocumentation
+/** @BeginDocumentation
    Name: tmpnam - Generate a string that is a valid non-existing file-name.
 
    Synopsis: tpmnam -> filename
@@ -288,15 +301,18 @@ FilesystemModule::RemoveDirectoryFunction::execute( SLIInterpreter* i ) const
    References: Donald Lewin, "The POSIX Programmer's Guide"
 
 */
-
+std::mutex mtx;
 void
 FilesystemModule::TmpNamFunction::execute( SLIInterpreter* i ) const
 {
+  std::lock_guard< std::mutex > lock( mtx );
   static unsigned int seed = std::time( 0 );
   char* env = getenv( "TMPDIR" );
   std::string tmpdir( "/tmp" );
   if ( env )
+  {
     tmpdir = std::string( env );
+  }
 
   std::string tempfile;
   do
@@ -311,7 +327,7 @@ FilesystemModule::TmpNamFunction::execute( SLIInterpreter* i ) const
   i->EStack.pop();
 }
 
-/* BeginDocumentation
+/** @BeginDocumentation
    Name: CompareFiles - Compare two files for equality.
 
    Synopsis: filenameA filenameB CompareFiles -> bool
@@ -336,7 +352,7 @@ FilesystemModule::CompareFilesFunction::execute( SLIInterpreter* i ) const
   std::ifstream as( flA->c_str(), std::ifstream::in | std::ifstream::binary );
   std::ifstream bs( flB->c_str(), std::ifstream::in | std::ifstream::binary );
 
-  if ( !( as.good() && bs.good() ) )
+  if ( not( as.good() && bs.good() ) )
   {
     as.close();
     bs.close();
@@ -349,21 +365,29 @@ FilesystemModule::CompareFilesFunction::execute( SLIInterpreter* i ) const
     const int ac = as.get();
     const int bc = bs.get();
 
-    if ( !( as.fail() || bs.fail() ) )
+    if ( not( as.fail() || bs.fail() ) )
+    {
       equal = ac == bc;
+    }
   }
 
   if ( as.fail() != bs.fail() )
+  {
     equal = false; // different lengths
+  }
 
   as.close();
   bs.close();
 
   i->OStack.pop( 2 );
   if ( equal )
+  {
     i->OStack.push( i->baselookup( i->true_name ) );
+  }
   else
+  {
     i->OStack.push( i->baselookup( i->false_name ) );
+  }
 
   i->EStack.pop();
 }

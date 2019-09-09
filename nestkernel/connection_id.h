@@ -23,6 +23,7 @@
 #ifndef CONNECTION_ID_H
 #define CONNECTION_ID_H
 
+// Includes from sli:
 #include "arraydatum.h"
 #include "dictutils.h"
 
@@ -35,11 +36,7 @@ public:
   ConnectionID()
   {
   }
-  ConnectionID( long source_gid,
-    long target_gid,
-    long target_thread,
-    long synapse_modelid,
-    long port );
+  ConnectionID( long source_gid, long target_gid, long target_thread, long synapse_modelid, long port );
   ConnectionID( long source_gid, long target_thread, long synapse_modelid, long port );
   ConnectionID( const ConnectionID& );
 

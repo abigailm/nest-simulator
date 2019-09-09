@@ -21,16 +21,20 @@
  */
 
 #include "tokenutils.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-#include "namedatum.h"
-#include "booldatum.h"
+
+// C++ includes:
+#include <cmath> // for sqrt()
 #include <string>
+
+// Includes from sli:
+#include "arraydatum.h"
+#include "booldatum.h"
+#include "doubledatum.h"
+#include "integerdatum.h"
+#include "namedatum.h"
+#include "sliexceptions.h"
 #include "stringdatum.h"
 #include "symboldatum.h"
-#include "arraydatum.h"
-#include <cmath> // for sqrt()
-#include "sliexceptions.h"
 
 template <>
 long
@@ -264,7 +268,9 @@ getValue< std::vector< double > >( const Token& t )
   // try DoubleVectorDatum first
   DoubleVectorDatum* dvd = dynamic_cast< DoubleVectorDatum* >( t.datum() );
   if ( dvd )
+  {
     return **dvd;
+  }
 
   // ok, try ArrayDatum
   ArrayDatum* ad = dynamic_cast< ArrayDatum* >( t.datum() );
@@ -276,8 +282,7 @@ getValue< std::vector< double > >( const Token& t )
   }
 
   // out of options
-  throw TypeMismatch(
-    DoubleVectorDatum().gettypename().toString() + " or " + ArrayDatum().gettypename().toString(),
+  throw TypeMismatch( DoubleVectorDatum().gettypename().toString() + " or " + ArrayDatum().gettypename().toString(),
     t.datum()->gettypename().toString() );
 }
 
@@ -320,7 +325,9 @@ getValue< std::vector< long > >( const Token& t )
   // try IntVectorDatum first
   IntVectorDatum* ivd = dynamic_cast< IntVectorDatum* >( t.datum() );
   if ( ivd )
+  {
     return **ivd;
+  }
 
   // ok, try ArrayDatum
   ArrayDatum* ad = dynamic_cast< ArrayDatum* >( t.datum() );
@@ -332,8 +339,7 @@ getValue< std::vector< long > >( const Token& t )
   }
 
   // out of options
-  throw TypeMismatch(
-    IntVectorDatum().gettypename().toString() + " or " + ArrayDatum().gettypename().toString(),
+  throw TypeMismatch( IntVectorDatum().gettypename().toString() + " or " + ArrayDatum().gettypename().toString(),
     t.datum()->gettypename().toString() );
 }
 

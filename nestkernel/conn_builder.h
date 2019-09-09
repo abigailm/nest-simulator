@@ -31,22 +31,30 @@
  *
  */
 
+// C++ includes:
 #include <map>
 #include <vector>
 
-#include "dictdatum.h"
-#include "gid_collection.h"
+// Includes from libnestutil:
 #include "lockptr.h"
-#include "sliexceptions.h"
 
+// Includes from librandom:
 #include "gslrandomgen.h"
+
+// Includes from nestkernel:
+#include "conn_parameter.h"
+#include "gid_collection.h"
+#include "nest_time.h"
+
+// Includes from sli:
+#include "dictdatum.h"
+#include "sliexceptions.h"
 
 namespace nest
 {
-
-class Network;
 class Node;
 class ConnParameter;
+class SparseNodeArray;
 
 /**
  * Abstract base class for ConnBuilders.
@@ -71,21 +79,72 @@ public:
    * where conn_spec_dict speficies connection type and its parameters.
    */
   virtual void connect();
+  virtual void disconnect();
 
   //! parameters: sources, targets, specifications
-  ConnBuilder( Network&,
-    const GIDCollection&,
-    const GIDCollection&,
-    const DictionaryDatum&,
-    const DictionaryDatum& );
+  ConnBuilder( const GIDCollection&, const GIDCollection&, const DictionaryDatum&, const DictionaryDatum& );
   virtual ~ConnBuilder();
+
+  index
+  get_synapse_model() const
+  {
+    return synapse_model_id_;
+  }
+
+  bool
+  get_default_delay() const
+  {
+    return default_delay_;
+  }
+
+  void set_pre_synaptic_element_name( const std::string& name );
+  void set_post_synaptic_element_name( const std::string& name );
+
+  bool all_parameters_scalar_() const;
+
+  bool change_connected_synaptic_elements( index, index, const int, int );
+
+  virtual bool
+  supports_symmetric() const
+  {
+    return false;
+  }
+
+  virtual bool
+  is_symmetric() const
+  {
+    return false;
+  }
+
+  //! Return true if rule is applicable only to nodes with proxies
+  virtual bool
+  requires_proxies() const
+  {
+    return true;
+  }
 
 protected:
   //! Implements the actual connection algorithm
   virtual void connect_() = 0;
+  virtual void
+  sp_connect_()
+  {
+    throw NotImplemented( "This connection rule is not implemented for structural plasticity" );
+  }
+  virtual void
+  disconnect_()
+  {
+    throw NotImplemented( "This disconnection rule is not implemented" );
+  }
+  virtual void
+  sp_disconnect_()
+  {
+    throw NotImplemented( "This connection rule is not implemented for structural plasticity" );
+  }
 
   //! Create connection between given nodes, fill parameter values
   void single_connect_( index, Node&, thread, librandom::RngPtr& );
+  void single_disconnect_( index, Node&, thread );
 
   /**
    * Moves pointer in parameter array.
@@ -96,29 +155,62 @@ protected:
    * node is not located on the current thread or MPI-process and read of an
    * array.
    */
-  void skip_conn_parameter_( thread );
+  void skip_conn_parameter_( thread, size_t n_skip = 1 );
 
-  Network& net_;
+  /**
+   * Returns true if conventional looping over targets is indicated.
+   *
+   * Conventional looping over targets must be used if
+   * - any connection parameter requires skipping
+   * - targets are not given as a simple range (lookup otherwise too slow)
+   *
+   * Conventional looping should be used if
+   * - the number of targets is smaller than the number of local nodes
+   *
+   * For background, see Ippen et al (2017).
+   *
+   * @return true if conventional looping is to be used
+   */
+  bool loop_over_targets_() const;
 
-  const GIDCollection& sources_;
-  const GIDCollection& targets_;
+  GIDCollection const* sources_;
+  GIDCollection const* targets_;
 
   bool autapses_;
   bool multapses_;
+  bool make_symmetric_;
+  bool creates_symmetric_connections_;
 
   //! buffer for exceptions raised in threads
   std::vector< lockPTR< WrappedThreadException > > exceptions_raised_;
 
+  // Name of the pre synaptic and post synaptic elements for this connection
+  // builder
+  Name pre_synaptic_element_name_;
+  Name post_synaptic_element_name_;
+
+  bool use_pre_synaptic_element_;
+  bool use_post_synaptic_element_;
+
+  inline bool
+  use_structural_plasticity_() const
+  {
+    return use_pre_synaptic_element_ and use_post_synaptic_element_;
+  }
+
 private:
   typedef std::map< Name, ConnParameter* > ConnParameterMap;
 
-  index synapse_model_;
+  index synapse_model_id_;
 
   //! indicate that weight and delay should not be set per synapse
   bool default_weight_and_delay_;
 
   //! indicate that weight should not be set per synapse
   bool default_weight_;
+
+  //! indicate that delay should not be set per synapse
+  bool default_delay_;
 
   // null-pointer indicates that default be used
   ConnParameter* weight_;
@@ -130,8 +222,8 @@ private:
   //! dictionaries to pass to connect function, one per thread
   std::vector< DictionaryDatum > param_dicts_;
 
-  //! pointers to connection parameters specified as arrays
-  std::vector< ConnParameter* > parameters_requiring_skipping_;
+  //! empty dictionary to pass to connect function
+  const static DictionaryDatum dummy_param_;
 
   /**
    * Collects all array paramters in a vector.
@@ -142,70 +234,89 @@ private:
    */
   void register_parameters_requiring_skipping_( ConnParameter& param );
 
-  // check for synapse specific errors or warnings
-  // This is a temporary function which should be removed once all parameter types work with
-  // Connect.
-  // The remaining error and warnings should then be handled within the synapse model.
-  void check_synapse_params_( std::string, const DictionaryDatum& );
+protected:
+  //! pointers to connection parameters specified as arrays
+  std::vector< ConnParameter* > parameters_requiring_skipping_;
 };
 
 class OneToOneBuilder : public ConnBuilder
 {
 public:
-  OneToOneBuilder( Network& net,
-    const GIDCollection& sources,
+  OneToOneBuilder( const GIDCollection& sources,
     const GIDCollection& targets,
     const DictionaryDatum& conn_spec,
-    const DictionaryDatum& syn_spec )
-    : ConnBuilder( net, sources, targets, conn_spec, syn_spec )
+    const DictionaryDatum& syn_spec );
+
+  bool
+  supports_symmetric() const
   {
+    return true;
+  }
+
+  bool
+  requires_proxies() const
+  {
+    return false;
   }
 
 protected:
   void connect_();
+  void sp_connect_();
+  void disconnect_();
+  void sp_disconnect_();
 };
 
 class AllToAllBuilder : public ConnBuilder
 {
 public:
-  AllToAllBuilder( Network& net,
-    const GIDCollection& sources,
+  AllToAllBuilder( const GIDCollection& sources,
     const GIDCollection& targets,
     const DictionaryDatum& conn_spec,
     const DictionaryDatum& syn_spec )
-    : ConnBuilder( net, sources, targets, conn_spec, syn_spec )
+    : ConnBuilder( sources, targets, conn_spec, syn_spec )
   {
+  }
+
+  bool
+  is_symmetric() const
+  {
+    return *sources_ == *targets_ and all_parameters_scalar_();
+  }
+
+  bool
+  requires_proxies() const
+  {
+    return false;
   }
 
 protected:
   void connect_();
+  void sp_connect_();
+  void disconnect_();
+  void sp_disconnect_();
+
+private:
+  void inner_connect_( const int, librandom::RngPtr&, Node*, index, bool );
 };
 
 
 class FixedInDegreeBuilder : public ConnBuilder
 {
 public:
-  FixedInDegreeBuilder( Network&,
-    const GIDCollection&,
-    const GIDCollection&,
-    const DictionaryDatum&,
-    const DictionaryDatum& );
+  FixedInDegreeBuilder( const GIDCollection&, const GIDCollection&, const DictionaryDatum&, const DictionaryDatum& );
 
 protected:
   void connect_();
 
 private:
+  void inner_connect_( const int, librandom::RngPtr&, Node*, index, bool );
   long indegree_;
 };
 
 class FixedOutDegreeBuilder : public ConnBuilder
 {
 public:
-  FixedOutDegreeBuilder( Network&,
-    const GIDCollection&,
-    const GIDCollection&,
-    const DictionaryDatum&,
-    const DictionaryDatum& );
+  FixedOutDegreeBuilder( const GIDCollection&, const GIDCollection&, const DictionaryDatum&, const DictionaryDatum& );
 
 protected:
   void connect_();
@@ -217,11 +328,7 @@ private:
 class FixedTotalNumberBuilder : public ConnBuilder
 {
 public:
-  FixedTotalNumberBuilder( Network&,
-    const GIDCollection&,
-    const GIDCollection&,
-    const DictionaryDatum&,
-    const DictionaryDatum& );
+  FixedTotalNumberBuilder( const GIDCollection&, const GIDCollection&, const DictionaryDatum&, const DictionaryDatum& );
 
 protected:
   void connect_();
@@ -233,11 +340,29 @@ private:
 class BernoulliBuilder : public ConnBuilder
 {
 public:
-  BernoulliBuilder( Network&,
-    const GIDCollection&,
+  BernoulliBuilder( const GIDCollection&, const GIDCollection&, const DictionaryDatum&, const DictionaryDatum& );
+
+protected:
+  void connect_();
+
+private:
+  void inner_connect_( const int, librandom::RngPtr&, Node*, index );
+  double p_; //!< connection probability
+};
+
+class SymmetricBernoulliBuilder : public ConnBuilder
+{
+public:
+  SymmetricBernoulliBuilder( const GIDCollection&,
     const GIDCollection&,
     const DictionaryDatum&,
     const DictionaryDatum& );
+
+  bool
+  supports_symmetric() const
+  {
+    return true;
+  }
 
 protected:
   void connect_();
@@ -246,6 +371,58 @@ private:
   double p_; //!< connection probability
 };
 
+class SPBuilder : public ConnBuilder
+{
+public:
+  SPBuilder( const GIDCollection& sources,
+    const GIDCollection& targets,
+    const DictionaryDatum& conn_spec,
+    const DictionaryDatum& syn_spec );
+
+  std::string
+  get_pre_synaptic_element_name() const
+  {
+    return pre_synaptic_element_name_.toString();
+  }
+  std::string
+  get_post_synaptic_element_name() const
+  {
+    return post_synaptic_element_name_.toString();
+  }
+
+  /**
+   * Writes the default delay of the connection model, if the
+   * SPBuilder only uses the default delay. If not, the min/max_delay
+   * has to be specified explicitly with the kernel status.
+   */
+  void update_delay( delay& d ) const;
+
+  void sp_connect( GIDCollection sources, GIDCollection targets );
+
+protected:
+  void connect_();
+  void connect_( GIDCollection sources, GIDCollection targets );
+};
+
+inline void
+ConnBuilder::register_parameters_requiring_skipping_( ConnParameter& param )
+{
+  if ( param.is_array() )
+  {
+    parameters_requiring_skipping_.push_back( &param );
+  }
+}
+
+inline void
+ConnBuilder::skip_conn_parameter_( thread target_thread, size_t n_skip )
+{
+  for ( std::vector< ConnParameter* >::iterator it = parameters_requiring_skipping_.begin();
+        it != parameters_requiring_skipping_.end();
+        ++it )
+  {
+    ( *it )->skip( target_thread, n_skip );
+  }
+}
 
 } // namespace nest
 

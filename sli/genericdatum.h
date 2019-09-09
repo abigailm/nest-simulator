@@ -25,6 +25,8 @@
 /*
     Datum template for generic C/C++ data types
 */
+
+// Includes from sli:
 #include "datum.h"
 
 /***********************************************************/
@@ -110,13 +112,14 @@ public:
   bool
   equals( const Datum* dat ) const
   {
-    const GenericDatum< D, slt >* ddc =
-      dynamic_cast< GenericDatum< D, slt >* >( const_cast< Datum* >( dat ) );
+    const GenericDatum< D, slt >* ddc = dynamic_cast< GenericDatum< D, slt >* >( const_cast< Datum* >( dat ) );
 
-    //    std::cerr << "d = " << d << " ddc = " << ddc << " dat = " << dat << std::endl;
-
+    //    std::cerr << "d = " << d << " ddc = " << ddc << " dat = " << dat <<
+    //    std::endl;
     if ( ddc == NULL )
+    {
       return false;
+    }
 
     return d == ddc->d;
   }

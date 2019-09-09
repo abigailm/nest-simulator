@@ -23,19 +23,28 @@
 #ifndef VOLUME_TRANSMITTER_H
 #define VOLUME_TRANSMITTER_H
 
-#include "nest.h"
-#include "event.h"
+// Includes from nestkernel:
 #include "archiving_node.h"
+#include "event.h"
+#include "nest_types.h"
 #include "ring_buffer.h"
 #include "spikecounter.h"
+
+// Includes from sli:
 #include "namedatum.h"
 
 
-/* BeginDocumentation
+namespace nest
+{
 
-Name: volume_transmitter - Node used in combination with neuromodulated synaptic plasticity. It
-collects all spikes emitted by the population of neurons connected to the volume transmitter and
-transmits the signal to a user-specific subset of synapses.
+/** @BeginDocumentation
+@ingroup Devices
+@ingroup generator
+
+Name: volume_transmitter - Node used in combination with neuromodulated synaptic
+plasticity. It collects all spikes emitted by the population of neurons
+connected to the volume transmitter and transmits the signal to a user-specific
+subset of synapses.
 
 Description:
 The volume transmitter is used in combination with neuromodulated
@@ -58,53 +67,39 @@ neuromodulatory synapse is defined. The implementation is based on the
 framework presented in [1].
 
 Examples:
-/volume_transmitter Create /vol Set
-/iaf_neuron Create /pre_neuron Set
-/iaf_neuron Create /post_neuron Set
-/iaf_neuron Create /neuromod_neuron Set
-/stdp_dopamine_synapse  << /vt vol >>  SetDefaults
-neuromod_neuron vol Connect
-pre_neuron post_neuron /stdp_dopamine_synapse Connect
+    /volume_transmitter Create /vol Set
+    /iaf_psc_alpha Create /pre_neuron Set
+    /iaf_psc_alpha Create /post_neuron Set
+    /iaf_psc_alpha Create /neuromod_neuron Set
+    /stdp_dopamine_synapse  << /vt vol >>  SetDefaults
+    neuromod_neuron vol Connect
+    pre_neuron post_neuron /stdp_dopamine_synapse Connect
 
 Parameters:
-deliver_interval - time interval given in d_min time steps, in which
-                   the volume signal is delivered from the volume
-                   transmitter to the assigned synapses
+- deliver_interval - time interval given in d_min time steps, in which
+                     the volume signal is delivered from the volume
+                     transmitter to the assigned synapses
 
 References:
-[1] Potjans W, Morrison A and Diesmann M (2010). Enabling functional
-    neural circuit simulations with distributed computing of
-    neuromodulated plasticity.
-    Front. Comput. Neurosci. 4:141. doi:10.3389/fncom.2010.00141
+
+\verbatim embed:rst
+.. [1] Potjans W, Morrison A, Diesmann M (2010). Enabling functional
+       neural circuit simulations with distributed computing of
+       neuromodulated plasticity. Frontiers in Computattional Neuroscience,
+       4:141. DOI: https://doi.org/10.3389/fncom.2010.00141
+\endverbatim
 
 Author: Wiebke Potjans, Abigail Morrison
+
 Remarks: major changes to update function after code revision in Apr 2013 (SK)
+
 Receives: SpikeEvent
 
 SeeAlso: stdp_dopamine_synapse
 
 */
-
-namespace nest
-{
-
-class Network;
 class ConnectorBase;
 
-/**
- * volume transmitter class.
- *
- * This class manages spike recording for normal and precise spikes. It
- * receives spikes via its handle(SpikeEvent&) method and buffers them. In the
- * update() method it stores the newly collected buffer elements, which are delivered
- * in time steps of (d_min*deliver_interval) to the neuromodulated synapses.
- * In addition the synapses can ask the volume transmitter to deliver the elements stored
- * in the update() method with the method deliver_spikes().
- *
- *
- *
- * @ingroup Devices
- */
 class volume_transmitter : public Archiving_Node
 {
 
@@ -125,7 +120,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -137,14 +133,22 @@ public:
   void get_status( DictionaryDatum& d ) const;
   void set_status( const DictionaryDatum& d );
 
-  const vector< spikecounter >& deliver_spikes();
+  /**
+   * Since volume transmitters are duplicated on each thread, and are
+   * hence treated just as devices during node creation, we need to
+   * define the corresponding setter and getter for local_device_id.
+   **/
+  void set_local_device_id( const index ldid );
+  index get_local_device_id() const;
+
+  const std::vector< spikecounter >& deliver_spikes();
 
 private:
   void init_state_( Node const& );
   void init_buffers_();
   void calibrate();
 
-  void update( const Time&, const long_t, const long_t );
+  void update( const Time&, const long, const long );
 
   // --------------------------------------------
 
@@ -156,26 +160,31 @@ private:
     Parameters_();
     void get( DictionaryDatum& ) const;
     void set( const DictionaryDatum& );
-    long_t deliver_interval_; //!< update interval in d_min time steps
+    long deliver_interval_; //!< update interval in d_min time steps
   };
 
   //-----------------------------------------------
 
   struct Buffers_
   {
-    RingBuffer neuromodulatory_spikes_;   //!< buffer to store incoming spikes
-    vector< spikecounter > spikecounter_; //!< vector to store and deliver spikes
+    RingBuffer neuromodulatory_spikes_; //!< buffer to store incoming spikes
+    //! vector to store and deliver spikes
+    std::vector< spikecounter > spikecounter_;
   };
 
   Parameters_ P_;
   Buffers_ B_;
+
+  index local_device_id_;
 };
 
 inline port
 volume_transmitter::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -204,10 +213,22 @@ volume_transmitter::set_status( const DictionaryDatum& d )
   P_ = ptmp;
 }
 
-inline const vector< nest::spikecounter >&
+inline const std::vector< nest::spikecounter >&
 volume_transmitter::deliver_spikes()
 {
   return B_.spikecounter_;
+}
+
+inline void
+volume_transmitter::set_local_device_id( const index ldid )
+{
+  local_device_id_ = ldid;
+}
+
+inline index
+volume_transmitter::get_local_device_id() const
+{
+  return local_device_id_;
 }
 
 } // namespace

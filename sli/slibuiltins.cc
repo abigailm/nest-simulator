@@ -23,14 +23,17 @@
 /*
     Interpreter builtins
 */
+
 #include "slibuiltins.h"
-#include "interpret.h"
-#include "callbackdatum.h"
+
+// Includes from sli:
 #include "arraydatum.h"
-#include "integerdatum.h"
-#include "stringdatum.h"
-#include "iteratordatum.h"
+#include "callbackdatum.h"
 #include "functiondatum.h"
+#include "integerdatum.h"
+#include "interpret.h"
+#include "iteratordatum.h"
+#include "stringdatum.h"
 
 void
 IlookupFunction::execute( SLIInterpreter* i ) const
@@ -380,15 +383,6 @@ IforallindexedarrayFunction::execute( SLIInterpreter* i ) const
     i->OStack.push_by_pointer( new IntegerDatum( cnt ) ); // push index to user
     ++cnt;
     i->EStack.push( i->EStack.pick( 1 ) );
-    // if(i->step_mode())
-    // {
-    // 	std::cerr << "forallindexed:"
-    // 		  << " Limit: " << limit->get()
-    // 		  << " Pos: " << count->get() -1
-    // 		  << " Iterator: ";
-    // 	i->OStack.pick(1).pprint(std::cerr);
-    // 	std::cerr << std::endl;
-    // }
   }
   else
   {
@@ -412,8 +406,7 @@ IforallindexedstringFunction::backtrace( SLIInterpreter* i, int p ) const
   IntegerDatum* count = static_cast< IntegerDatum* >( i->EStack.pick( p + 2 ).datum() );
   assert( count != NULL );
 
-  std::cerr << "During forallindexed (string) at iteration " << count->get() - 1 << "."
-            << std::endl;
+  std::cerr << "During forallindexed (string) at iteration " << count->get() - 1 << "." << std::endl;
 }
 
 /*********************************************************/
@@ -472,8 +465,7 @@ IforallstringFunction::execute( SLIInterpreter* i ) const
   if ( count->get() < limit->get() )
   {
     StringDatum const* obj = static_cast< StringDatum* >( i->EStack.pick( 4 ).datum() );
-    i->OStack.push_by_pointer(
-      new IntegerDatum( ( *obj )[ count->get() ] ) ); // push element to user
+    i->OStack.push_by_pointer( new IntegerDatum( ( *obj )[ count->get() ] ) ); // push element to user
     ++( count->get() );
     i->EStack.push( i->EStack.pick( 1 ) );
     if ( i->step_mode() )

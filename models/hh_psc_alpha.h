@@ -23,29 +23,28 @@
 #ifndef HH_PSC_ALPHA_H
 #define HH_PSC_ALPHA_H
 
+// Generated includes:
 #include "config.h"
 
 #ifdef HAVE_GSL
 
-#include "nest.h"
-#include "event.h"
-#include "archiving_node.h"
-#include "ring_buffer.h"
-#include "connection.h"
-
-#include "universal_data_logger.h"
-#include "recordables_map.h"
-
+// External includes:
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv.h>
 #include <gsl/gsl_sf_exp.h>
 
+// Includes from nestkernel:
+#include "archiving_node.h"
+#include "connection.h"
+#include "event.h"
+#include "nest_types.h"
+#include "recordables_map.h"
+#include "ring_buffer.h"
+#include "universal_data_logger.h"
+
 namespace nest
 {
-
-using std::vector;
-
 /**
  * Function computing right-hand side of ODE for GSL solver.
  * @note Must be declared here so we can befriend it in class.
@@ -58,70 +57,78 @@ using std::vector;
  */
 extern "C" int hh_psc_alpha_dynamics( double, const double*, double*, void* );
 
-/* BeginDocumentation
-Name: hh_psc_alpha - Hodgkin Huxley neuron model.
+/** @BeginDocumentation
+@ingroup Neurons
+@ingroup hh
+@ingroup psc
+
+Name: hh_psc_alpha - Hodgkin-Huxley neuron model.
 
 Description:
 
- hh_psc_alpha is an implementation of a spiking neuron using the Hodkin-Huxley formalism.
+hh_psc_alpha is an implementation of a spiking neuron using the Hodgkin-Huxley
+formalism.
 
- (1) Post-syaptic currents
- Incoming spike events induce a post-synaptic change of current modelled
- by an alpha function. The alpha function is normalised such that an event of
- weight 1.0 results in a peak current of 1 pA.
+1. Post-synaptic currents
+Incoming spike events induce a post-synaptic change of current modelled
+by an alpha function. The alpha function is normalised such that an event of
+weight 1.0 results in a peak current of 1 pA.
 
 
- (2) Spike Detection
- Spike detection is done by a combined threshold-and-local-maximum search: if there
- is a local maximum above a certain threshold of the membrane potential, it is considered a spike.
+2. Spike Detection
+Spike detection is done by a combined threshold-and-local-maximum search: if
+there is a local maximum above a certain threshold of the membrane potential,
+it is considered a spike.
 
 Parameters:
 
- The following parameters can be set in the status dictionary.
-
- V_m        double - Membrane potential in mV
- E_L        double - Resting membrane potential in mV.
- g_L        double - Leak conductance in nS.
- C_m        double - Capacity of the membrane in pF.
- tau_ex     double - Rise time of the excitatory synaptic alpha function in ms.
- tau_in     double - Rise time of the inhibitory synaptic alpha function in ms.
- E_Na       double - Sodium reversal potential in mV.
- g_Na       double - Sodium peak conductance in nS.
- E_K        double - Potassium reversal potential in mV.
- g_K        double - Potassium peak conductance in nS.
- Act_m      double - Activation variable m
- Act_h      double - Activation variable h
- Inact_n    double - Inactivation variable n
- I_e        double - Constant external input current in pA.
+The following parameters can be set in the status dictionary.
+\verbatim embed:rst
+========  ======  ============================================================
+V_m       mV      Membrane potential
+E_L       mV      Leak reversal potential
+C_m       pF      Capacity of the membrane
+g_L       nS      Leak conductance
+tau_ex    ms      Rise time of the excitatory synaptic alpha function
+tau_in    ms      Rise time of the inhibitory synaptic alpha function
+E_Na      mV      Sodium reversal potential
+g_Na      nS      Sodium peak conductance
+E_K       mV      Potassium reversal potential
+g_K       nS      Potassium peak conductance
+Act_m     real    Activation variable m
+Inact_h   real    Inactivation variable h
+Act_n     real    Activation variable n
+I_e       pA      External input current
+========  ======  ============================================================
+\endverbatim
 
 Problems/Todo:
 
- better spike detection
- initial wavelet/spike at simulation onset
+better spike detection
+initial wavelet/spike at simulation onset
 
 References:
 
- Spiking Neuron Models:
- Single Neurons, Populations, Plasticity
- Wulfram Gerstner, Werner Kistler,  Cambridge University Press
-
- Theoretical Neuroscience:
- Computational and Mathematical Modeling of Neural Systems
- Peter Dayan, L. F. Abbott, MIT Press (parameters taken from here)
-
- Hodgkin, A. L. and Huxley, A. F.,
- A Quantitative Description of Membrane Current
- and Its Application to Conduction and Excitation in Nerve,
- Journal of Physiology, 117, 500-544 (1952)
+\verbatim embed:rst
+.. [1] Gerstner W, Kistler W (2002). Spiking neuron models: Single neurons,
+       populations, plasticity. New York: Cambridge University Press
+.. [2] Dayan P, Abbott LF (2001). Theoretical neuroscience: Computational and
+       mathematical modeling of neural systems. Cambridge, MA: MIT Press.
+       https://pure.mpg.de/pubman/faces/ViewItemOverviewPage.jsp?itemId=item_3006127>
+.. [3] Hodgkin AL and Huxley A F (1952). A quantitative description of
+       membrane current and its application to conduction and excitation in
+       nerve. The Journal of Physiology 117.
+       DOI: https://doi.org/10.1113/jphysiol.1952.sp004764
+\endverbatim
 
 Sends: SpikeEvent
 
 Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
 
 Authors: Schrader
+
 SeeAlso: hh_cond_exp_traub
 */
-
 class hh_psc_alpha : public Archiving_Node
 {
 
@@ -132,7 +139,8 @@ public:
 
   /**
    * Import sets of overloaded virtual functions.
-   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and Hiding
+   * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
+   * Hiding
    */
   using Node::handle;
   using Node::handles_test_event;
@@ -147,26 +155,6 @@ public:
   port handles_test_event( CurrentEvent&, rport );
   port handles_test_event( DataLoggingRequest&, rport );
 
-  /**
-   * Return membrane potential at time t.
-potentials_.connect_logging_device();
-   * This function is not thread-safe and should not be used in threaded
-   * contexts to access the current membrane potential values.
-   * @param Time the current network time
-   *
-   */
-  double_t get_potential( Time const& ) const;
-
-  /**
-   * Define current membrane potential.
-   * This function is thread-safe and should be used in threaded
-   * contexts to change the current membrane potential value.
-   * @param Time     the current network time
-   * @param double_t new value of the mebrane potential
-   *
-   */
-  void set_potential( Time const&, double_t );
-
   void get_status( DictionaryDatum& ) const;
   void set_status( const DictionaryDatum& );
 
@@ -174,7 +162,7 @@ private:
   void init_state_( const Node& proto );
   void init_buffers_();
   void calibrate();
-  void update( Time const&, const long_t, const long_t );
+  void update( Time const&, const long, const long );
 
   // END Boilerplate function declarations ----------------------------
 
@@ -193,17 +181,17 @@ private:
   //! Independent parameters
   struct Parameters_
   {
-    double_t t_ref_;   //!< refractory time in ms
-    double_t g_Na;     //!< Sodium Conductance in nS
-    double_t g_K;      //!< Potassium Conductance in nS
-    double_t g_L;      //!< Leak Conductance in nS
-    double_t C_m;      //!< Membrane Capacitance in pF
-    double_t E_Na;     //!< Sodium Reversal Potential in mV
-    double_t E_K;      //!< Potassium Reversal Potential in mV
-    double_t E_L;      //!< Leak reversal Potential (aka resting potential) in mV
-    double_t tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
-    double_t tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
-    double_t I_e;      //!< Constant Current in pA
+    double t_ref_;   //!< refractory time in ms
+    double g_Na;     //!< Sodium Conductance in nS
+    double g_K;      //!< Potassium Conductance in nS
+    double g_L;      //!< Leak Conductance in nS
+    double C_m;      //!< Membrane Capacitance in pF
+    double E_Na;     //!< Sodium Reversal Potential in mV
+    double E_K;      //!< Potassium Reversal Potential in mV
+    double E_L;      //!< Leak reversal Potential (aka resting potential) in mV
+    double tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
+    double tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
+    double I_e;      //!< Constant Current in pA
 
     Parameters_(); //!< Sets default parameter values
 
@@ -242,8 +230,9 @@ public:
     };
 
 
-    double_t y_[ STATE_VEC_SIZE ]; //!< neuron state, must be C-array for GSL solver
-    int_t r_;                      //!< number of refractory steps remaining
+    //! neuron state, must be C-array for GSL solver
+    double y_[ STATE_VEC_SIZE ];
+    int r_; //!< number of refractory steps remaining
 
     State_( const Parameters_& ); //!< Default initialization
     State_( const State_& );
@@ -282,7 +271,7 @@ private:
     // but remain unchanged during calibration. Since it is initialized with
     // step_, and the resolution cannot change after nodes have been created,
     // it is safe to place both here.
-    double_t step_;          //!< step size in ms
+    double step_;            //!< step size in ms
     double IntegrationStep_; //!< current integration time step, updated by GSL
 
     /**
@@ -292,7 +281,7 @@ private:
      * It must be a part of Buffers_, since it is initialized once before
      * the first simulation, but not modified before later Simulate calls.
      */
-    double_t I_stim_;
+    double I_stim_;
   };
 
   // ----------------------------------------------------------------
@@ -303,19 +292,19 @@ private:
   struct Variables_
   {
     /** initial value to normalise excitatory synaptic current */
-    double_t PSCurrInit_E_;
+    double PSCurrInit_E_;
 
     /** initial value to normalise inhibitory synaptic current */
-    double_t PSCurrInit_I_;
+    double PSCurrInit_I_;
 
-    int_t RefractoryCounts_;
+    int RefractoryCounts_;
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out state vector elements, used by UniversalDataLogger
   template < State_::StateVecElems elem >
-  double_t
+  double
   get_y_elem_() const
   {
     return S_.y_[ elem ];
@@ -347,7 +336,9 @@ inline port
 hh_psc_alpha::handles_test_event( SpikeEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -355,7 +346,9 @@ inline port
 hh_psc_alpha::handles_test_event( CurrentEvent&, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return 0;
 }
 
@@ -363,7 +356,9 @@ inline port
 hh_psc_alpha::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 {
   if ( receptor_type != 0 )
+  {
     throw UnknownReceptorType( receptor_type, get_name() );
+  }
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 

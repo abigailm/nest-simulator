@@ -20,13 +20,18 @@
  *
  */
 
-#include "network.h"
-#include "dictdatum.h"
-#include "connector_model.h"
-#include "common_synapse_properties.h"
+#ifndef CONT_DELAY_CONNECTION_IMPL_H
+#define CONT_DELAY_CONNECTION_IMPL_H
+
 #include "cont_delay_connection.h"
+
+// Includes from nestkernel:
+#include "common_synapse_properties.h"
+#include "connector_model.h"
 #include "event.h"
 
+// Includes from sli:
+#include "dictdatum.h"
 
 namespace nest
 {
@@ -53,10 +58,9 @@ ContDelayConnection< targetidentifierT >::get_status( DictionaryDatum& d ) const
 {
   ConnectionBase::get_status( d );
 
-  def< double_t >( d, names::weight, weight_ );
-  def< double_t >(
-    d, names::delay, Time( Time::step( get_delay_steps() ) ).get_ms() - delay_offset_ );
-  def< long_t >( d, names::size_of, sizeof( *this ) );
+  def< double >( d, names::weight, weight_ );
+  def< double >( d, names::delay, Time( Time::step( get_delay_steps() ) ).get_ms() - delay_offset_ );
+  def< long >( d, names::size_of, sizeof( *this ) );
 }
 
 template < typename targetidentifierT >
@@ -65,33 +69,49 @@ ContDelayConnection< targetidentifierT >::set_status( const DictionaryDatum& d, 
 {
   ConnectionBase::set_status( d, cm );
 
-  updateValue< double_t >( d, names::weight, weight_ );
+  updateValue< double >( d, names::weight, weight_ );
 
   // set delay if mentioned
-  double_t delay;
+  double delay;
 
-  if ( updateValue< double_t >( d, names::delay, delay ) )
+  if ( updateValue< double >( d, names::delay, delay ) )
   {
 
-    const double_t h = Time::get_resolution().get_ms();
+    const double h = Time::get_resolution().get_ms();
 
-    double_t int_delay;
-    const double_t frac_delay = std::modf( delay / h, &int_delay );
+    double int_delay;
+    const double frac_delay = std::modf( delay / h, &int_delay );
 
     if ( frac_delay == 0 )
     {
-      cm.assert_valid_delay_ms( delay );
+      kernel().connection_manager.get_delay_checker().assert_valid_delay_ms( delay );
       set_delay_steps( Time::delay_ms_to_steps( delay ) );
       delay_offset_ = 0.0;
     }
     else
     {
-      const long_t lowerbound = static_cast< long_t >( int_delay );
-      cm.assert_two_valid_delays_steps( lowerbound, lowerbound + 1 );
+      const long lowerbound = static_cast< long >( int_delay );
+      kernel().connection_manager.get_delay_checker().assert_two_valid_delays_steps( lowerbound, lowerbound + 1 );
       set_delay_steps( lowerbound + 1 );
       delay_offset_ = h * ( 1.0 - frac_delay );
     }
   }
 }
 
+template < typename targetidentifierT >
+void
+ContDelayConnection< targetidentifierT >::check_synapse_params( const DictionaryDatum& syn_spec ) const
+{
+  if ( syn_spec->known( names::delay ) )
+  {
+    LOG( M_WARNING,
+      "Connect",
+      "The delay will be rounded to the next multiple of the time step. "
+      "To use a more precise time delay it needs to be defined within "
+      "the synapse, e.g. with CopyModel()." );
+  }
+}
+
 } // of namespace nest
+
+#endif // #ifndef CONT_DELAY_CONNECTION_IMPL_H

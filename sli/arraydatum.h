@@ -23,11 +23,14 @@
 #ifndef ARRAYDATUM_H
 #define ARRAYDATUM_H
 
-#include "interpret.h"
-#include "tokenarray.h"
-#include "aggregatedatum.h"
-#include "lockptrdatum.h"
+// C++ includes:
 #include <vector>
+
+// Includes from sli:
+#include "aggregatedatum.h"
+#include "interpret.h"
+#include "lockptrdatum.h"
+#include "tokenarray.h"
 
 /* These are declarations to specialize the static memory pool BEFORE
    we instantiate the AggregateDatum. Note, that this is only a declaration,
@@ -56,9 +59,7 @@ void AggregateDatum< TokenArray, &SLIInterpreter::Arraytype >::pprint( std::ostr
 template <>
 void AggregateDatum< TokenArray, &SLIInterpreter::Proceduretype >::print( std::ostream& ) const;
 template <>
-void AggregateDatum< TokenArray, &SLIInterpreter::Proceduretype >::list( std::ostream&,
-  std::string,
-  int ) const;
+void AggregateDatum< TokenArray, &SLIInterpreter::Proceduretype >::list( std::ostream&, std::string, int ) const;
 template <>
 void AggregateDatum< TokenArray, &SLIInterpreter::Proceduretype >::pprint( std::ostream& ) const;
 template <>
@@ -66,15 +67,11 @@ void AggregateDatum< TokenArray, &SLIInterpreter::Litproceduretype >::print( std
 template <>
 void AggregateDatum< TokenArray, &SLIInterpreter::Litproceduretype >::pprint( std::ostream& ) const;
 template <>
-void AggregateDatum< TokenArray, &SLIInterpreter::Litproceduretype >::list( std::ostream&,
-  std::string,
-  int ) const;
+void AggregateDatum< TokenArray, &SLIInterpreter::Litproceduretype >::list( std::ostream&, std::string, int ) const;
 template <>
-void lockPTRDatum< std::vector< long >, &SLIInterpreter::IntVectortype >::pprint(
-  std::ostream& out ) const;
+void lockPTRDatum< std::vector< long >, &SLIInterpreter::IntVectortype >::pprint( std::ostream& out ) const;
 template <>
-void lockPTRDatum< std::vector< double >, &SLIInterpreter::DoubleVectortype >::pprint(
-  std::ostream& out ) const;
+void lockPTRDatum< std::vector< double >, &SLIInterpreter::DoubleVectortype >::pprint( std::ostream& out ) const;
 
 /**
  * @remark This type was introduced to pass numeric arrays between
@@ -83,7 +80,8 @@ void lockPTRDatum< std::vector< double >, &SLIInterpreter::DoubleVectortype >::p
  *         purpose. While it is useful to have numeric arrays at the
  *         level of SLI, this would require the implementation of many
  *         functions, to make them useful. For example there are no
- *         functions to access the data in such arrays. (MOG 2009-01-23, see #253)
+ *         functions to access the data in such arrays. (MOG 2009-01-23, see
+ *         #253)
  */
 typedef lockPTRDatum< std::vector< long >, &SLIInterpreter::IntVectortype > IntVectorDatum;
 
@@ -94,7 +92,8 @@ typedef lockPTRDatum< std::vector< long >, &SLIInterpreter::IntVectortype > IntV
  *         purpose. While it is useful to have numeric arrays at the
  *         level of SLI, this would require the implementation of many
  *         functions, to make them useful. For example there are no
- *         functions to access the data in such arrays. (MOG 2009-01-23, see #253)
+ *         functions to access the data in such arrays. (MOG 2009-01-23, see
+ *         #253)
  */
 typedef lockPTRDatum< std::vector< double >, &SLIInterpreter::DoubleVectortype > DoubleVectorDatum;
 

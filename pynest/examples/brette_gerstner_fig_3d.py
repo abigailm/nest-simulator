@@ -19,9 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
-'''
-Test of the adapting exponential integrate and fire model in NEST
------------------------------------------------------------------
+"""Test of the adapting exponential integrate and fire model in NEST
+----------------------------------------------------------------------
 
 This example tests the adaptive integrate and fire model (AdEx) according to
 Brette and Gerstner (2005) J. Neurophysiology and
@@ -30,7 +29,14 @@ reproduces figure 3.D of the paper.
 Note that Brette&Gerstner give the value for b in nA.
 To be consistent with the other parameters in the equations, b must be
 converted to pA (pico Ampere).
-'''
+
+See Also
+~~~~~~~~~~~
+
+:Authors:
+
+KEYWORDS:
+"""
 
 import nest
 import nest.voltage_trace
@@ -38,50 +44,50 @@ import pylab
 
 nest.ResetKernel()
 
-'''
-First we make sure that the resolution of the simulation is 0.1 ms.
-This is important, since the slop of the action potential is very steep.
-'''
-res=0.1
+###############################################################################
+# First we make sure that the resolution of the simulation is 0.1 ms. This is
+#  important, since the slop of the action potential is very steep.
+
+res = 0.1
 nest.SetKernelStatus({"resolution": res})
-neuron=nest.Create("aeif_cond_exp")
+neuron = nest.Create("aeif_cond_exp")
 
-'''
-Set the parameters of the neuron according to the paper.
-'''
-nest.SetStatus(neuron, {"V_peak":20., "E_L":-60.0, "a":80.0, "b":80.5, "tau_w": 720.0})
+###############################################################################
+# Set the parameters of the neuron according to the paper.
 
-'''
-Create and configure the stimulus which is a step current.
-'''
+nest.SetStatus(neuron, {"V_peak": 20., "E_L": -60.0, "a": 80.0, "b": 80.5,
+                        "tau_w": 720.0})
 
-dc=nest.Create("dc_generator")
+###############################################################################
+# Create and configure the stimulus which is a step current.
 
-nest.SetStatus(dc,[{"amplitude":-800.0, "start":0.0, "stop":400.0}])
+dc = nest.Create("dc_generator")
 
-'''
-We connect the DC generators.
-'''
+nest.SetStatus(dc, [{"amplitude": -800.0, "start": 0.0, "stop": 400.0}])
 
-nest.Connect(dc,neuron,'all_to_all')
+###############################################################################
+# We connect the DC generators.
 
-'''
-And add a voltmeter to record the membrane potentials.
-'''
+nest.Connect(dc, neuron, 'all_to_all')
 
-voltmeter= nest.Create("voltmeter")
+###############################################################################
+# And add a voltmeter to record the membrane potentials.
 
-'''
-We set the voltmeter to record in small intervals of 0.1 ms and connect the voltmeter to the neuron.
-'''
-nest.SetStatus(voltmeter, {"withgid": True, "withtime": True, 'interval':0.1})
+voltmeter = nest.Create("voltmeter")
 
-nest.Connect(voltmeter,neuron)
+###############################################################################
+# We set the voltmeter to record in small intervals of 0.1 ms and connect the
+#  voltmeter to the neuron.
 
-'''
-Finally, we simulate for 1000 ms and plot a voltage trace to produce the figure.
-'''
+nest.SetStatus(voltmeter, {"withgid": True, "withtime": True, 'interval': 0.1})
+
+nest.Connect(voltmeter, neuron)
+
+###############################################################################
+# Finally, we simulate for 1000 ms and plot a voltage trace to produce the
+# figure.
+
 nest.Simulate(1000.0)
 
 nest.voltage_trace.from_device(voltmeter)
-pylab.axis([0,1000,-85,0])
+pylab.axis([0, 1000, -85, 0])

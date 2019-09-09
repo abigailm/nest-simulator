@@ -21,7 +21,7 @@
  */
 
 
-/* BeginDocumentation
+/** @BeginDocumentation
 Name: testsuite::test_multimeter_freeze_thaw - test if multimeter handles frozen nodes properly
 
 Synopsis: (test_multimeter_freeze_thaw.sli) run -> dies if assertion fails
@@ -93,10 +93,10 @@ def
 {
   << >> begin
    /build_net { 
-     /iaf_neuron << /I_e 50.0 >> SetDefaults 
+     /iaf_psc_alpha << /I_e 50.0 >> SetDefaults
      /multimeter << /record_from [ /V_m ] /interval 0.5 >> SetDefaults
-     /n  /iaf_neuron Create def  
-     /mm /multimeter Create def  
+     /n  /iaf_psc_alpha Create def  
+     /mm /multimeter Create def
      mm n Connect
    } def
  
@@ -129,11 +129,11 @@ def
 {
   << >> begin
    /build_net { 
-     /iaf_neuron << /I_e 50.0 >> SetDefaults 
+     /iaf_psc_alpha << /I_e 50.0 >> SetDefaults
      /multimeter << /record_from [ /V_m ] /interval 0.5 /withgid true 
                     /time_in_steps true >> SetDefaults
-     /nc /iaf_neuron Create def  
-     /np /iaf_neuron Create def  
+     /nc /iaf_psc_alpha Create def
+     /np /iaf_psc_alpha Create def
      /mm /multimeter Create def  
      mm nc Connect
      mm np Connect
@@ -182,22 +182,21 @@ def
 
         /nnet /subnet Create def
         nnet ChangeSubnet
-	/iaf_psc_alpha N Create ;
+  /iaf_psc_alpha N Create ;
         0 ChangeSubnet
         /nrns nnet GetGlobalLeaves def
 
         /multimeter << /record_from recvars /withgid false /withtime true 
                        /interval 0.7 /start 4.8 /stop 233.1 /time_in_steps true >> SetDefaults
-        /mm /multimeter Create def	
-        /ac /multimeter << /to_memory false /to_accumulator true >> Create def	
-        mm nrns DivergentConnect
-        ac nrns DivergentConnect
+        /mm /multimeter Create def  
+        /ac /multimeter << /to_memory false /to_accumulator true >> Create def  
+        [mm] nrns Connect
+        [ac] nrns Connect
 
         /pg /poisson_generator << /rate 1000. >> Create def
-        /static_synapse /exc << /weight  1.0 >> CopyModel 
-        /static_synapse /inh << /weight -1.0 >> CopyModel  
-        pg nrns /exc DivergentConnect
-        pg nrns /inh DivergentConnect
+
+        [pg] nrns << /rule /all_to_all >> << /model /static_synapse /weight 1.0 >> Connect
+        [pg] nrns << /rule /all_to_all >> << /model /static_synapse /weight -1.0 >> Connect
 
         nrns { << /frozen true >> SetStatus } forall
         20. Simulate
@@ -210,14 +209,14 @@ def
 
         /detevs mm /events get def
         /dettimes detevs /times get cva def          
-        /accevs ac /events get def	
+        /accevs ac /events get def  
         /acctimes accevs /times get cva def          
         
         recvars 
         { 
           /var Set
           % get data from individual recordings
-	  detevs var get cva
+    detevs var get cva
           % compute mean for error estimate
           dup Mean /varmean Set
           % sum results for equal times
@@ -226,9 +225,9 @@ def
           % data from accumulated recording
           accevs var get cva
 
-          % test difference relative to mean	  
+          % test difference relative to mean    
           sub true exch { varmean div abs 1e-15 lt and } Fold 
-	} Map 
+  } Map 
 
         true exch { and } Fold 
 
@@ -244,11 +243,11 @@ def
 {
   << >> begin
    /build_net { 
-     /iaf_neuron << /I_e 0.0 >> SetDefaults 
+     /iaf_psc_alpha << /I_e 0.0 >> SetDefaults
      /multimeter << /record_from [ /V_m ] /interval 0.5 /withgid false 
                     /time_in_steps true /record_to [ /accumulator ] >> SetDefaults
-     /nc /iaf_neuron Create def  
-     /np /iaf_neuron Create def  
+     /nc /iaf_psc_alpha Create def
+     /np /iaf_psc_alpha Create def
      /mm /multimeter Create def  
      mm nc Connect
      mm np Connect
@@ -274,7 +273,7 @@ def
    ev /V_m get cva /Vall Set
    /fp [ 1 10] Range [21 30] Range join def
    /tp [11 20] Range [31 38] Range join def
-   /Vref /iaf_neuron GetDefaults /E_L get def
+   /Vref /iaf_psc_alpha GetDefaults /E_L get def
    nc /V_m get Vref eq np /V_m get Vref eq and assert % ascertain V_m has not changed
 
    true fp { Vall exch 1 sub get   Vref     eq and } Fold

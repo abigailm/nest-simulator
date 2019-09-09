@@ -23,11 +23,16 @@
 #ifndef TOKENUTILS_H
 #define TOKENUTILS_H
 
-#include "token.h"
-#include "sliexceptions.h"
-#include "namedatum.h"
+// C++ includes:
 #include <string>
+
+// Generated includes:
 #include "config.h"
+
+// Includes from sli:
+#include "namedatum.h"
+#include "sliexceptions.h"
+#include "token.h"
 
 /**
  * @defgroup TokenHandling Handling classes Token and Dictionary.
@@ -122,8 +127,8 @@
     The following specialized variants of getValue() can be used in addition:
 
     \verbatim
-        call                                    can be used on Token containing SLI-type
-       ---------------------------------------------------------------------------------
+        call                            can be used on Token containing SLI-type
+       -------------------------------------------------------------------------
         long             GetValue<long>              IntegerDatum
         double           GetValue<double>            DoubleDatum
         bool             GetValue<bool>              BoolDatum
