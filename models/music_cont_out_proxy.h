@@ -40,29 +40,31 @@
 
 // Includes from nestkernel:
 #include "device_node.h"
+#include "nest_timeconverter.h"
 #include "nest_types.h"
+#include "node_collection.h"
 
-// Includes from sli:
-#include "arraydatum.h"
 
 namespace nest
 {
+void register_music_cont_out_proxy( const std::string& name );
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup music
+/* BeginUserDocs: device, MUSIC
 
-Name: music_cont_out_proxy - A device which sends continuous data from NEST to
-MUSIC.
+Short description
++++++++++++++++++
 
-Description:
+A device which sends continuous data from NEST to MUSIC
 
-A music_cont_out_proxy can be used to send continuous data from
+Description
++++++++++++
+
+A ``music_cont_out_proxy`` can be used to send continuous data from
 neurons over MUSIC to remote applications. It works in a similar fashion like
 the multimeter model. The user has to specify the recordable values to observe
-(e.g. ["V_m"]) via the record_from parameter. The target neurons are specified
-by a list of global neuron ids which must be passed via the "targets"
-parameter. The music_cont_out_proxy will be connected automatically to the
+(e.g. [``V_m``]) via the record_from parameter. The target neurons are specified
+by a list of global neuron ids which must be passed via the ``targets``
+parameter. The ``music_cont_out_proxy`` will be connected automatically to the
 specified target neurons. It is not possible to apply further changes to the
 list of target neurons or observed quantities once the simulation has been
 started for the first time.
@@ -70,19 +72,21 @@ started for the first time.
 In case of multiple recordables the data can be read out (PyNEST only) of the
 receiving buffer via the following access pattern:
 
-    buffer[ target_gid_index ][ recordable_index] = buffer[ target_gid_index *
+    buffer[ target_node_id_index ][ recordable_index] = buffer[ target_node_id_index *
     record_from.size() + recordable_index ]
 
     For example:
-    target_gids = [ 2, 5, 4 ], record_from = ["V_m"] and
+    target_node_ids = [ 2, 5, 4 ], record_from = ["V_m"] and
 
-    we want to get "V_m" for neuron with GID 5: buffer[ 1*1 + 0 ]
+    we want to get ``V_m`` for neuron with node ID 5: buffer[ 1*1 + 0 ]
 
-Parameters:
+This model is only available if NEST was compiled with MUSIC.
 
-The following properties are available in the status dictionary:
+Parameters
+++++++++++
 
-\verbatim embed:rst
+The following properties are available in the status Dictionary:
+
 ============ ========  ========================================================
  interval    ms        Recording interval
  targets     array     Global id list of neurons to be observed
@@ -95,17 +99,19 @@ The following properties are available in the status dictionary:
                        from, obtained from the /recordables entry of the
                        model from which one wants to record
 ============ ========  ========================================================
-\endverbatim
 
-Author: Martin Asghar Schulze, Forschungszentrum fur Informatik Karlsruhe (FZI)
+See also
+++++++++
 
-FirstVersion: March 2016
+music_cont_in_proxy, music_event_out_proxy, music_event_in_proxy, music_message_in_proxy
 
-Availability: Only when compiled with MPI and MUSIC
+Examples using this model
++++++++++++++++++++++++++
 
-SeeAlso: music_cont_in_proxy, music_event_out_proxy, music_event_in_proxy,
-music_message_in_proxy
-*/
+.. listexamples:: music_cont_out_proxy
+
+EndUserDocs */
+
 class music_cont_out_proxy : public DeviceNode
 {
 
@@ -137,19 +143,20 @@ public:
   using Node::handle;
   using Node::handles_test_event;
   using Node::sends_signal;
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool );
 
   void handle( DataLoggingReply& );
 
   SignalType sends_signal() const;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const;
+  void set_status( const Dictionary& );
+
+  void calibrate_time( const TimeConverter& tc );
 
 protected:
-  void init_state_( Node const& );
   void init_buffers_();
-  void calibrate();
+  void pre_run_hook();
   void finalize();
 
   /**
@@ -162,45 +169,45 @@ protected:
   void update( Time const&, const long, const long );
 
 private:
-  struct State_; //!< Forward declarations
+  struct State_;  //!< Forward declarations
 
   struct Buffers_;
 
   struct Parameters_
   {
-    Parameters_();                     //!< Sets default parameter values
-    Parameters_( const Parameters_& ); //!< Copy constructor for parameter values
+    Parameters_();                      //!< Sets default parameter values
+    Parameters_( const Parameters_& );  //!< Copy constructor for parameter values
 
-    Time interval_;                   //!< sampling interval, in ms
-    std::string port_name_;           //!< the name of MUSIC port to connect to
-    std::vector< Name > record_from_; //!< recordables to record from
-    std::vector< long > target_gids_; //!< Neuron GIDs to be observed
+    Time interval_;                           //!< sampling interval, in ms
+    std::string port_name_;                   //!< the name of MUSIC port to connect to
+    std::vector< std::string > record_from_;  //!< recordables to record from
+    NodeCollectionPTR targets_;               //!< nodes to be observed
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum&, const Node&, const State_&, const Buffers_& ); //!< Set values from dictionary
+    void get( Dictionary& ) const;                                               //!< Store current values in Dictionary
+    void set( const Dictionary&, const Node&, const State_&, const Buffers_& );  //!< Set values from Dictionary
   };
 
   // ------------------------------------------------------------
 
   struct State_
   {
-    State_();                           //!< Sets default state value
-    State_( const State_& );            //!< Copy constructor for state values
-    bool published_;                    //!< indicates whether this node has been published
-                                        //!< already with MUSIC
-    size_t port_width_;                 //!< the width of the MUSIC port
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    State_();                       //!< Sets default state value
+    State_( const State_& );        //!< Copy constructor for state values
+    bool published_;                //!< indicates whether this node has been published
+                                    //!< already with MUSIC
+    size_t port_width_;             //!< the width of the MUSIC port
+    void get( Dictionary& ) const;  //!< Store current values in Dictionary
   };
 
   // ------------------------------------------------------------
 
   struct Buffers_
   {
-    Buffers_();                  //!< Initializes default buffer
-    Buffers_( const Buffers_& ); //!< Copy constructor for the data buffer
-    bool has_targets_;           //!< Indicates whether the proxy is recording from any
-                                 //!neurons or not
-    std::vector< double > data_; //!< Recorded data
+    Buffers_();                   //!< Initializes default buffer
+    Buffers_( const Buffers_& );  //!< Copy constructor for the data buffer
+    bool has_targets_;            //!< Indicates whether the proxy is recording from any
+                                  //! neurons or not
+    std::vector< double > data_;  //!< Recorded data
   };
 
   // ------------------------------------------------------------
@@ -216,7 +223,13 @@ nest::music_cont_out_proxy::sends_signal() const
   return ALL;
 }
 
-} // namespace
+inline void
+nest::music_cont_out_proxy::calibrate_time( const TimeConverter& tc )
+{
+  P_.interval_ = tc.from_old_tics( P_.interval_.get_tics() );
+}
+
+}  // namespace
 
 #endif /* #ifndef HAVE_MUSIC */
 #endif /* #ifndef MUSIC_CONT_OUT_PROXY_H */

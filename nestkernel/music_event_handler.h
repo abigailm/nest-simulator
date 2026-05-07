@@ -54,18 +54,20 @@ public:
   /**
    * Register a new node to a specific channel on this port.
    */
-  void register_channel( int channel, nest::Node* mp );
+  void register_channel( size_t channel, nest::Node* mp );
 
   /**
    * Publish the MUSIC port.
+   *
    * This method has to be called once before the first simulation to
    * tell MUSIC which channels lie on which processor.
    */
   void publish_port();
 
   /**
-   * Called by MUSIC from within tick() to deliver events to
-   * NEST. This function only queues the events. Delivery to the
+   * Called by MUSIC from within tick() to deliver events to NEST.
+   *
+   * This function only queues the events. Delivery to the
    * targets takes place in update().
    */
   void operator()( double t, MUSIC::GlobalIndex channel );
@@ -85,19 +87,20 @@ private:
   std::vector< nest::Node* > channelmap_;
   //! Maps local index to global MUSIC index (channel)
   std::vector< MUSIC::GlobalIndex > indexmap_;
-  double acceptable_latency_; //!< The acceptable latency of the port in ms
+  double acceptable_latency_;  //!< The acceptable latency of the port in ms
   int max_buffered_;
 
   /**
-   * Buffers incoming spike events until they are due. The vector has
-   * one entry per channel. The priority queues used within the vector
+   * Buffers incoming spike events until they are due.
+   *
+   * The vector has one entry per channel. The priority queues used within the vector
    * implement min-heaps stored in vectors.
    */
   std::vector< std::priority_queue< double, std::vector< double >, std::greater< double > > > eventqueue_;
 };
 
-} // namespace nest
+}  // namespace nest
 
-#endif // HAVE_MUSIC
+#endif /* #ifdef HAVE_MUSIC */
 
-#endif // MUSIC_EVENT_HANDLER
+#endif /* #ifndef MUSIC_EVENT_HANDLER */

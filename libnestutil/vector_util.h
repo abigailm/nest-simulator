@@ -23,8 +23,8 @@
 #ifndef VECTOR_UTIL_H
 #define VECTOR_UTIL_H
 
-#include <vector>
 #include <cstddef>
+#include <vector>
 
 namespace vector_util
 {
@@ -47,6 +47,6 @@ grow( std::vector< T >& v )
   }
 }
 
-} // namespace vector_util
+}  // namespace vector_util
 
-#endif // VECTOR_UTIL_H
+#endif  // VECTOR_UTIL_H

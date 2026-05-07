@@ -26,84 +26,96 @@
 // C++ includes:
 #include <vector>
 
-// Includes from librandom:
-#include "binomial_randomdev.h"
-#include "poisson_randomdev.h"
-
 // Includes from nestkernel:
 #include "connection.h"
 #include "device_node.h"
 #include "event.h"
 #include "nest_types.h"
-#include "stimulating_device.h"
+#include "random_generators.h"
+#include "stimulation_device.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup generator
+/* BeginUserDocs: device, generator
 
-Name: ppd_sup_generator - simulate the superimposed spike train of a population
-of Poisson processes
-with dead time.
+Short description
++++++++++++++++++
 
-Description:
+Simulate the superimposed spike train of a population of Poisson
+processes with dead time
 
-The ppd_sup_generator generator simulates the pooled spike train of a
+Description
++++++++++++
+
+The ``ppd_sup_generator`` generator simulates the pooled spike train of a
 population of neurons firing independently with Poisson process with dead
 time statistics.
 The rate parameter can also be sine-modulated. The generator does not
 initialize to equilibrium in this case, initial transients might occur.
 
-Parameters:
+.. include:: ../models/stimulation_device.rst
 
-The following parameters appear in the element's status dictionary:
-\verbatim embed:rst
-===================  ======== =================================================
- rate                spikes/s Mean firing rate of the component processes,
-                              default: 0 spikes/s
- dead_time           ms       Minimal time between two spikes of the component
-                              processes, default: 0 ms
- n_proc              integer  Number of superimposed independent component
-                              processes, default: 1
- frequency           Hz       Rate modulation frequency, default: 0 Hz
- relative_amplitude  real     Relative rate modulation amplitude, default: 0
-===================  ======== =================================================
-\endverbatim
+rate
+    Mean firing rate of the component processes, default: 0 spikes/s
 
-Remarks:
+dead_time
+    Minimal time between two spikes of the component processes, default: 0 ms
 
-References:
+n_proc
+    Number of superimposed independent component processes, default: 1
 
-\verbatim embed:rst
+frequency
+    Rate modulation frequency, default: 0 Hz
+
+relative_amplitude
+    Relative rate modulation amplitude, default: 0
+
+See also [1]_.
+
+Set parameters from a stimulation backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The parameters in this stimulation device can be updated with input
+coming from a stimulation backend. The data structure used for the
+update holds one value for each of the parameters mentioned above.
+The indexing is as follows:
+
+ 0. dead_time
+ 1. rate
+ 2. n_proc
+ 3. frequency
+ 4. relative_amplitude
+
+References
+++++++++++
+
 .. [1]  Deger M, Helias M, Boucsein C, Rotter S (2011). Statistical properties
         of superimposed stationary spike trains. Journal of Computational
         Neuroscience. DOI: https://doi.org/10.1007/s10827-011-0362-8
-\endverbatim
-Authors:
-   June 2009, Moritz Deger, Moritz Helias
 
-SeeAlso: gamma_sup_generator, poisson_generator_ps, spike_generator, Device,
-StimulatingDevice
-*/
-class ppd_sup_generator : public DeviceNode
+See also
+++++++++
+
+gamma_sup_generator, poisson_generator_ps, spike_generator
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: ppd_sup_generator
+
+EndUserDocs */
+
+void register_ppd_sup_generator( const std::string& name );
+
+class ppd_sup_generator : public StimulationDevice
 {
 
 public:
   ppd_sup_generator();
   ppd_sup_generator( const ppd_sup_generator& );
 
-  bool
-  has_proxies() const
-  {
-    return false;
-  }
-  bool
-  is_off_grid() const
-  {
-    return false;
-  } // does not use off_grid events
+  bool is_off_grid() const override;
 
   /**
    * Import sets of overloaded virtual functions.
@@ -112,15 +124,18 @@ public:
    */
   using Node::event_hook;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
+
+  StimulationDevice::Type get_type() const override;
+  void set_data_from_stimulation_backend( std::vector< double >& input_param ) override;
 
 private:
-  void init_state_( const Node& );
-  void init_buffers_();
-  void calibrate();
+  void init_state_() override;
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
   /**
    * Update state.
@@ -131,14 +146,14 @@ private:
    * information.
    * @see event_hook, DSSpikeEvent
    */
-  void update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
 
   /**
    * Send out spikes.
    * Called once per target to dispatch actual output spikes.
    * @param contains target information.
    */
-  void event_hook( DSSpikeEvent& );
+  void event_hook( DSSpikeEvent& ) override;
 
   // ------------------------------------------------------------
 
@@ -147,11 +162,11 @@ private:
    */
   struct Parameters_
   {
-    double rate_;          //!< process rate [Hz]
-    double dead_time_;     //!< dead time [ms]
-    unsigned long n_proc_; //!< number of component processes
-    double frequency_;     //!< rate modulation frequency [Hz]
-    double amplitude_;     //!< rate modulation amplitude [Hz]
+    double rate_;           //!< process rate [Hz]
+    double dead_time_;      //!< dead time [ms]
+    unsigned long n_proc_;  //!< number of component processes
+    double frequency_;      //!< rate modulation frequency [Hz]
+    double amplitude_;      //!< rate modulation amplitude [Hz]
 
     /**
      * Number of targets.
@@ -161,10 +176,10 @@ private:
      */
     size_t num_targets_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;              //!< Store current values in dictionary
+    void set( const Dictionary&, Node* node );  //!< Set values from dictionary
   };
 
   // ------------------------------------------------------------
@@ -172,20 +187,18 @@ private:
 
   class Age_distribution_
   {
-
-    librandom::BinomialRandomDev bino_dev_;   //!< random deviate generator
-    librandom::PoissonRandomDev poisson_dev_; //!< random deviate generator
-    //! occupation numbers of ages below dead time
-    std::vector< unsigned long > occ_refractory_;
-    unsigned long occ_active_; //!< summed occupation number of ages above dead time
-    size_t activate_;          //!< rotating pointer
+    binomial_distribution bino_dist_;              //!< binomial distribution
+    poisson_distribution poisson_dist_;            //!< poisson distribution
+    std::vector< unsigned long > occ_refractory_;  //!< occupation numbers of ages below dead time
+    unsigned long occ_active_;                     //!< summed occupation number of ages above dead time
+    size_t activate_;                              //!< rotating pointer
 
   public:
     //! initialize age dist
     Age_distribution_( size_t num_age_bins, unsigned long ini_occ_ref, unsigned long ini_occ_act );
 
     //! update age dist and generate spikes
-    unsigned long update( double hazard_rate, librandom::RngPtr rng );
+    unsigned long update( double hazard_rate, RngPtr rng );
   };
 
 
@@ -203,9 +216,9 @@ private:
 
   struct Variables_
   {
-    double hazard_step_;   //!< base hazard rate in units of time step
-    double hazard_step_t_; //!< hazard rate at time t in units of time step
-    double omega_;         //!< angular velocity of rate modulation [rad/ms]
+    double hazard_step_;    //!< base hazard rate in units of time step
+    double hazard_step_t_;  //!< hazard rate at time t in units of time step
+    double omega_;          //!< angular velocity of rate modulation [rad/ms]
 
     /**
      * @name update-hook communication.
@@ -217,23 +230,22 @@ private:
      *   t_min_active_ < t <= t_max_active_
      */
     //@{
-    double t_min_active_; //!< start of generator activity in slice
-    double t_max_active_; //!< end of generator activity in slice
+    double t_min_active_;  //!< start of generator activity in slice
+    double t_max_active_;  //!< end of generator activity in slice
     //@}
   };
 
   // ------------------------------------------------------------
 
-  StimulatingDevice< CurrentEvent > device_;
   Parameters_ P_;
   Variables_ V_;
   Buffers_ B_;
 };
 
-inline port
-ppd_sup_generator::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
+inline size_t
+ppd_sup_generator::send_test_event( Node& target, size_t receptor_type, synindex syn_id, bool dummy_target )
 {
-  device_.enforce_single_syn_type( syn_id );
+  StimulationDevice::enforce_single_syn_type( syn_id );
 
   if ( dummy_target )
   {
@@ -245,37 +257,49 @@ ppd_sup_generator::send_test_event( Node& target, rport receptor_type, synindex 
   {
     SpikeEvent e;
     e.set_sender( *this );
-    const port p = target.handles_test_event( e, receptor_type );
-    if ( p != invalid_port_ and not is_model_prototype() )
+    const size_t p = target.handles_test_event( e, receptor_type );
+    if ( p != invalid_port and not is_model_prototype() )
     {
-      ++P_.num_targets_; // count number of targets
+      ++P_.num_targets_;  // count number of targets
     }
     return p;
   }
 }
 
 inline void
-ppd_sup_generator::get_status( DictionaryDatum& d ) const
+ppd_sup_generator::get_status( Dictionary& d ) const
 {
   P_.get( d );
-  device_.get_status( d );
+  StimulationDevice::get_status( d );
 }
 
 inline void
-ppd_sup_generator::set_status( const DictionaryDatum& d )
+ppd_sup_generator::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
+  ptmp.set( d, this );    // throws if BadProperty
 
   // We now know that ptmp is consistent. We do not write it back
   // to P_ before we are also sure that the properties to be set
   // in the parent class are internally consistent.
-  device_.set_status( d );
+  StimulationDevice::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
 }
 
-} // namespace
+inline bool
+ppd_sup_generator::is_off_grid() const
+{
+  return false;
+}
 
-#endif // PPD_SUP_GENERATOR_H
+inline StimulationDevice::Type
+ppd_sup_generator::get_type() const
+{
+  return StimulationDevice::Type::SPIKE_GENERATOR;
+}
+
+}  // namespace
+
+#endif  // PPD_SUP_GENERATOR_H

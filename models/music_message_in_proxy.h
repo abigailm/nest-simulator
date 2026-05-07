@@ -35,6 +35,9 @@
 #include <string>
 #include <vector>
 
+// Includes from libnestutil:
+#include "dict_util.h"
+
 // External includes:
 #include <music.hh>
 
@@ -42,39 +45,43 @@
 #include "device_node.h"
 #include "nest_types.h"
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "dictutils.h"
 
 namespace nest
 {
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup music
+void register_music_message_in_proxy( const std::string& name );
 
-Name: music_message_in_proxy - A device which receives message strings from
-                              MUSIC.
+/* BeginUserDocs: device, MUSIC
 
-Description:
+Short description
++++++++++++++++++
 
-A music_message_in_proxy can be used to receive message strings from
+A device which receives message strings from MUSIC
+
+Description
++++++++++++
+
+A ``music_message_in_proxy`` can be used to receive message strings from
 remote MUSIC applications in NEST.
 
 It uses the MUSIC library to receive message strings from other
-applications. The music_message_in_proxy represents an input port to
-which MUSIC can connect a message source. The music_message_in_proxy
+applications. The ``music_message_in_proxy`` represents an input port to
+which MUSIC can connect a message source. The ``music_message_in_proxy``
 can queried using GetStatus to retrieve the messages.
 
-Parameters:
+To clear the data array, the parameter ``n_messages`` can be set to 0.
 
-The following properties are available in the status dictionary:
+This model is only available if NEST was compiled with MUSIC.
 
-\verbatim embed:rst
+Parameters
+++++++++++
+
+The following properties are available in the status Dictionary:
+
 ============ ======= =========================================================
  port_name   string  The name of the MUSIC input port to listen to (default:
                      message_in)
  port_width  integer The width of the MUSIC input port
- data        array   A sub-dictionary that contains the string messages
+ data        array   A sub-Dictionary that contains the string messages
                      in the form of two arrays:
                      messages      - The strings
                      message_times - The times the messages were sent (ms)
@@ -82,33 +89,26 @@ The following properties are available in the status dictionary:
  published   boolean A bool indicating if the port has been already published
                      with MUSIC
 ============ ======= =========================================================
-\endverbatim
 
-The parameter port_name can be set using SetStatus. The field n_messages
-can be set to 0 to clear the data arrays.
+See also
+++++++++
 
-Examples:
+music_event_out_proxy, music_event_in_proxy, music_cont_in_proxy
 
-    /music_message_in_proxy Create /mmip Set
-    10 Simulate
-    mmip GetStatus /data get /messages get 0 get /command Set
-    (Executing command ') command join ('.) join =
-    command cvx exec
+Examples using this model
++++++++++++++++++++++++++
 
-Author: Jochen Martin Eppler
+.. listexamples:: music_message_in_proxy
 
-FirstVersion: July 2010
+EndUserDocs */
 
-Availability: Only when compiled with MUSIC
-
-SeeAlso: music_event_out_proxy, music_event_in_proxy, music_cont_in_proxy
-*/
 class MsgHandler : public MUSIC::MessageHandler
 {
-  ArrayDatum messages;                 //!< The buffer for incoming message
-  std::vector< double > message_times; //!< The buffer for incoming message
+  std::vector< std::string > messages;  //!< The buffer for incoming message
+  std::vector< double > message_times;  //!< The times for incoming message
 
-  void operator()( double t, void* msg, size_t size )
+  void
+  operator()( double t, void* msg, size_t size )
   {
     message_times.push_back( t * 1000.0 );
     messages.push_back( std::string( static_cast< char* >( msg ), size ) );
@@ -116,13 +116,13 @@ class MsgHandler : public MUSIC::MessageHandler
 
 public:
   void
-  get_status( DictionaryDatum& d ) const
+  get_status( Dictionary& d ) const
   {
-    DictionaryDatum dict( new Dictionary );
-    ( *dict )[ names::messages ] = messages;
-    ( *dict )[ names::message_times ] = DoubleVectorDatum( new std::vector< double >( message_times ) );
-    ( *d )[ names::n_messages ] = messages.size();
-    ( *d )[ names::data ] = dict;
+    Dictionary dict;
+    dict[ names::messages ] = messages;
+    dict[ names::message_times ] = std::vector< double >( message_times );
+    d[ names::n_messages ] = static_cast< long >( messages.size() );
+    d[ names::data ] = dict;
   }
 
   void
@@ -156,13 +156,12 @@ public:
     return true;
   }
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const;
+  void set_status( const Dictionary& );
 
 private:
-  void init_state_( const Node& );
   void init_buffers_();
-  void calibrate();
+  void pre_run_hook();
 
   void
   update( Time const&, const long, const long )
@@ -174,33 +173,32 @@ private:
 
   struct Parameters_
   {
-    std::string port_name_;     //!< the name of MUSIC port to connect to
-    double acceptable_latency_; //!< the acceptable latency of the port
+    std::string port_name_;      //!< the name of MUSIC port to connect to
+    double acceptable_latency_;  //!< the acceptable latency of the port
 
-    Parameters_();                     //!< Sets default parameter values
-    Parameters_( const Parameters_& ); //!< Recalibrate all times
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const;
+    void get( Dictionary& ) const;
 
     /**
-     * Set values from dicitonary.
+     * Set values from Dictionary.
      */
-    void set( const DictionaryDatum&, State_& );
+    void set( const Dictionary&, State_&, Node* );
   };
 
   // ------------------------------------------------------------
 
   struct State_
   {
-    bool published_; //!< indicates whether this node has been published already
-                     //!< with MUSIC
-    int port_width_; //!< the width of the MUSIC port
+    bool published_;  //!< indicates whether this node has been published already
+                      //!< with MUSIC
+    int port_width_;  //!< the width of the MUSIC port
 
-    State_(); //!< Sets default state value
+    State_();  //!< Sets default state value
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    //! Set values from dictionary
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary& ) const;  //!< Store current values in Dictionary
+    //! Set values from Dictionary
+    void set( const Dictionary&, const Parameters_&, Node* );
   };
 
   // ------------------------------------------------------------
@@ -214,7 +212,7 @@ private:
 
   struct Variables_
   {
-    MUSIC::MessageInputPort* MP_; //!< The MUSIC cont port for input of data
+    MUSIC::MessageInputPort* MP_;  //!< The MUSIC cont port for input of data
   };
 
   // ------------------------------------------------------------
@@ -226,7 +224,7 @@ private:
 };
 
 inline void
-music_message_in_proxy::get_status( DictionaryDatum& d ) const
+music_message_in_proxy::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d );
@@ -235,16 +233,16 @@ music_message_in_proxy::get_status( DictionaryDatum& d ) const
 }
 
 inline void
-music_message_in_proxy::set_status( const DictionaryDatum& d )
+music_message_in_proxy::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d, S_ );     // throws if BadProperty
+  Parameters_ ptmp = P_;    // temporary copy in case of errors
+  ptmp.set( d, S_, this );  // throws if BadProperty
 
   State_ stmp = S_;
-  stmp.set( d, P_ ); // throws if BadProperty
+  stmp.set( d, P_, this );  // throws if BadProperty
 
   long nm = 0;
-  if ( updateValue< long >( d, names::n_messages, nm ) )
+  if ( update_value_param( d, names::n_messages, nm, this ) )
   {
     if ( nm == 0 )
     {
@@ -261,7 +259,7 @@ music_message_in_proxy::set_status( const DictionaryDatum& d )
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
 #endif
 

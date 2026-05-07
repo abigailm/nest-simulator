@@ -26,7 +26,7 @@
 #include "rate_neuron_opn.h"
 
 // C++ includes:
-#include <cmath> // in case we need isnan() // fabs
+#include <cmath>  // in case we need isnan() // fabs
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
@@ -41,11 +41,6 @@
 #include "kernel_manager.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 namespace nest
 {
@@ -64,7 +59,7 @@ RecordablesMap< rate_neuron_opn< TNonlinearities > > rate_neuron_opn< TNonlinear
 
 template < class TNonlinearities >
 nest::rate_neuron_opn< TNonlinearities >::Parameters_::Parameters_()
-  : tau_( 10.0 ) // ms
+  : tau_( 10.0 )  // ms
   , sigma_( 1.0 )
   , mu_( 0.0 )
   , linear_summation_( true )
@@ -87,42 +82,42 @@ nest::rate_neuron_opn< TNonlinearities >::State_::State_()
 
 template < class TNonlinearities >
 void
-nest::rate_neuron_opn< TNonlinearities >::Parameters_::get( DictionaryDatum& d ) const
+nest::rate_neuron_opn< TNonlinearities >::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::tau, tau_ );
-  def< double >( d, names::sigma, sigma_ );
-  def< double >( d, names::mu, mu_ );
-  def< bool >( d, names::linear_summation, linear_summation_ );
-  def< bool >( d, names::mult_coupling, mult_coupling_ );
+  d[ names::tau ] = tau_;
+  d[ names::sigma ] = sigma_;
+  d[ names::mu ] = mu_;
+  d[ names::linear_summation ] = linear_summation_;
+  d[ names::mult_coupling ] = mult_coupling_;
 
   // Also allow old names (to not break old scripts)
-  def< double >( d, names::std, sigma_ );
-  def< double >( d, names::mean, mu_ );
+  d[ names::std ] = sigma_;
+  d[ names::mean ] = mu_;
 }
 
 template < class TNonlinearities >
 void
-nest::rate_neuron_opn< TNonlinearities >::Parameters_::set( const DictionaryDatum& d )
+nest::rate_neuron_opn< TNonlinearities >::Parameters_::set( const Dictionary& d, Node* node )
 {
-  updateValue< double >( d, names::tau, tau_ );
-  updateValue< double >( d, names::mu, mu_ );
-  updateValue< double >( d, names::sigma, sigma_ );
-  updateValue< bool >( d, names::linear_summation, linear_summation_ );
-  updateValue< bool >( d, names::mult_coupling, mult_coupling_ );
+  update_value_param( d, names::tau, tau_, node );
+  update_value_param( d, names::mu, mu_, node );
+  update_value_param( d, names::sigma, sigma_, node );
+  update_value_param( d, names::linear_summation, linear_summation_, node );
+  update_value_param( d, names::mult_coupling, mult_coupling_, node );
 
   // Check for old names
-  if ( updateValue< double >( d, names::mean, mu_ ) )
+  if ( update_value_param( d, names::mean, mu_, node ) )
   {
-    LOG( M_WARNING,
-      "rate_neuron_ipn< TNonlinearities >::Parameters_::set",
+    LOG( VerbosityLevel::WARNING,
+      "rate_neuron_opn< TNonlinearities >::Parameters_::set",
       "The parameter mean has been renamed to mu. Please use the new "
       "name from now on." );
   }
 
-  if ( updateValue< double >( d, names::std, sigma_ ) )
+  if ( update_value_param( d, names::std, sigma_, node ) )
   {
-    LOG( M_WARNING,
-      "rate_neuron_ipn< TNonlinearities >::Parameters_::set",
+    LOG( VerbosityLevel::WARNING,
+      "rate_neuron_opn< TNonlinearities >::Parameters_::set",
       "The parameter std has been renamed to sigma. Please use the new "
       "name from now on." );
   }
@@ -140,18 +135,18 @@ nest::rate_neuron_opn< TNonlinearities >::Parameters_::set( const DictionaryDatu
 
 template < class TNonlinearities >
 void
-nest::rate_neuron_opn< TNonlinearities >::State_::get( DictionaryDatum& d ) const
+nest::rate_neuron_opn< TNonlinearities >::State_::get( Dictionary& d ) const
 {
-  def< double >( d, names::rate, rate_ );             // Rate
-  def< double >( d, names::noise, noise_ );           // Noise
-  def< double >( d, names::noisy_rate, noisy_rate_ ); // Noisy rate
+  d[ names::rate ] = rate_;              // Rate
+  d[ names::noise ] = noise_;            // Noise
+  d[ names::noisy_rate ] = noisy_rate_;  // Noisy rate
 }
 
 template < class TNonlinearities >
 void
-nest::rate_neuron_opn< TNonlinearities >::State_::set( const DictionaryDatum& d )
+nest::rate_neuron_opn< TNonlinearities >::State_::set( const Dictionary& d, Node* node )
 {
-  updateValue< double >( d, names::rate, rate_ ); // Rate
+  update_value_param( d, names::rate, rate_, node );  // Rate
 }
 
 template < class TNonlinearities >
@@ -172,7 +167,7 @@ nest::rate_neuron_opn< TNonlinearities >::Buffers_::Buffers_( const Buffers_&, r
 
 template < class TNonlinearities >
 nest::rate_neuron_opn< TNonlinearities >::rate_neuron_opn()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_()
   , B_( *this )
@@ -183,7 +178,7 @@ nest::rate_neuron_opn< TNonlinearities >::rate_neuron_opn()
 
 template < class TNonlinearities >
 nest::rate_neuron_opn< TNonlinearities >::rate_neuron_opn( const rate_neuron_opn& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -197,18 +192,10 @@ nest::rate_neuron_opn< TNonlinearities >::rate_neuron_opn( const rate_neuron_opn
 
 template < class TNonlinearities >
 void
-nest::rate_neuron_opn< TNonlinearities >::init_state_( const Node& proto )
-{
-  const rate_neuron_opn& pr = downcast< rate_neuron_opn >( proto );
-  S_ = pr.S_;
-}
-
-template < class TNonlinearities >
-void
 nest::rate_neuron_opn< TNonlinearities >::init_buffers_()
 {
-  B_.delayed_rates_ex_.clear(); // includes resize
-  B_.delayed_rates_in_.clear(); // includes resize
+  B_.delayed_rates_ex_.clear();  // includes resize
+  B_.delayed_rates_in_.clear();  // includes resize
 
   // resize buffers
   const size_t buffer_size = kernel().connection_manager.get_min_delay();
@@ -220,25 +207,27 @@ nest::rate_neuron_opn< TNonlinearities >::init_buffers_()
   // initialize random numbers
   for ( unsigned int i = 0; i < buffer_size; i++ )
   {
-    B_.random_numbers[ i ] = V_.normal_dev_( kernel().rng_manager.get_rng( get_thread() ) );
+    B_.random_numbers[ i ] = V_.normal_dist_( get_vp_specific_rng( get_thread() ) );
   }
 
-  B_.logger_.reset(); // includes resize
-  Archiving_Node::clear_history();
+  B_.logger_.reset();  // includes resize
+  ArchivingNode::clear_history();
 }
 
 template < class TNonlinearities >
 void
-nest::rate_neuron_opn< TNonlinearities >::calibrate()
+nest::rate_neuron_opn< TNonlinearities >::pre_run_hook()
 {
-  B_.logger_.init(); // ensures initialization in case mm connected after Simulate
+  B_.logger_.init();  // ensures initialization in case mm connected after Simulate
 
   const double h = Time::get_resolution().get_ms();
 
   // propagators
   V_.P1_ = std::exp( -h / P_.tau_ );
   V_.P2_ = -numerics::expm1( -h / P_.tau_ );
-  V_.output_noise_factor_ = std::sqrt( P_.tau_ / h ); // Gaussian white noise approximated by piecewise constant value
+
+  // Gaussian white noise approximated by piecewise constant value
+  V_.output_noise_factor_ = std::sqrt( P_.tau_ / h );
 }
 
 /* ----------------------------------------------------------------
@@ -252,9 +241,6 @@ nest::rate_neuron_opn< TNonlinearities >::update_( Time const& origin,
   const long to,
   const bool called_from_wfr_update )
 {
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   const size_t buffer_size = kernel().connection_manager.get_min_delay();
   const double wfr_tol = kernel().simulation_manager.get_wfr_tol();
   bool wfr_tol_exceeded = false;
@@ -289,8 +275,8 @@ nest::rate_neuron_opn< TNonlinearities >::update_( Time const& origin,
     }
     double instant_rates_in = B_.instant_rates_in_[ lag ];
     double instant_rates_ex = B_.instant_rates_ex_[ lag ];
-    double H_ex = 1.; // valid value for non-multiplicative coupling
-    double H_in = 1.; // valid value for non-multiplicative coupling
+    double H_ex = 1.;  // valid value for non-multiplicative coupling
+    double H_in = 1.;  // valid value for non-multiplicative coupling
     if ( P_.mult_coupling_ )
     {
       H_ex = nonlinearities_.mult_coupling_ex( new_rates[ lag ] );
@@ -347,7 +333,7 @@ nest::rate_neuron_opn< TNonlinearities >::update_( Time const& origin,
     // clear last_y_values
     std::vector< double >( buffer_size, 0.0 ).swap( B_.last_y_values );
 
-    // modifiy new_rates for rate-neuron-event as proxy for next min_delay
+    // modify new_rates for rate-neuron-event as proxy for next min_delay
     for ( long temp = from; temp < to; ++temp )
     {
       new_rates[ temp ] = S_.noisy_rate_;
@@ -357,7 +343,7 @@ nest::rate_neuron_opn< TNonlinearities >::update_( Time const& origin,
     B_.random_numbers.resize( buffer_size, numerics::nan );
     for ( unsigned int i = 0; i < buffer_size; i++ )
     {
-      B_.random_numbers[ i ] = V_.normal_dev_( kernel().rng_manager.get_rng( get_thread() ) );
+      B_.random_numbers[ i ] = V_.normal_dist_( get_vp_specific_rng( get_thread() ) );
     }
   }
 
@@ -416,7 +402,7 @@ void
 nest::rate_neuron_opn< TNonlinearities >::handle( DelayedRateConnectionEvent& e )
 {
   const double weight = e.get_weight();
-  const long delay = e.get_delay_steps();
+  const long delay = e.get_delay_steps() - kernel().connection_manager.get_min_delay();
 
   size_t i = 0;
   std::vector< unsigned int >::iterator it = e.begin();
@@ -456,6 +442,6 @@ nest::rate_neuron_opn< TNonlinearities >::handle( DataLoggingRequest& e )
   B_.logger_.handle( e );
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef RATE_NEURON_OPN_IMPL_H */

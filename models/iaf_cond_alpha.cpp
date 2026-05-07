@@ -27,23 +27,18 @@
 
 // C++ includes:
 #include <cstdio>
-#include <iomanip>
 #include <iostream>
-#include <limits>
 
 // Includes from libnestutil:
+#include "dict_util.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 /* ----------------------------------------------------------------
  * Recordables map
@@ -51,8 +46,14 @@
 
 nest::RecordablesMap< nest::iaf_cond_alpha > nest::iaf_cond_alpha::recordablesMap_;
 
-namespace nest // template specialization must be placed in namespace
+namespace nest  // template specialization must be placed in namespace
 {
+void
+register_iaf_cond_alpha( const std::string& name )
+{
+  register_node_model< iaf_cond_alpha >( name );
+}
+
 /*
  * Override the create() method with one call to RecordablesMap::insert_()
  * for each quantity to be recorded.
@@ -61,7 +62,7 @@ template <>
 void
 RecordablesMap< iaf_cond_alpha >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::V_m, &iaf_cond_alpha::get_y_elem_< iaf_cond_alpha::State_::V_M > );
   insert_( names::g_ex, &iaf_cond_alpha::get_y_elem_< iaf_cond_alpha::State_::G_EXC > );
   insert_( names::g_in, &iaf_cond_alpha::get_y_elem_< iaf_cond_alpha::State_::G_INH > );
@@ -84,23 +85,30 @@ nest::iaf_cond_alpha_dynamics( double, const double y[], double f[], void* pnode
   assert( pnode );
   const nest::iaf_cond_alpha& node = *( reinterpret_cast< nest::iaf_cond_alpha* >( pnode ) );
 
+  const bool is_refractory = node.S_.r > 0;
+
   // y[] here is---and must be---the state vector supplied by the integrator,
   // not the state vector in the node, node.S_.y[].
 
   // The following code is verbose for the sake of clarity. We assume that a
   // good compiler will optimize the verbosity away ...
-  const double I_syn_exc = y[ S::G_EXC ] * ( y[ S::V_M ] - node.P_.E_ex );
-  const double I_syn_inh = y[ S::G_INH ] * ( y[ S::V_M ] - node.P_.E_in );
-  const double I_leak = node.P_.g_L * ( y[ S::V_M ] - node.P_.E_L );
+
+  // Clamp membrane potential to V_reset while refractory, otherwise bound
+  // it to V_th.
+  const double V = is_refractory ? node.P_.V_reset : std::min( y[ S::V_M ], node.P_.V_th );
+
+  const double I_syn_exc = y[ S::G_EXC ] * ( V - node.P_.E_ex );
+  const double I_syn_inh = y[ S::G_INH ] * ( V - node.P_.E_in );
+  const double I_leak = node.P_.g_L * ( V - node.P_.E_L );
 
   // dV_m/dt
-  f[ 0 ] = ( -I_leak - I_syn_exc - I_syn_inh + node.B_.I_stim_ + node.P_.I_e ) / node.P_.C_m;
+  f[ 0 ] = is_refractory ? 0.0 : ( -I_leak - I_syn_exc - I_syn_inh + node.B_.I_stim_ + node.P_.I_e ) / node.P_.C_m;
 
   // d dg_exc/dt, dg_exc/dt
   f[ 1 ] = -y[ S::DG_EXC ] / node.P_.tau_synE;
   f[ 2 ] = y[ S::DG_EXC ] - ( y[ S::G_EXC ] / node.P_.tau_synE );
 
-  // d dg_exc/dt, dg_exc/dt
+  // d dg_inh/dt, dg_inh/dt
   f[ 3 ] = -y[ S::DG_INH ] / node.P_.tau_synI;
   f[ 4 ] = y[ S::DG_INH ] - ( y[ S::G_INH ] / node.P_.tau_synI );
 
@@ -112,24 +120,24 @@ nest::iaf_cond_alpha_dynamics( double, const double y[], double f[], void* pnode
  * ---------------------------------------------------------------- */
 
 nest::iaf_cond_alpha::Parameters_::Parameters_()
-  : V_th( -55.0 )    // mV
-  , V_reset( -60.0 ) // mV
-  , t_ref( 2.0 )     // ms
-  , g_L( 16.6667 )   // nS
-  , C_m( 250.0 )     // pF
-  , E_ex( 0.0 )      // mV
-  , E_in( -85.0 )    // mV
-  , E_L( -70.0 )     // mV
-  , tau_synE( 0.2 )  // ms
-  , tau_synI( 2.0 )  // ms
-  , I_e( 0.0 )       // pA
+  : V_th( -55.0 )     // mV
+  , V_reset( -60.0 )  // mV
+  , t_ref( 2.0 )      // ms
+  , g_L( 16.6667 )    // nS
+  , C_m( 250.0 )      // pF
+  , E_ex( 0.0 )       // mV
+  , E_in( -85.0 )     // mV
+  , E_L( -70.0 )      // mV
+  , tau_synE( 0.2 )   // ms
+  , tau_synI( 2.0 )   // ms
+  , I_e( 0.0 )        // pA
 {
 }
 
 nest::iaf_cond_alpha::State_::State_( const Parameters_& p )
   : r( 0 )
 {
-  y[ V_M ] = p.E_L; // initialize to reversal potential
+  y[ V_M ] = p.E_L;  // initialize to reversal potential
   for ( size_t i = 1; i < STATE_VEC_SIZE; ++i )
   {
     y[ i ] = 0;
@@ -145,26 +153,22 @@ nest::iaf_cond_alpha::State_::State_( const State_& s )
   }
 }
 
-nest::iaf_cond_alpha::State_& nest::iaf_cond_alpha::State_::operator=( const State_& s )
+nest::iaf_cond_alpha::State_&
+nest::iaf_cond_alpha::State_::operator=( const State_& s )
 {
-  if ( this == &s ) // avoid assignment to self
-  {
-    return *this;
-  }
+  r = s.r;
   for ( size_t i = 0; i < STATE_VEC_SIZE; ++i )
   {
     y[ i ] = s.y[ i ];
   }
-
-  r = s.r;
   return *this;
 }
 
 nest::iaf_cond_alpha::Buffers_::Buffers_( iaf_cond_alpha& n )
   : logger_( n )
-  , s_( 0 )
-  , c_( 0 )
-  , e_( 0 )
+  , s_( nullptr )
+  , c_( nullptr )
+  , e_( nullptr )
 {
   // Initialization of the remaining members is deferred to
   // init_buffers_().
@@ -172,9 +176,9 @@ nest::iaf_cond_alpha::Buffers_::Buffers_( iaf_cond_alpha& n )
 
 nest::iaf_cond_alpha::Buffers_::Buffers_( const Buffers_&, iaf_cond_alpha& n )
   : logger_( n )
-  , s_( 0 )
-  , c_( 0 )
-  , e_( 0 )
+  , s_( nullptr )
+  , c_( nullptr )
+  , e_( nullptr )
 {
   // Initialization of the remaining members is deferred to
   // init_buffers_().
@@ -185,40 +189,40 @@ nest::iaf_cond_alpha::Buffers_::Buffers_( const Buffers_&, iaf_cond_alpha& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::iaf_cond_alpha::Parameters_::get( DictionaryDatum& d ) const
+nest::iaf_cond_alpha::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::V_th, V_th );
-  def< double >( d, names::V_reset, V_reset );
-  def< double >( d, names::t_ref, t_ref );
-  def< double >( d, names::g_L, g_L );
-  def< double >( d, names::E_L, E_L );
-  def< double >( d, names::E_ex, E_ex );
-  def< double >( d, names::E_in, E_in );
-  def< double >( d, names::C_m, C_m );
-  def< double >( d, names::tau_syn_ex, tau_synE );
-  def< double >( d, names::tau_syn_in, tau_synI );
-  def< double >( d, names::I_e, I_e );
+  d[ names::V_th ] = V_th;
+  d[ names::V_reset ] = V_reset;
+  d[ names::t_ref ] = t_ref;
+  d[ names::g_L ] = g_L;
+  d[ names::E_L ] = E_L;
+  d[ names::E_ex ] = E_ex;
+  d[ names::E_in ] = E_in;
+  d[ names::C_m ] = C_m;
+  d[ names::tau_syn_ex ] = tau_synE;
+  d[ names::tau_syn_in ] = tau_synI;
+  d[ names::I_e ] = I_e;
 }
 
 void
-nest::iaf_cond_alpha::Parameters_::set( const DictionaryDatum& d )
+nest::iaf_cond_alpha::Parameters_::set( const Dictionary& d, Node* node )
 {
   // allow setting the membrane potential
-  updateValue< double >( d, names::V_th, V_th );
-  updateValue< double >( d, names::V_reset, V_reset );
-  updateValue< double >( d, names::t_ref, t_ref );
-  updateValue< double >( d, names::E_L, E_L );
+  update_value_param( d, names::V_th, V_th, node );
+  update_value_param( d, names::V_reset, V_reset, node );
+  update_value_param( d, names::t_ref, t_ref, node );
+  update_value_param( d, names::E_L, E_L, node );
 
-  updateValue< double >( d, names::E_ex, E_ex );
-  updateValue< double >( d, names::E_in, E_in );
+  update_value_param( d, names::E_ex, E_ex, node );
+  update_value_param( d, names::E_in, E_in, node );
 
-  updateValue< double >( d, names::C_m, C_m );
-  updateValue< double >( d, names::g_L, g_L );
+  update_value_param( d, names::C_m, C_m, node );
+  update_value_param( d, names::g_L, g_L, node );
 
-  updateValue< double >( d, names::tau_syn_ex, tau_synE );
-  updateValue< double >( d, names::tau_syn_in, tau_synI );
+  update_value_param( d, names::tau_syn_ex, tau_synE, node );
+  update_value_param( d, names::tau_syn_in, tau_synI, node );
 
-  updateValue< double >( d, names::I_e, I_e );
+  update_value_param( d, names::I_e, I_e, node );
   if ( V_reset >= V_th )
   {
     throw BadProperty( "Reset potential must be smaller than threshold." );
@@ -231,22 +235,30 @@ nest::iaf_cond_alpha::Parameters_::set( const DictionaryDatum& d )
   {
     throw BadProperty( "Refractory time cannot be negative." );
   }
-  if ( tau_synE <= 0 || tau_synI <= 0 )
+  if ( tau_synE <= 0 or tau_synI <= 0 )
   {
     throw BadProperty( "All time constants must be strictly positive." );
   }
 }
 
 void
-nest::iaf_cond_alpha::State_::get( DictionaryDatum& d ) const
+nest::iaf_cond_alpha::State_::get( Dictionary& d ) const
 {
-  def< double >( d, names::V_m, y[ V_M ] ); // Membrane potential
+  d[ names::V_m ] = y[ V_M ];  // Membrane potential
+  d[ names::g_ex ] = y[ G_EXC ];
+  d[ names::dg_ex ] = y[ DG_EXC ];
+  d[ names::g_in ] = y[ G_INH ];
+  d[ names::dg_in ] = y[ DG_INH ];
 }
 
 void
-nest::iaf_cond_alpha::State_::set( const DictionaryDatum& d, const Parameters_& )
+nest::iaf_cond_alpha::State_::set( const Dictionary& d, const Parameters_&, Node* node )
 {
-  updateValue< double >( d, names::V_m, y[ V_M ] );
+  update_value_param( d, names::V_m, y[ V_M ], node );
+  update_value_param( d, names::g_ex, y[ G_EXC ], node );
+  update_value_param( d, names::dg_ex, y[ DG_EXC ], node );
+  update_value_param( d, names::g_in, y[ G_INH ], node );
+  update_value_param( d, names::dg_in, y[ DG_INH ], node );
 }
 
 
@@ -255,7 +267,7 @@ nest::iaf_cond_alpha::State_::set( const DictionaryDatum& d, const Parameters_& 
  * ---------------------------------------------------------------- */
 
 nest::iaf_cond_alpha::iaf_cond_alpha()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_( P_ )
   , B_( *this )
@@ -264,7 +276,7 @@ nest::iaf_cond_alpha::iaf_cond_alpha()
 }
 
 nest::iaf_cond_alpha::iaf_cond_alpha( const iaf_cond_alpha& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -293,27 +305,20 @@ nest::iaf_cond_alpha::~iaf_cond_alpha()
  * ---------------------------------------------------------------- */
 
 void
-nest::iaf_cond_alpha::init_state_( const Node& proto )
-{
-  const iaf_cond_alpha& pr = downcast< iaf_cond_alpha >( proto );
-  S_ = pr.S_;
-}
-
-void
 nest::iaf_cond_alpha::init_buffers_()
 {
-  Archiving_Node::clear_history();
+  ArchivingNode::clear_history();
 
-  B_.spike_exc_.clear(); // includes resize
-  B_.spike_inh_.clear(); // includes resize
-  B_.currents_.clear();  // includes resize
+  B_.spike_exc_.clear();  // includes resize
+  B_.spike_inh_.clear();  // includes resize
+  B_.currents_.clear();   // includes resize
 
   B_.logger_.reset();
 
   B_.step_ = Time::get_resolution().get_ms();
   B_.IntegrationStep_ = B_.step_;
 
-  if ( B_.s_ == 0 )
+  if ( not B_.s_ )
   {
     B_.s_ = gsl_odeiv_step_alloc( gsl_odeiv_step_rkf45, State_::STATE_VEC_SIZE );
   }
@@ -322,7 +327,7 @@ nest::iaf_cond_alpha::init_buffers_()
     gsl_odeiv_step_reset( B_.s_ );
   }
 
-  if ( B_.c_ == 0 )
+  if ( not B_.c_ )
   {
     B_.c_ = gsl_odeiv_control_y_new( 1e-3, 0.0 );
   }
@@ -331,7 +336,7 @@ nest::iaf_cond_alpha::init_buffers_()
     gsl_odeiv_control_init( B_.c_, 1e-3, 0.0, 1.0, 0.0 );
   }
 
-  if ( B_.e_ == 0 )
+  if ( not B_.e_ )
   {
     B_.e_ = gsl_odeiv_evolve_alloc( State_::STATE_VEC_SIZE );
   }
@@ -341,7 +346,7 @@ nest::iaf_cond_alpha::init_buffers_()
   }
 
   B_.sys_.function = iaf_cond_alpha_dynamics;
-  B_.sys_.jacobian = NULL;
+  B_.sys_.jacobian = nullptr;
   B_.sys_.dimension = State_::STATE_VEC_SIZE;
   B_.sys_.params = reinterpret_cast< void* >( this );
 
@@ -349,7 +354,7 @@ nest::iaf_cond_alpha::init_buffers_()
 }
 
 void
-nest::iaf_cond_alpha::calibrate()
+nest::iaf_cond_alpha::pre_run_hook()
 {
   // ensures initialization in case mm connected after Simulate
   B_.logger_.init();
@@ -369,10 +374,6 @@ nest::iaf_cond_alpha::calibrate()
 void
 nest::iaf_cond_alpha::update( Time const& origin, const long from, const long to )
 {
-
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   for ( long lag = from; lag < to; ++lag )
   {
 
@@ -395,11 +396,11 @@ nest::iaf_cond_alpha::update( Time const& origin, const long from, const long to
       const int status = gsl_odeiv_evolve_apply( B_.e_,
         B_.c_,
         B_.s_,
-        &B_.sys_,             // system of ODE
-        &t,                   // from t
-        B_.step_,             // to t <= step
-        &B_.IntegrationStep_, // integration step size
-        S_.y );               // neuronal state
+        &B_.sys_,              // system of ODE
+        &t,                    // from t
+        B_.step_,              // to t <= step
+        &B_.IntegrationStep_,  // integration step size
+        S_.y );                // neuronal state
       if ( status != GSL_SUCCESS )
       {
         throw GSLSolverFailure( get_name(), status );
@@ -408,23 +409,23 @@ nest::iaf_cond_alpha::update( Time const& origin, const long from, const long to
 
     // refractoriness and spike generation
     if ( S_.r )
-    { // neuron is absolute refractory
+    {  // neuron is absolute refractory
       --S_.r;
-      S_.y[ State_::V_M ] = P_.V_reset; // clamp potential
+      S_.y[ State_::V_M ] = P_.V_reset;  // clamp potential
     }
     else
       // neuron is not absolute refractory
       if ( S_.y[ State_::V_M ] >= P_.V_th )
-    {
-      S_.r = V_.RefractoryCounts;
-      S_.y[ State_::V_M ] = P_.V_reset;
+      {
+        S_.r = V_.RefractoryCounts;
+        S_.y[ State_::V_M ] = P_.V_reset;
 
-      // log spike with Archiving_Node
-      set_spiketime( Time::step( origin.get_steps() + lag + 1 ) );
+        // log spike with ArchivingNode
+        set_spiketime( Time::step( origin.get_steps() + lag + 1 ) );
 
-      SpikeEvent se;
-      kernel().event_delivery_manager.send( *this, se, lag );
-    }
+        SpikeEvent se;
+        kernel().event_delivery_manager.send( *this, se, lag );
+      }
 
     // add incoming spikes
     S_.y[ State_::DG_EXC ] += B_.spike_exc_.get_value( lag ) * V_.PSConInit_E;
@@ -452,7 +453,7 @@ nest::iaf_cond_alpha::handle( SpikeEvent& e )
   {
     B_.spike_inh_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
       -e.get_weight() * e.get_multiplicity() );
-  } // ensure conductance is positive
+  }
 }
 
 void
@@ -460,7 +461,6 @@ nest::iaf_cond_alpha::handle( CurrentEvent& e )
 {
   assert( e.get_delay_steps() > 0 );
 
-  // add weighted current; HEP 2002-10-04
   B_.currents_.add_value(
     e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), e.get_weight() * e.get_current() );
 }
@@ -471,4 +471,4 @@ nest::iaf_cond_alpha::handle( DataLoggingRequest& e )
   B_.logger_.handle( e );
 }
 
-#endif // HAVE_GSL
+#endif  // HAVE_GSL

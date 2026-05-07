@@ -21,7 +21,6 @@
  */
 
 /**
- * \file spikecounter.h
  * Part of definition of volume_transmitter to record and manage
  * spike times and multiplicity of neurons releasing a
  * neuromodulator, which is needed for neuromodulated synaptic plasticity
@@ -47,7 +46,7 @@ class spikecounter
 public:
   spikecounter( double spike_time, double multiplicity );
 
-  double spike_time_; // point in time when spike occurred (in ms)
+  double spike_time_;  // point in time when spike occurred (in ms)
   double multiplicity_;
 };
 }

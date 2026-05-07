@@ -23,86 +23,92 @@
 #ifndef INHOMOGENEOUS_POISSON_GENERATOR_H
 #define INHOMOGENEOUS_POISSON_GENERATOR_H
 
-#include "poisson_randomdev.h"
+// C++ includes:
+#include <vector>
 
+// Includes from nestkernel:
 #include "connection.h"
 #include "device_node.h"
 #include "event.h"
-#include "nest_types.h"
-#include "stimulating_device.h"
-
-#include <vector>
-#include "nest.h"
+#include "random_generators.h"
 #include "ring_buffer.h"
-
+#include "stimulation_device.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup generator
+/* BeginUserDocs: device, generator
 
-Name: inhomogeneous_poisson_generator - provides Poisson spike trains
-    at a piecewise constant rate
+Short description
++++++++++++++++++
 
-Description:
+Provides Poisson spike trains at a piecewise constant rate
+
+Description
++++++++++++
+
 The inhomogeneous Poisson generator provides Poisson spike trains at a
 piecewise constant rate to the connected node(s). The rate of the process
 is changed at the specified times. The unit of the instantaneous rate
 is spikes/s. By default, each target of the generator will receive
 a different spike train.
 
-Parameters:
-The following parameters can be set in the status dictionary:
+.. include:: ../models/stimulation_device.rst
 
-\verbatim embed:rst
-==================== ================ =========================================
- rate_times          list of ms       Times at which rate changes
- rate_values         list of spikes/s Rate of Poisson spike train
- allow_offgrid_times boolean          If false, spike times will be rounded to
-                                      the nearest step if they are less than
-                                      tic/2 from the step, otherwise NEST
-                                      reports an error.
-                                      If true, spike times are rounded to the
-                                      nearest step if within tic/2 from the
-                                      step,otherwise they are rounded up to the
-                                      *end* of the step. Default: false
-==================== ================ =========================================
-\endverbatim
+rate_times
+    Times at which rate changes (list of ms)
 
-Examples:
+rate_values
+    Rate of Poisson spike train (list of spikes/s)
 
-The rate can be altered in the following way:
+allow_offgrid_times
+    If false, spike times will be rounded to the nearest step if they
+    are less than tic/2 from the step, otherwise NEST reports an
+    error.  If true, spike times are rounded to the nearest step if
+    within tic/2 from the step, otherwise they are rounded up to the
+    *end* of the step. Default: false
 
-    /inhomogeneous_poisson_generator Create /sc Set
-    sc << /rate_times [0.2 0.5] /rate_values [2.0 4.0] >> SetStatus
+Set parameters from a stimulation backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The average firing rate of each realization of the Poisson process will be
-0.0 in the time interval [0, 0.2), 2.0 in the interval [0.2, 0.5)
-and 4.0 from then on.
+The parameters in this stimulation device can be updated with input
+coming from a stimulation backend. The data structure used for the
+update holds one value for each of the parameters mentioned above.
+The indexing is as follows:
 
-Receives: DataLoggingRequest
+ 0. rate_times
+ 1. rate_values
 
-Sends: SpikeEvent
+Receives
+++++++++
 
-Authors: Renato Duarte, Barna Zajzon
+DataLoggingRequest
 
-SeeAlso: sinusoidal_poisson_generator, step_current_generator, Device,
-       StimulatingDevice
-*/
-class inhomogeneous_poisson_generator : public DeviceNode
+Sends
++++++
+
+SpikeEvent
+
+See also
+++++++++
+
+sinusoidal_poisson_generator, step_current_generator
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: inhomogeneous_poisson_generator
+
+EndUserDocs */
+
+void register_inhomogeneous_poisson_generator( const std::string& name );
+
+class inhomogeneous_poisson_generator : public StimulationDevice
 {
 
 public:
   inhomogeneous_poisson_generator();
   inhomogeneous_poisson_generator( const inhomogeneous_poisson_generator& );
-
-  bool
-  has_proxies() const
-  {
-    return false;
-  }
 
   /**
    * Import sets of overloaded virtual functions.
@@ -111,19 +117,22 @@ public:
    */
   using Node::event_hook;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
+
+  StimulationDevice::Type get_type() const override;
+  void set_data_from_stimulation_backend( std::vector< double >& input_param ) override;
 
 
 private:
-  void init_state_( const Node& );
-  void init_buffers_();
-  void calibrate();
+  void init_state_() override;
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
-  void update( Time const&, const long, const long );
-  void event_hook( DSSpikeEvent& );
+  void update( Time const&, const long, const long ) override;
+  void event_hook( DSSpikeEvent& ) override;
 
   struct Buffers_;
 
@@ -133,54 +142,52 @@ private:
   struct Parameters_
   {
     std::vector< Time > rate_times_;
-    std::vector< double_t > rate_values_;
+    std::vector< double > rate_values_;
 
     //! Allow and round up rate times not on steps;
     bool allow_offgrid_times_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
     Parameters_( const Parameters_&, Buffers_& );
 
     //!< Store current values in dictionary
-    void get( DictionaryDatum& ) const;
+    void get( Dictionary& ) const;
     //!< Set values from dictionary
-    void set( const DictionaryDatum&, Buffers_& );
+    void set( const Dictionary&, Buffers_&, Node* );
     //!< Align rate time to grid if necessary and insert it into rate_times_
-    void assert_valid_rate_time_and_insert( const double_t t );
+    void assert_valid_rate_time_and_insert( const double t );
   };
 
   // ------------------------------------------------------------
 
   struct Buffers_
   {
-    size_t idx_;    //!< index of current amplitude
-    double_t rate_; //!< current amplitude
+    size_t idx_;   //!< index of current amplitude
+    double rate_;  //!< current amplitude
   };
 
   // ------------------------------------------------------------
 
   struct Variables_
   {
-    librandom::PoissonRandomDev poisson_dev_; //!< random deviate generator
-    double_t h_;                              //! time resolution (ms)
+    poisson_distribution poisson_dist_;  //!< poisson distribution
+    double h_;                           //! time resolution (ms)
   };
 
   // ------------------------------------------------------------
-
-  StimulatingDevice< SpikeEvent > device_;
 
   Parameters_ P_;
   Buffers_ B_;
   Variables_ V_;
 };
 
-inline port
+inline size_t
 inhomogeneous_poisson_generator::send_test_event( Node& target,
-  rport receptor_type,
+  size_t receptor_type,
   synindex syn_id,
   bool dummy_target )
 {
-  device_.enforce_single_syn_type( syn_id );
+  StimulationDevice::enforce_single_syn_type( syn_id );
 
   // to ensure correct overloading resolution, we need explicit event types
   // therefore, we need to duplicate the code here
@@ -200,27 +207,33 @@ inhomogeneous_poisson_generator::send_test_event( Node& target,
 
 
 inline void
-inhomogeneous_poisson_generator::get_status( DictionaryDatum& d ) const
+inhomogeneous_poisson_generator::get_status( Dictionary& d ) const
 {
   P_.get( d );
-  device_.get_status( d );
+  StimulationDevice::get_status( d );
 }
 
 inline void
-inhomogeneous_poisson_generator::set_status( const DictionaryDatum& d )
+inhomogeneous_poisson_generator::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
 
-  ptmp.set( d, B_ ); // throws if BadProperty
+  ptmp.set( d, B_, this );  // throws if BadProperty
   // We now know that ptmp is consistent. We do not write it back
   // to P_ before we are also sure that the properties to be set
   // in the parent class are internally consistent.
-  device_.set_status( d );
+  StimulationDevice::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
 }
 
-} // namespace
+inline StimulationDevice::Type
+inhomogeneous_poisson_generator::get_type() const
+{
+  return StimulationDevice::Type::SPIKE_GENERATOR;
+}
 
-#endif // INHOMOGENEOUS_POISSON_GENERATOR_H
+}  // namespace
+
+#endif  // INHOMOGENEOUS_POISSON_GENERATOR_H

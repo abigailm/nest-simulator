@@ -41,66 +41,79 @@ class ModelRangeManager : public ManagerInterface
 {
 public:
   ModelRangeManager();
-  ~ModelRangeManager()
+  ~ModelRangeManager() override
   {
   }
 
-  virtual void initialize();
-  virtual void finalize();
-
-  virtual void
-  set_status( const DictionaryDatum& )
-  {
-  }
-  virtual void
-  get_status( DictionaryDatum& )
-  {
-  }
+  void initialize( const bool ) override;
+  void finalize( const bool ) override;
+  void set_status( const Dictionary& ) override;
+  void get_status( Dictionary& ) override;
 
   /**
-   * Assign a range of GIDs for the given model
+   * Assign a range of node IDs for the given model
    */
-  void add_range( index model, index first_gid, index last_gid );
+  void add_range( size_t model, size_t first_node_id, size_t last_node_id );
 
   /**
-   * Check whether a GID is with the range of assigned gids
+   * Check whether a node ID is with the range of assigned node IDs
    */
-  bool is_in_range( index gid ) const;
+  bool is_in_range( size_t node_id ) const;
 
   /**
-   * Get the ID of the model to which this GID is assigned
+   * Get the ID of the model to which this node ID is assigned
    */
-  index get_model_id( index gid ) const;
+  size_t get_model_id( size_t node_id ) const;
 
   /**
-   * Return the Model for a given GID.
+   * Return the Model for a given node ID.
    */
-  Model* get_model_of_gid( index );
-
-  /**
-   * Check whether this model ID has any gids assigned to it
-   */
-  bool model_in_use( index i ) const;
+  Model* get_model_of_node_id( size_t );
 
   /**
    * Return the contiguous range of IDs of nodes assigned to the same model
-   * as the node with the given GID.
+   * as the node with the given node ID.
    */
-  const modelrange& get_contiguous_gid_range( index gid ) const;
+  const modelrange& get_contiguous_node_id_range( size_t node_id ) const;
 
+  std::vector< modelrange >::const_iterator begin() const;
+
+  std::vector< modelrange >::const_iterator end() const;
 
 private:
   std::vector< modelrange > modelranges_;
-  index first_gid_;
-  index last_gid_;
+  size_t first_node_id_;
+  size_t last_node_id_;
 };
+
+inline void
+nest::ModelRangeManager::set_status( const Dictionary& )
+{
+}
+
+inline void
+nest::ModelRangeManager::get_status( Dictionary& )
+{
 }
 
 inline bool
-nest::ModelRangeManager::is_in_range( index gid ) const
+nest::ModelRangeManager::is_in_range( size_t node_id ) const
 {
-  return ( ( gid <= last_gid_ ) and ( gid >= first_gid_ ) );
+  return ( node_id > 0 and node_id <= last_node_id_ and node_id >= first_node_id_ );
 }
 
+inline std::vector< modelrange >::const_iterator
+nest::ModelRangeManager::begin() const
+{
+  return modelranges_.begin();
+}
+
+inline std::vector< modelrange >::const_iterator
+nest::ModelRangeManager::end() const
+{
+  return modelranges_.end();
+}
+
+}  // namespace nest end
 
 #endif

@@ -25,70 +25,75 @@
 // Includes from nestkernel:
 #include "connection.h"
 #include "kernel_manager.h"
-#include "subnet.h"
-
-// Includes from sli:
-#include "dictutils.h"
 
 
 namespace nest
 {
 
-proxynode::proxynode( index gid, index parent_gid, index model_id, index vp )
+proxynode::proxynode( size_t node_id, size_t model_id, size_t vp )
   : Node()
 {
-  set_gid_( gid );
-  Subnet* parent = dynamic_cast< Subnet* >( kernel().node_manager.get_node( parent_gid ) );
-  assert( parent );
-  set_parent_( parent );
+  set_node_id_( node_id );
   set_model_id( model_id );
   set_vp( vp );
   set_frozen_( true );
 }
 
-port
-proxynode::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
+size_t
+proxynode::send_test_event( Node& target, size_t receptor_type, synindex syn_id, bool dummy_target )
 {
-  return kernel()
-    .model_manager.get_model( get_model_id() )
-    ->send_test_event( target, receptor_type, syn_id, dummy_target );
+  Model* model = kernel().model_manager.get_node_model( get_model_id() );
+  return model->send_test_event( target, receptor_type, syn_id, dummy_target );
 }
 
 void
 proxynode::sends_secondary_event( GapJunctionEvent& ge )
 {
-  kernel().model_manager.get_model( get_model_id() )->sends_secondary_event( ge );
+  kernel().model_manager.get_node_model( get_model_id() )->sends_secondary_event( ge );
 }
 
 void
 proxynode::sends_secondary_event( InstantaneousRateConnectionEvent& re )
 {
-  kernel().model_manager.get_model( get_model_id() )->sends_secondary_event( re );
+  kernel().model_manager.get_node_model( get_model_id() )->sends_secondary_event( re );
 }
 
 void
 proxynode::sends_secondary_event( DiffusionConnectionEvent& de )
 {
-  kernel().model_manager.get_model( get_model_id() )->sends_secondary_event( de );
+  kernel().model_manager.get_node_model( get_model_id() )->sends_secondary_event( de );
 }
 
 void
 proxynode::sends_secondary_event( DelayedRateConnectionEvent& re )
 {
-  kernel().model_manager.get_model( get_model_id() )->sends_secondary_event( re );
+  kernel().model_manager.get_node_model( get_model_id() )->sends_secondary_event( re );
 }
 
-/**
- * @returns type of signal this node produces
- * used in check_connection to only connect neurons which send / receive
- * compatible information
- * delgates to underlying model
- */
+void
+proxynode::sends_secondary_event( LearningSignalConnectionEvent& re )
+{
+  kernel().model_manager.get_node_model( get_model_id() )->sends_secondary_event( re );
+}
+
+void
+proxynode::sends_secondary_event( SICEvent& sic )
+{
+  kernel().model_manager.get_node_model( get_model_id() )->sends_secondary_event( sic );
+}
+
 nest::SignalType
 proxynode::sends_signal() const
 {
-  return kernel().model_manager.get_model( get_model_id() )->sends_signal();
+  return kernel().model_manager.get_node_model( get_model_id() )->sends_signal();
+}
+
+void
+proxynode::get_status( Dictionary& d ) const
+{
+  const Model* model = kernel().model_manager.get_node_model( model_id_ );
+  d[ names::element_type ] = model->get_prototype().get_element_type();
 }
 
 
-} // namespace
+}  // namespace

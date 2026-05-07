@@ -33,104 +33,110 @@
 #include "event.h"
 #include "nest_types.h"
 #include "ring_buffer.h"
-#include "stimulating_device.h"
+#include "stimulation_device.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup generator
+/* BeginUserDocs: device, generator
 
-Name: step_current_generator - provides a piecewise constant DC input current
+Short description
++++++++++++++++++
 
-Description:
+Provide a piecewise constant DC input current
 
-The dc_generator provides a piecewise constant DC input to the
+Description
++++++++++++
+
+The ``step_current_generator`` provides a piecewise constant DC input to the
 connected node(s).  The amplitude of the current is changed at the
 specified times. The unit of the current is pA.
 
-Parameters:
-
-The following parameters can be set in the status dictionary:
-
-\verbatim embed:rst
-==================== ===============  ======================================
- amplitude_times     list of ms       Times at which current changes
- amplitude_values    list of pA       Amplitudes of step current current
- allow_offgrid_times boolean          Default false
-==================== ===============  ======================================
-\endverbatim
-
-  If false, times will be rounded to the nearest step if they are
-  less than tic/2 from the step, otherwise NEST reports an error.
-  If true,  times are rounded to the nearest step if within tic/2
-  from the step, otherwise they are rounded up to the *end* of the
-  step.
-
-Note:
+If ``allow_offgrid_spikes`` is set false, times will be rounded to the
+nearest step if they are less than tic/2 from the step, otherwise NEST
+reports an error. If true, times are rounded to the nearest step if
+within tic/2 from the step, otherwise they are rounded up to the *end*
+of the step.
 
 Times of amplitude changes must be strictly increasing after conversion
-to simulation time steps. The option allow_offgrid_times may be
-useful, e.g., if you are using randomized times for current changes
+to simulation time steps. The option ``allow_offgrid_times`` may be
+useful, for example, if you are using randomized times for current changes
 which typically would not fall onto simulation time steps.
 
-Examples:
+.. include:: ../models/stimulation_device.rst
 
-The current can be altered in the following way:
+amplitude_times
+    Times at which current changes (list of times in ms)
 
-    /step_current_generator Create /sc Set
-    sc << /amplitude_times [0.2 0.5] /amplitude_values [2.0 4.0] >> SetStatus
+amplitude_values
+    Amplitudes of step current current (list of currents in pA)
 
-    The amplitude of the DC will be 0.0 pA in the time interval [0, 0.2),
-    2.0 pA in the interval [0.2, 0.5) and 4.0 from then on.
+allow_offgrid_times
+    Boolean indicating if offgrid times should be used (default: False)
 
-Sends: CurrentEvent
+Set parameters from a stimulation backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Author: Jochen Martin Eppler, Jens Kremkow
+The parameters in this stimulation device can be updated with input
+coming from a stimulation backend. The data structure used for the
+update holds pairs of values in the form
 
-SeeAlso: ac_generator, dc_generator, step_current_generator, Device,
-StimulatingDevice
-*/
-class step_current_generator : public DeviceNode
+ [ (amplitude_times, amplitude_values), (amplitude_times, amplitude_values), ... ].
+
+Thus, the size of the data for the step_rate_generator needs to be even.
+
+Sends
++++++
+
+CurrentEvent
+
+See also
+++++++++
+
+ac_generator, dc_generator, noise_generator
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: step_current_generator
+
+EndUserDocs */
+
+void register_step_current_generator( const std::string& name );
+
+class step_current_generator : public StimulationDevice
 {
 
 public:
   step_current_generator();
   step_current_generator( const step_current_generator& );
 
-  bool
-  has_proxies() const
-  {
-    return false;
-  }
+  //! Allow multimeter to connect to local instances
+  bool local_receiver() const override;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
   using Node::handle;
   using Node::handles_test_event;
 
-  void handle( DataLoggingRequest& );
+  void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
-  //! Allow multimeter to connect to local instances
-  bool
-  local_receiver() const
-  {
-    return true;
-  }
+  void set_data_from_stimulation_backend( std::vector< double >& input_spikes ) override;
+
+  StimulationDevice::Type get_type() const override;
 
 private:
-  void init_state_( const Node& );
-  void init_buffers_();
-  void calibrate();
+  void init_state_() override;
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
-  void update( Time const&, const long, const long );
+  void update( Time const&, long, long ) override;
 
   struct Buffers_;
 
@@ -148,14 +154,14 @@ private:
     //! Allow and round up amplitude times not on steps
     bool allow_offgrid_amp_times_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
     Parameters_( const Parameters_&, Buffers_& );
     Parameters_( const Parameters_& );
     Parameters_& operator=( const Parameters_& p );
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
     //! Set values from dictionary
-    void set( const DictionaryDatum&, Buffers_& );
+    void set( const Dictionary&, Buffers_&, Node* );
 
     /**
      * Return time as Time object if valid, otherwise throw BadProperty
@@ -170,11 +176,9 @@ private:
 
   struct State_
   {
-    double I_; //!< Instantaneous current value; used for recording current
+    double I_;  //!< Instantaneous current value; used for recording current
 
-    State_(); //!< Sets default parameter values
-
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    State_();  //!< Sets default parameter values
   };
 
   // ------------------------------------------------------------
@@ -187,10 +191,10 @@ private:
 
   struct Buffers_
   {
-    size_t idx_; //!< index of current amplitude
-    double amp_; //!< current amplitude
+    size_t idx_;  //!< index of current amplitude
+    double amp_;  //!< current amplitude
 
-    Buffers_( step_current_generator& );
+    explicit Buffers_( step_current_generator& );
     Buffers_( const Buffers_&, step_current_generator& );
     UniversalDataLogger< step_current_generator > logger_;
   };
@@ -205,17 +209,16 @@ private:
 
   // ------------------------------------------------------------
 
-  StimulatingDevice< CurrentEvent > device_;
   static RecordablesMap< step_current_generator > recordablesMap_;
   Parameters_ P_;
   State_ S_;
   Buffers_ B_;
 };
 
-inline port
-step_current_generator::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool )
+inline size_t
+step_current_generator::send_test_event( Node& target, size_t receptor_type, synindex syn_id, bool )
 {
-  device_.enforce_single_syn_type( syn_id );
+  StimulationDevice::enforce_single_syn_type( syn_id );
 
   CurrentEvent e;
   e.set_sender( *this );
@@ -223,8 +226,8 @@ step_current_generator::send_test_event( Node& target, rport receptor_type, syni
   return target.handles_test_event( e, receptor_type );
 }
 
-inline port
-step_current_generator::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+step_current_generator::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -234,29 +237,41 @@ step_current_generator::handles_test_event( DataLoggingRequest& dlr, rport recep
 }
 
 inline void
-step_current_generator::get_status( DictionaryDatum& d ) const
+step_current_generator::get_status( Dictionary& d ) const
 {
   P_.get( d );
-  device_.get_status( d );
+  StimulationDevice::get_status( d );
 
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-step_current_generator::set_status( const DictionaryDatum& d )
+step_current_generator::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d, B_ );     // throws if BadProperty
+  Parameters_ ptmp = P_;    // temporary copy in case of errors
+  ptmp.set( d, B_, this );  // throws if BadProperty
 
   // We now know that ptmp is consistent. We do not write it back
   // to P_ before we are also sure that the properties to be set
   // in the parent class are internally consistent.
-  device_.set_status( d );
+  StimulationDevice::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
 }
 
-} // namespace
+//! Allow multimeter to connect to local instances
+inline bool
+step_current_generator::local_receiver() const
+{
+  return true;
+}
+
+inline StimulationDevice::Type
+step_current_generator::get_type() const
+{
+  return StimulationDevice::Type::CURRENT_GENERATOR;
+}
+}  // namespace
 
 #endif /* #ifndef STEP_CURRENT_GENERATOR_H */

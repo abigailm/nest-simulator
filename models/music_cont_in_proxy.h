@@ -41,33 +41,36 @@
 #include "device_node.h"
 #include "nest_types.h"
 
-// Includes from sli:
-#include "arraydatum.h"
 
 namespace nest
 {
+void register_music_cont_in_proxy( const std::string& name );
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup music
+/* BeginUserDocs: device, MUSIC
 
+Short description
++++++++++++++++++
 
-Name: music_cont_in_proxy - A device which receives continuous data from MUSIC.
+A device which receives continuous data from MUSIC
 
-Description:
+Description
++++++++++++
 
-A music_cont_in_proxy can be used to receive continuous data from
+A ``music_cont_in_proxy`` can be used to receive continuous data from
 remote MUSIC applications in NEST.
 
 It uses the MUSIC library to receive the data from other applications.
-The music_cont_in_proxy represents a complete port to which MUSIC can
+The ``music_cont_in_proxy`` represents a complete port to which MUSIC can
 connect and send data. The music_cont_in_proxy can queried using
 GetStatus to retrieve the messages.
 
-Parameters:
+This model is only available if NEST was compiled with MUSIC.
 
-The following properties are available in the status dictionary:
-\verbatim embed:rst
+Parameters
+++++++++++
+
+The following properties are available in the status Dictionary:
+
 =========== ======= ========================================================
  port_name  string  The name of the MUSIC input port to listen to (default:
                     cont_in)
@@ -76,23 +79,21 @@ The following properties are available in the status dictionary:
  published  boolean A bool indicating if the port has been already published
                     with MUSIC
 =========== ======= ========================================================
-\endverbatim
+
 The parameter port_name can be set using SetStatus.
 
-Examples:
+See also
+++++++++
 
-    /music_cont_in_proxy Create /mcip Set
-    10 Simulate
-    mcip GetStatus /data get /gaze_directions Set
+music_event_out_proxy, music_event_in_proxy, music_message_in_proxy
 
-Author: Jochen Martin Eppler
+Examples using this model
++++++++++++++++++++++++++
 
-FirstVersion: July 2010
+.. listexamples:: music_cont_in_proxy
 
-Availability: Only when compiled with MUSIC
+EndUserDocs */
 
-SeeAlso: music_event_out_proxy, music_event_in_proxy, music_message_in_proxy
-*/
 class music_cont_in_proxy : public DeviceNode
 {
 
@@ -111,13 +112,12 @@ public:
     return true;
   }
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const;
+  void set_status( const Dictionary& );
 
 private:
-  void init_state_( const Node& );
   void init_buffers_();
-  void calibrate();
+  void pre_run_hook();
 
   void
   update( Time const&, const long, const long )
@@ -130,42 +130,41 @@ private:
 
   struct Parameters_
   {
-    std::string port_name_; //!< the name of MUSIC port to connect to
+    std::string port_name_;  //!< the name of MUSIC port to connect to
 
-    Parameters_();                     //!< Sets default parameter values
-    Parameters_( const Parameters_& ); //!< Recalibrate all times
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const;          //!< Store current values in dictionary
-    void set( const DictionaryDatum&, State_& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;                  //!< Store current values in Dictionary
+    void set( const Dictionary&, State_&, Node* );  //!< Set values from Dictionary
   };
 
   // ------------------------------------------------------------
 
   struct State_
   {
-    bool published_; //!< indicates whether this node has been published already
-                     //!< with MUSIC
-    int port_width_; //!< the width of the MUSIC port
+    bool published_;  //!< indicates whether this node has been published already
+                      //!< with MUSIC
+    int port_width_;  //!< the width of the MUSIC port
 
-    State_(); //!< Sets default state value
+    State_();  //!< Sets default state value
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    //! Set values from dictionary
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary& ) const;  //!< Store current values in Dictionary
+    //! Set values from Dictionary
+    void set( const Dictionary&, const Parameters_& );
   };
 
   // ------------------------------------------------------------
 
   struct Buffers_
   {
-    std::vector< double > data_; //!< The buffer for incoming data
+    std::vector< double > data_;  //!< The buffer for incoming data
   };
 
   // ------------------------------------------------------------
 
   struct Variables_
   {
-    MUSIC::ContInputPort* MP_; //!< The MUSIC cont port for input of data
+    MUSIC::ContInputPort* MP_;  //!< The MUSIC cont port for input of data
   };
 
   // ------------------------------------------------------------
@@ -176,7 +175,7 @@ private:
   Variables_ V_;
 };
 
-} // namespace
+}  // namespace
 
 #endif
 

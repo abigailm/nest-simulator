@@ -19,83 +19,65 @@
 
 if ( HAVE_PYTHON )
 
+  execute_process(
+    COMMAND ${Python_EXECUTABLE} "${PROJECT_SOURCE_DIR}/pynest/generate_exception_header.py"
+    "${PROJECT_SOURCE_DIR}" "${PROJECT_BINARY_DIR}"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    # Uncomment for debugging: ECHO_OUTPUT_VARIABLE ECHO_ERROR_VARIABLE COMMAND_ECHO STDOUT
+    COMMAND_ERROR_IS_FATAL ANY
+  )
+
   if ( CYTHON_FOUND )
     include( UseCython )
-    set_source_files_properties(
-        pynestkernel.pyx
-        PROPERTIES CYTHON_IS_CXX TRUE )
-
-    cython_add_module( pynestkernel pynestkernel.pyx )
+    set_source_files_properties( nestkernel_api.pyx PROPERTIES CYTHON_IS_CXX TRUE )
+    cython_add_module( nestkernel_api nestkernel_api.pyx )
   else ()
-    # require the source pynest/pynestkernel.cxx precompiled
-    set( pynestkernel_generated_file "NOTFOUND" )
-    if ( EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/pynestkernel.cxx )
-      set( pynestkernel_generated_file pynestkernel.cxx )
-    elseif ( EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/pynestkernel.cpp )
-      set( pynestkernel_generated_file pynestkernel.cpp )
-    endif ()
-
-    if ( pynestkernel_generated_file STREQUAL "NOTFOUND" )
-      message( FATAL_ERROR "You have configured NEST to build the Python bindings PyNEST, but "
-          "either there is no Cython version found on your system or you decided to "
-          "not have NEST cythonize the bindings. Either install Cython (>=0.19.2) or cythonize the "
-          "PyNEST bindings yourself on a system with a suitable version of Cython (>=0.19.2):\n"
-          "    cd <NEST sources>/pynest\n"
-          "    cythonize pynestkernel.pyx\n"
-          "And copy the file `pynestkernel.cpp` into ${CMAKE_CURRENT_SOURCE_DIR}/pynest ." )
-    endif ()
-    python_add_module( pynestkernel ${pynestkernel_generated_file} pynestkernel.pxd )
-    if ( APPLE )
-      set_target_properties( pynestkernel PROPERTIES LINK_FLAGS "-undefined dynamic_lookup" )
-    else ()
-      set_target_properties( pynestkernel PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
-      target_link_libraries( pynestkernel ${PYTHON_LIBRARIES} )
-    endif ()
+    message( FATAL_ERROR "Building PyNEST requires Cython." )
   endif ()
 
-  target_link_libraries( pynestkernel
-      nest_lib nestutil nestkernel random sli_lib
-      ${SLI_MODULES} ${EXTERNAL_MODULE_LIBRARIES}
-      )
+  # PYNEST-NG-FUTURE: somehow it works without models being in here, but why?
+  target_link_libraries( nestkernel_api nestutil nestkernel )
 
-  target_include_directories( pynestkernel PRIVATE
-      ${PROJECT_BINARY_DIR}/libnestutil
-      ${PROJECT_SOURCE_DIR}/libnestutil
-      ${PROJECT_SOURCE_DIR}/nest
-      ${PROJECT_SOURCE_DIR}/nestkernel
-      ${PROJECT_SOURCE_DIR}/librandom
-      ${PROJECT_SOURCE_DIR}/sli
-      ${SLI_MODULE_INCLUDE_DIRS}
-      ${PYTHON_INCLUDE_DIRS}
-      )
+  if ( APPLE )
+    set_target_properties( nestkernel_api PROPERTIES LINK_FLAGS "-undefined dynamic_lookup" )
+  else ()
+    set_target_properties( nestkernel_api PROPERTIES LINK_FLAGS "-Wl,--no-as-needed" )
+    target_link_libraries( nestkernel_api ${Python_LIBRARIES} )
+  endif ()
 
-  target_compile_definitions( pynestkernel PRIVATE
-      -D_IS_PYNEST
-      )
+  target_include_directories( nestkernel_api PRIVATE
+    ${PROJECT_BINARY_DIR}/libnestutil
+    ${PROJECT_BINARY_DIR}/pynest
+    ${PROJECT_SOURCE_DIR}/libnestutil
+    ${PROJECT_SOURCE_DIR}/pynest
+    ${PROJECT_SOURCE_DIR}/nestkernel
+    ${PROJECT_SOURCE_DIR}/nestkernel/spatial
+    ${PROJECT_SOURCE_DIR}/thirdparty
+    ${PROJECT_SOURCE_DIR}/models
+    ${Python_INCLUDE_DIRS}
+  )
 
-  install( CODE "execute_process(
-    COMMAND ${PYTHON} setup.py build --build-base=${CMAKE_CURRENT_BINARY_DIR}/build
-                               install --prefix=${CMAKE_INSTALL_PREFIX}
-                                       --install-lib=${CMAKE_INSTALL_PREFIX}/${PYEXECDIR}
-                                       --install-scripts=${CMAKE_INSTALL_FULL_BINDIR}
-                                       --install-data=${CMAKE_INSTALL_FULL_DATADIR}
-    WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")"
-      )
-  install( TARGETS pynestkernel DESTINATION ${PYEXECDIR}/nest/ )
-  install( FILES ${PROJECT_BINARY_DIR}/pynest/do_tests.py
-      DESTINATION ${CMAKE_INSTALL_DATADIR}/extras
-      )
-
-  install( DIRECTORY examples/
+  target_compile_definitions( nestkernel_api PRIVATE
+    -D_IS_PYNEST
+  )
+  # TODO PYNEST NG: Do changes only for the new pip installation
+  if(NOT "${SKBUILD}" STREQUAL "")
+    install( DIRECTORY nest/ ${PROJECT_BINARY_DIR}/pynest/nest/
+      DESTINATION ./nest
+      PATTERN "versionchecker.py.in" EXCLUDE
+    )
+    install( DIRECTORY examples/
+      DESTINATION ./nest/doc/examples/pynest
+    )
+    install( TARGETS nestkernel_api DESTINATION ./nest )
+  else()
+    install( DIRECTORY nest/ ${PROJECT_BINARY_DIR}/pynest/nest/
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/${PYEXECDIR}/nest
+      PATTERN "versionchecker.py.in" EXCLUDE
+    )
+    install( DIRECTORY examples/
       DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples/pynest
-      )
-
-  find_program( NOSETESTS nosetests )
-  if ( NOT NOSETESTS STREQUAL "NOSETESTS-NOTFOUND" )
-    add_test( NAME PyNEST
-        COMMAND ${NOSETESTS} -v --with-xunit
-        --xunit-file=${PROJECT_BINARY_DIR}/reports/pynest_tests.xml
-        ${CMAKE_INSTALL_PREFIX}/${PYEXECDIR}/nest/tests
-        )
-  endif ()
+    )
+    install( TARGETS nestkernel_api DESTINATION ${PYEXECDIR}/nest/ )
+  endif()
 endif ()

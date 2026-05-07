@@ -42,30 +42,34 @@
 
 namespace nest
 {
+void register_music_event_out_proxy( const std::string& name );
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup music
+/* BeginUserDocs: device, MUSIC, spike
 
-Name: music_event_out_proxy - Device to forward spikes to remote applications
-                              using MUSIC.
+Short description
++++++++++++++++++
 
-Description:
+Device to forward spikes to remote applications using MUSIC
 
-A music_event_out_proxy is used to send spikes to a remote application that
+Description
++++++++++++
+
+A ``music_event_out_proxy`` is used to send spikes to a remote application that
 also uses MUSIC.
 
-The music_event_out_proxy represents a complete MUSIC event output
+The ``music_event_out_proxy`` represents a complete MUSIC event output
 port. The channel on the port to which a source node forwards its
 events is determined during connection setup by using the parameter
-music_channel of the connection. The name of the port is set via
+``music_channel`` of the connection. The name of the port is set via
 SetStatus (see Parameters section below).
 
-Parameters:
+This model is only available if NEST was compiled with MUSIC.
 
-The following properties are available in the status dictionary:
+Parameters
+++++++++++
 
-\verbatim embed:rst
+The following properties are available in the status Dictionary:
+
 =========== ======= ========================================================
  port_name  string  The name of the MUSIC output_port to forward events to
                     (default: event_out)
@@ -73,24 +77,21 @@ The following properties are available in the status dictionary:
  published  boolean A bool indicating if the port has been already published
                     with MUSIC
 =========== ======= ========================================================
-\endverbatim
 
 The parameter port_name can be set using SetStatus.
 
-Examples:
+See also
+++++++++
 
-    /iaf_psc_alpha Create /n Set
-    /music_event_out_proxy Create /meop Set
-    n meop << /music_channel 2 >> Connect
+music_event_in_proxy, music_cont_in_proxy, music_message_in_proxy
 
-Author: Moritz Helias, Jochen Martin Eppler
+Examples using this model
++++++++++++++++++++++++++
 
-FirstVersion: March 2009
+.. listexamples:: music_event_out_proxy
 
-Availability: Only when compiled with MUSIC
+EndUserDocs */
 
-SeeAlso: music_event_in_proxy, music_cont_in_proxy, music_message_in_proxy
-*/
 class music_event_out_proxy : public DeviceNode
 {
 
@@ -125,15 +126,14 @@ public:
 
   void handle( SpikeEvent& );
 
-  port handles_test_event( SpikeEvent&, rport );
+  size_t handles_test_event( SpikeEvent&, size_t );
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const;
+  void set_status( const Dictionary& );
 
 private:
-  void init_state_( Node const& );
   void init_buffers_();
-  void calibrate();
+  void pre_run_hook();
 
   void
   update( Time const&, const long, const long )
@@ -146,38 +146,37 @@ private:
 
   struct Parameters_
   {
-    std::string port_name_; //!< the name of MUSIC port to connect to
+    std::string port_name_;  //!< the name of MUSIC port to connect to
 
-    Parameters_();                     //!< Sets default parameter values
-    Parameters_( const Parameters_& ); //!< Recalibrate all times
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const;          //!< Store current values in dictionary
-    void set( const DictionaryDatum&, State_& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;           //!< Store current values in Dictionary
+    void set( const Dictionary&, State_& );  //!< Set values from Dictionary
   };
 
   // ------------------------------------------------------------
 
   struct State_
   {
-    bool published_; //!< indicates whether this node has been published already
-                     //!< with MUSIC
-    int port_width_; //!< the width of the MUSIC port
+    bool published_;  //!< indicates whether this node has been published already
+                      //!< with MUSIC
+    int port_width_;  //!< the width of the MUSIC port
 
-    State_(); //!< Sets default state value
+    State_();  //!< Sets default state value
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    //!< Set values from dictionary
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary& ) const;  //!< Store current values in Dictionary
+    //!< Set values from Dictionary
+    void set( const Dictionary&, const Parameters_& );
   };
 
   // ------------------------------------------------------------
 
   struct Variables_
   {
-    MUSIC::EventOutputPort* MP_; //!< The MUSIC event port for output of spikes
+    MUSIC::EventOutputPort* MP_;  //!< The MUSIC event port for output of spikes
     std::vector< MUSIC::GlobalIndex > index_map_;
-    MUSIC::PermutationIndex* music_perm_ind_; //!< The permutation index needed
-                                              //!< to map the ports of MUSIC.
+    MUSIC::PermutationIndex* music_perm_ind_;  //!< The permutation index needed
+                                               //!< to map the ports of MUSIC.
   };
 
   // ------------------------------------------------------------
@@ -187,8 +186,8 @@ private:
   Variables_ V_;
 };
 
-inline port
-music_event_out_proxy::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+music_event_out_proxy::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   // receptor_type i is mapped to channel i of the MUSIC port so we
   // have to generate the index map here, that assigns the channel
@@ -207,8 +206,8 @@ music_event_out_proxy::handles_test_event( SpikeEvent&, rport receptor_type )
   return receptor_type;
 }
 
-} // namespace
+}  // namespace
 
-#endif /* #ifndef MUSIC_EVENT_OUT_PROXY_H */
+#endif /* HAVE_MUSIC */
 
 #endif

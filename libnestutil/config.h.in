@@ -28,11 +28,11 @@
   configuration process. Please make all changes in config.h.in.
 */
 
-#define NEST_VERSION_STRING "@NEST_VERSION_STRING@"
-#define NEST_VERSION_BRANCH "@NEST_VERSION_BRANCH@"
-#define NEST_VERSION_SUFFIX "@NEST_VERSION_SUFFIX@"
 #define NEST_VERSION "@NEST_VERSION@"
-#define NEST_VERSION_GITHASH "@NEST_VERSION_GITHASH@"
+#cmakedefine NEST_VERSION_GIT "@NEST_VERSION_GIT@"
+#cmakedefine NEST_VERSION_GIT_HASH "@NEST_VERSION_GIT_HASH@"
+#cmakedefine NEST_VERSION_GIT_BRANCH "@NEST_VERSION_GIT_BRANCH@"
+#cmakedefine NEST_VERSION_GIT_REMOTE "@NEST_VERSION_GIT_REMOTE@"
 
 // TODO NEST_HOST and NEST_HOSTVENDOR not available with cmake
 #define NEST_HOST "@NEST_TARGET_TRIPLE@"
@@ -43,6 +43,13 @@
 #define NEST_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
 #define NEST_INSTALL_DATADIR "@CMAKE_INSTALL_DATADIR@"
 #define NEST_INSTALL_DOCDIR "@CMAKE_INSTALL_DOCDIR@"
+#define NEST_INSTALL_LIBDIR "@CMAKE_INSTALL_LIBDIR@/nest"
+
+#define MPIEXEC "@MPIEXEC@"
+#define MPIEXEC_NUMPROC_FLAG "@MPIEXEC_NUMPROC_FLAG@"
+#define MPIEXEC_MAX_NUMPROCS "@MPIEXEC_MAX_NUMPROCS@"
+#define MPIEXEC_PREFLAGS "@MPIEXEC_PREFLAGS@"
+#define MPIEXEC_POSTFLAGS "@MPIEXEC_POSTFLAGS@"
 
 #define NEST_EXITCODE_ABORT @NEST_EXITCODE_ABORT@
 #define NEST_EXITCODE_SEGFAULT @NEST_EXITCODE_SEGFAULT@
@@ -55,9 +62,6 @@
 
 /* tics per step in simulation */
 #define CONFIG_TICS_PER_STEP @tics_per_step@
-
-/* when to truncate the recursive instantiation of the connector */
-#define CONFIG_CONNECTOR_CUTOFF @connector_cutoff@
 
 /* Define to 1 if you have a 32 bit architecture */
 #cmakedefine HAVE_32BIT_ARCH 1
@@ -92,10 +96,10 @@
 /* Define to 1 if you have usable long long type. */
 #cmakedefine HAVE_LONG_LONG 1
 
-/* Define to 1 if you have u_int46_t type. */
+/* Define to 1 if you have u_int64_t type. */
 #cmakedefine HAVE_U_INT64_T 1
 
-/* Define to 1 if you have uint46_t type. */
+/* Define to 1 if you have uint64_t type. */
 #cmakedefine HAVE_UINT64_T 1
 
 /* Define to 1 if you have the <mach/mach.h> header file. */
@@ -125,14 +129,11 @@
 /* "Define if NAN is available" */
 #cmakedefine HAVE_NAN 1
 
-/* "Define if std::nan(NULL) is available" */
+/* "Define if std::nan(nullptr) is available" */
 #cmakedefine HAVE_STD_NAN 1
 
 /* define for ostream */
 #cmakedefine HAVE_OSTREAM 1
-
-/* Use GNU libreadline */
-#cmakedefine HAVE_READLINE 1
 
 /* define if the compiler ignores symbolic signal names in signal.h */
 #cmakedefine HAVE_SIGUSR_IGNORED 1
@@ -158,27 +159,36 @@
 /* define if the compiler fails with ICE */
 #cmakedefine HAVE_XLC_ICE_ON_USING 1
 
-/* Configuring for Blue Gene */
-#cmakedefine IS_BLUEGENE 1
+/* Is SIONlib available? */
+#cmakedefine HAVE_SIONLIB 1
 
-/* Configuring for Blue Gene/L */
-#cmakedefine IS_BLUEGENE_L 1
+/* Is HDF5 available? */
+#cmakedefine HAVE_HDF5 1
 
-/* Configuring for Blue Gene/P */
-#cmakedefine IS_BLUEGENE_P 1
+/* Is mpi4py available? */
+#cmakedefine HAVE_MPI4PY 1
 
-/* Configuring for Blue Gene/Q */
-#cmakedefine IS_BLUEGENE_Q 1
-
-/* Configuring for K */
-#cmakedefine IS_K 1
-
-/* Use PS array construction semantics */
-#cmakedefine PS_ARRAYS 1
+/* Do Random123 generators work? */
+#cmakedefine HAVE_RANDOM123 1
 
 /* Bit counts for Target members */
 #define TARGET_BITS_SPLIT @TARGET_BITS_SPLIT@
 #define TARGET_BITS_SPLIT_STANDARD 0
 #define TARGET_BITS_SPLIT_HPC 1
+
+/* Whether to enable detailed NEST internal timers */
+#cmakedefine TIMER_DETAILED 1
+
+/* Whether to enable NEST internal cycle timers */
+#cmakedefine CYCLE_TIMERS 1
+
+/* Whether to use one NEST internal timer per thread */
+#cmakedefine THREADED_TIMERS 1
+
+/* Whether to use the mpi synchronization timer (including an additional barrier) */
+#cmakedefine MPI_SYNC_TIMER 1
+
+/* Whether to do full logging */
+#cmakedefine ENABLE_FULL_LOGGING 1
 
 #endif // #ifndef CONFIG_H

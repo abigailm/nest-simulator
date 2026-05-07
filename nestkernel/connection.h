@@ -30,6 +30,7 @@
 #include "delay_checker.h"
 #include "event.h"
 #include "kernel_manager.h"
+#include "nest.h"
 #include "nest_names.h"
 #include "nest_time.h"
 #include "nest_timeconverter.h"
@@ -38,71 +39,61 @@
 #include "spikecounter.h"
 #include "syn_id_delay.h"
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-
 namespace nest
 {
 
 class ConnectorModel;
 
 /**
-  * Base class for dummy nodes used in connection testing.
-  *
-  * This class provides a based for dummy node objects that
-  * are used to test whether a connection can be established.
-  * The base class provides empty implementations of all pure
-  * virtual functions of class Node.
-  *
-  * Each connection class (i.e., each class derived from class
-  * template Connection<T>), must derive a concrete ConnTestDummyNode
-  * class that overrides method Node::handles_test_event() for all
-  * event types that the connection supports.
-  *
-  * For details, see Kunkel et al, Front Neuroinform 8:78 (2014),
-  * Sec 3.3.1. Note that the ConnTestDummyNode class is called
-  * "check_helper" in the paper.
-  *
-  * @ingroup event_interface
-  */
+ * Base class for dummy nodes used in connection testing.
+ *
+ * This class provides a based for dummy node objects that
+ * are used to test whether a connection can be established.
+ * The base class provides empty implementations of all pure
+ * virtual functions of class Node.
+ *
+ * Each connection class (i.e., each class derived from class
+ * template Connection<T>), must derive a concrete ConnTestDummyNode
+ * class that overrides method Node::handles_test_event() for all
+ * event types that the connection supports.
+ *
+ * For details, see Kunkel et al, Front Neuroinform 8:78 (2014),
+ * Sec 3.3.1. Note that the ConnTestDummyNode class is called
+ * "check_helper" in the paper.
+ *
+ * @ingroup event_interface
+ */
 class ConnTestDummyNodeBase : public Node
 {
   void
-  calibrate()
+  pre_run_hook() override
   {
   }
   void
-  update( const nest::Time&, long, long )
+  update( const nest::Time&, long, long ) override
   {
   }
   void
-  set_status( const DictionaryDatum& )
+  set_status( const Dictionary& ) override
   {
   }
   void
-  get_status( DictionaryDatum& ) const
+  get_status( Dictionary& ) const override
   {
   }
   void
-  init_node_( const nest::Node& )
+  init_state_() override
   {
   }
   void
-  init_state_( const nest::Node& )
-  {
-  }
-  void
-  init_buffers_()
+  init_buffers_() override
   {
   }
 };
 
-
 /**
  * Base class for representing connections.
+ *
  * It provides the mandatory properties receiver port and target,
  * as well as the functions get_status() and set_status()
  * to read and write them. A suitable Connector containing these
@@ -119,10 +110,11 @@ class Connection
 {
 
 public:
-  // this typedef may be overwritten in the derived connection classes in order
-  // to attach a specific event type to this connection type, used in secondary
-  // connections not used in primary connectors
-  typedef SecondaryEvent EventType;
+  // properties used when registering a connection with the ModelManager
+  static constexpr ConnectionModelProperties properties = ConnectionModelProperties::NONE;
+
+  // Whether this connection type supports flush events.
+  static constexpr bool supports_flush_event = false;
 
   Connection()
     : target_()
@@ -130,17 +122,21 @@ public:
   {
   }
 
-  Connection( const Connection< targetidentifierT >& rhs )
-    : target_( rhs.target_ )
-    , syn_id_delay_( rhs.syn_id_delay_ )
-  {
-  }
+  Connection( const Connection< targetidentifierT >& rhs ) = default;
+  Connection& operator=( const Connection< targetidentifierT >& rhs ) = default;
 
+  /**
+   * Get a pointer to an instance of a SecondaryEvent if this connection supports secondary events.
+   *
+   * To prevent erronous calls of this function on primary connections, the base class implementation
+   * below just contains `assert(false)`.
+   */
+  std::unique_ptr< SecondaryEvent > get_secondary_event();
 
   /**
    * Get all properties of this connection and put them into a dictionary.
    */
-  void get_status( DictionaryDatum& d ) const;
+  void get_status( Dictionary& d ) const;
 
   /**
    * Set properties of this connection from the values given in dictionary.
@@ -148,7 +144,7 @@ public:
    * @note Target and Rport cannot be changed after a connection has been
    * created.
    */
-  void set_status( const DictionaryDatum& d, ConnectorModel& cm );
+  void set_status( const Dictionary& d, ConnectorModel& cm );
 
   /**
    * Check syn_spec dictionary for parameters that are not allowed with the
@@ -159,8 +155,10 @@ public:
    *
    * @note Classes requiring checks need to override the function with their own
    * implementation, as this base class implementation does not do anything.
+   *
+   * @see ConnectorModel::check_synapse_params
    */
-  void check_synapse_params( const DictionaryDatum& d ) const;
+  void check_synapse_params( const Dictionary& d ) const;
 
   /**
    * Calibrate the delay of this connection to the desired resolution.
@@ -228,20 +226,21 @@ public:
   }
 
   /**
-   * triggers an update of a synaptic weight
-   * this function is needed for neuromodulated synaptic plasticity
+   * Triggers an update of a synaptic weight
+   *
+   * This function is needed for neuromodulated synaptic plasticity
    */
-  void trigger_update_weight( const thread,
+  void trigger_update_weight( const size_t,
     const std::vector< spikecounter >&,
     const double,
     const CommonSynapseProperties& );
 
   Node*
-  get_target( const thread tid ) const
+  get_target( const size_t tid ) const
   {
     return target_.get_target_ptr( tid );
   }
-  rport
+  size_t
   get_rport() const
   {
     return target_.get_rport();
@@ -251,24 +250,24 @@ public:
    * Sets a flag in the connection to signal that the following connection has
    * the same source.
    *
-   * @see has_source_subsequent_targets
+   * @see source_has_more_targets
    */
   void
-  set_has_source_subsequent_targets( const bool subsequent_targets )
+  set_source_has_more_targets( const bool more_targets )
   {
-    syn_id_delay_.set_has_source_subsequent_targets( subsequent_targets );
+    syn_id_delay_.set_source_has_more_targets( more_targets );
   }
 
   /**
    * Returns a flag denoting whether the connection has source subsequent
    * targets.
    *
-   * @see set_has_source_subsequent_targets
+   * @see set_source_has_more_targets
    */
   bool
-  has_source_subsequent_targets() const
+  source_has_more_targets() const
   {
-    return syn_id_delay_.has_source_subsequent_targets();
+    return syn_id_delay_.source_has_more_targets();
   }
 
   /**
@@ -296,36 +295,31 @@ public:
 protected:
   /**
    * This function calls check_connection() on the sender to check if the
-   * receiver
-   * accepts the event type and receptor type requested by the sender.
+   * receiver accepts the event type and receptor type requested by the sender.
    * \param s The source node
    * \param r The target node
    * \param receptor The ID of the requested receptor type
    * \param the last spike produced by the presynaptic neuron (for STDP and
    * maturing connections)
    */
-  void check_connection_( Node& dummy_target, Node& source, Node& target, const rport receptor_type );
+  void check_connection_( Node& dummy_target, Node& source, Node& target, const size_t receptor_type );
 
-  /* the order of the members below is critical
-     as it influcences the size of the object. Please leave unchanged
-     as
-     targetidentifierT target_;
-     SynIdDelay syn_id_delay_;        //!< syn_id (char) and delay (24 bit) in
-     timesteps of this
-     connection
-  */
+  // The order of the members below is critical as it influcences the size of the object.
+  // Please leave unchanged!
   targetidentifierT target_;
-  //! syn_id (char) and delay (24 bit) in timesteps of this connection
+  // syn_id (9 bit), delay (21 bit) in timesteps of this connection and more_targets and disabled flags (each 1 bit)
   SynIdDelay syn_id_delay_;
 };
 
+template < typename targetidentifierT >
+constexpr ConnectionModelProperties Connection< targetidentifierT >::properties;
 
 template < typename targetidentifierT >
 inline void
 Connection< targetidentifierT >::check_connection_( Node& dummy_target,
   Node& source,
   Node& target,
-  const rport receptor_type )
+  const size_t receptor_type )
 {
   // 1. does this connection support the event type sent by source
   // try to send event from source to dummy_target
@@ -345,7 +339,7 @@ Connection< targetidentifierT >::check_connection_( Node& dummy_target,
   // each bit in the signal type as a collection of individual flags
   if ( not( source.sends_signal() & target.receives_signal() ) )
   {
-    throw IllegalConnection();
+    throw IllegalConnection( "Source and target neuron are not compatible (e.g., spiking vs binary neuron)." );
   }
 
   target_.set_target( &target );
@@ -353,18 +347,18 @@ Connection< targetidentifierT >::check_connection_( Node& dummy_target,
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::get_status( DictionaryDatum& d ) const
+Connection< targetidentifierT >::get_status( Dictionary& d ) const
 {
-  def< double >( d, names::delay, syn_id_delay_.get_delay_ms() );
+  d[ names::delay ] = syn_id_delay_.get_delay_ms();
   target_.get_status( d );
 }
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::set_status( const DictionaryDatum& d, ConnectorModel& )
+Connection< targetidentifierT >::set_status( const Dictionary& d, ConnectorModel& )
 {
   double delay;
-  if ( updateValue< double >( d, names::delay, delay ) )
+  if ( d.update_value( names::delay, delay ) )
   {
     kernel().connection_manager.get_delay_checker().assert_valid_delay_ms( delay );
     syn_id_delay_.set_delay_ms( delay );
@@ -374,7 +368,7 @@ Connection< targetidentifierT >::set_status( const DictionaryDatum& d, Connector
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::check_synapse_params( const DictionaryDatum& d ) const
+Connection< targetidentifierT >::check_synapse_params( const Dictionary& ) const
 {
 }
 
@@ -393,17 +387,22 @@ Connection< targetidentifierT >::calibrate( const TimeConverter& tc )
 
 template < typename targetidentifierT >
 inline void
-Connection< targetidentifierT >::trigger_update_weight( const thread,
+Connection< targetidentifierT >::trigger_update_weight( const size_t,
   const std::vector< spikecounter >&,
   const double,
   const CommonSynapseProperties& )
 {
-  throw IllegalConnection(
-    "Connection::trigger_update_weight: "
-    "Connection does not support updates that are triggered by the volume "
-    "transmitter." );
+  throw IllegalConnection( "Connection does not support updates that are triggered by a volume transmitter." );
 }
 
-} // namespace nest
+template < typename targetidentifierT >
+std::unique_ptr< SecondaryEvent >
+Connection< targetidentifierT >::get_secondary_event()
+{
+  assert( false and "Non-primary connections have to provide get_secondary_event()" );
+  return nullptr;
+}
 
-#endif // CONNECTION_H
+}  // namespace nest
+
+#endif /* CONNECTION_H */

@@ -36,30 +36,30 @@
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup iaf
-@ingroup psc
+/* BeginUserDocs: neuron, integrate-and-fire, current-based, adaptation, hard threshold
 
-Name: mat2_psc_exp - Non-resetting leaky integrate-and-fire neuron model with
-exponential PSCs and adaptive threshold.
+Short description
++++++++++++++++++
 
-Description:
+Non-resetting leaky integrate-and-fire neuron model with exponential PSCs and adaptive threshold
 
-mat2_psc_exp is an implementation of a leaky integrate-and-fire model
+Description
++++++++++++
+
+``mat2_psc_exp`` is an implementation of a leaky integrate-and-fire model
 with exponential shaped postsynaptic currents (PSCs). Thus, postsynaptic
 currents have an infinitely short rise time.
 
 The threshold is lifted when the neuron is fired and then decreases in a
-fixed time scale toward a fixed level [3].
+fixed time scale toward a fixed level [3]_.
 
 The threshold crossing is followed by a total refractory period
 during which the neuron is not allowed to fire, even if the membrane
 potential exceeds the threshold. The membrane potential is NOT reset,
 but continuously integrated.
 
-The linear subthresold dynamics is integrated by the Exact
-Integration scheme [1]. The neuron dynamics is solved on the time
+The linear subthreshold dynamics is integrated by the Exact
+Integration scheme [1]_. The neuron dynamics is solved on the time
 grid given by the computation step size. Incoming as well as emitted
 spikes are forced to that grid.
 
@@ -68,22 +68,24 @@ equation represents a piecewise constant external current.
 
 The general framework for the consistent formulation of systems with
 neuron like dynamics interacting by point events is described in
-[1]. A flow chart can be found in [2].
+[1]_. A flow chart can be found in [2]_.
 
-Remarks:
+The current implementation requires tau_m != tau_syn_{ex,in} to avoid
+a degenerate case of the ODE describing the model [1]_. For very
+similar values, numerics will be unstable.
 
-The present implementation uses individual variables for the
-components of the state vector and the non-zero matrix elements of
-the propagator. Because the propagator is a lower triangular matrix
-no full matrix multiplication needs to be carried out and the
-computation can be done "in place" i.e. no temporary state vector
-object is required.
+The following state variables can be read out with the multimeter device:
 
-Parameters:
+====== ====  =================================
+ V_m   mV    Non-resetting membrane potential
+ V_th  mV    Two-timescale adaptive threshold
+====== ====  =================================
+
+Parameters
+++++++++++
 
 The following parameters can be set in the status dictionary:
 
-\verbatim embed:rst
 ============ =======  ========================================================
  C_m          pF      Capacity of the membrane
  E_L          mV      Resting potential
@@ -96,30 +98,28 @@ The following parameters can be set in the status dictionary:
  t_spike      ms      Point in time of last spike
  tau_1        ms      Short time constant of adaptive threshold
  tau_2        ms      Long time constant of adaptive threshold
- alpha_1      mV      Amplitude of short time threshold adaption [3]
- alpha_2      mV      Amplitude of long time threshold adaption [3]
+ alpha_1      mV      Amplitude of short time threshold adaption [3]_
+ alpha_2      mV      Amplitude of long time threshold adaption [3]_
  omega        mV      Resting spike threshold (absolute value, not
-                      relative to E_L as in [3])
+                      relative to E_L as in [3]_)
 ============ =======  ========================================================
-\endverbatim
 
 The following state variables can be read out with the multimeter device:
-\verbatim embed:rst
+
 ====== ====  =================================
  V_m   mV    Non-resetting membrane potential
  V_th  mV    Two-timescale adaptive threshold
 ====== ====  =================================
-\endverbatim
 
 Remarks:
 
 tau_m != tau_syn_{ex,in} is required by the current implementation to avoid a
-degenerate case of the ODE describing the model [1]. For very similar values,
+degenerate case of the ODE describing the model [1]_. For very similar values,
 numerics will be unstable.
 
-References:
+References
+++++++++++
 
-\verbatim embed:rst
 .. [1] Rotter S and Diesmann M (1999). Exact simulation of
        time-invariant linear systems with applications to neuronal
        modeling. Biologial Cybernetics 81:381-402.
@@ -132,17 +132,36 @@ References:
        spiking neuron model equipped with a multi-timescale adaptive
        threshold. Frontiers in Computuational Neuroscience 3:9.
        DOI: https://doi.org/10.3389/neuro.10.009.2009
-\endverbatim
-Sends: SpikeEvent
 
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+Sends
++++++
 
-FirstVersion: Mai 2009
+SpikeEvent
 
-Author: Thomas Pfeil (modified iaf_psc_exp model of Moritz Helias)
+Receives
+++++++++
 
-*/
-class mat2_psc_exp : public Archiving_Node
+SpikeEvent, CurrentEvent, DataLoggingRequest
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: mat2_psc_exp
+
+EndUserDocs */
+
+/**
+ * The present implementation uses individual variables for the
+ * components of the state vector and the non-zero matrix elements of
+ * the propagator. Because the propagator is a lower triangular matrix,
+ * no full matrix multiplication needs to be carried out and the
+ * computation can be done "in place", i.e. no temporary state vector
+ * object is required.
+ */
+
+void register_mat2_psc_exp( const std::string& name );
+
+class mat2_psc_exp : public ArchivingNode
 {
 
 public:
@@ -157,24 +176,23 @@ public:
   using Node::handle;
   using Node::handles_test_event;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  port handles_test_event( SpikeEvent&, rport );
-  port handles_test_event( CurrentEvent&, rport );
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
-  void handle( SpikeEvent& );
-  void handle( CurrentEvent& );
-  void handle( DataLoggingRequest& );
+  void handle( SpikeEvent& ) override;
+  void handle( CurrentEvent& ) override;
+  void handle( DataLoggingRequest& ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
-  void update( Time const&, const long, const long );
+  void init_buffers_() override;
+  void pre_run_hook() override;
+  void update( Time const&, const long, const long ) override;
 
   // The next two classes need to be friends to access private members
   friend class RecordablesMap< mat2_psc_exp >;
@@ -187,7 +205,6 @@ private:
    */
   struct Parameters_
   {
-
     /** Membrane time constant in ms. */
     double Tau_;
 
@@ -220,17 +237,17 @@ private:
     /** Resting threshold in mV
         (relative to resting potential).
         The real resting threshold is (E_L_+omega_).
-        Called omega in [3]. */
+        Called omega in [3]_. */
     double omega_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
 
     /** Set values from dictionary.
      * @returns Change in reversal potential E_L, to be passed to State_::set()
      */
-    double set( const DictionaryDatum& ); //!< Set values from dicitonary
+    double set( const Dictionary&, Node* node );
   };
 
   // ----------------------------------------------------------------
@@ -241,27 +258,27 @@ private:
   struct State_
   {
     // state variables
-    double i_0_;      //!< synaptic dc input current, variable 0
-    double i_syn_ex_; //!< postsynaptic current for exc. inputs, variable 1
-    double i_syn_in_; //!< postsynaptic current for inh. inputs, variable 1
-    double V_m_;      //!< membrane potential, variable 2
+    double i_0_;       //!< synaptic dc input current, variable 0
+    double i_syn_ex_;  //!< postsynaptic current for exc. inputs, variable 1
+    double i_syn_in_;  //!< postsynaptic current for inh. inputs, variable 1
+    double V_m_;       //!< membrane potential, variable 2
     //! short time adaptive threshold (related to tau_1_), variable 1
     double V_th_1_;
     //! long time adaptive threshold (related to tau_2_), variable 2
     double V_th_2_;
 
-    int r_; //!< total refractory counter (no spikes can be generated)
+    int r_;  //!< total refractory counter (no spikes can be generated)
 
-    State_(); //!< Default initialization
+    State_();  //!< Default initialization
 
-    void get( DictionaryDatum&, const Parameters_& ) const;
+    void get( Dictionary&, const Parameters_& ) const;
 
     /** Set values from dictionary.
      * @param dictionary to take data from
      * @param current parameters
      * @param Change in reversal potential E_L specified by this dict
      */
-    void set( const DictionaryDatum&, const Parameters_&, double );
+    void set( const Dictionary&, const Parameters_&, double, Node* );
   };
 
   // ----------------------------------------------------------------
@@ -271,8 +288,8 @@ private:
    */
   struct Buffers_
   {
-    Buffers_( mat2_psc_exp& );                  //!<Sets buffer pointers to 0
-    Buffers_( const Buffers_&, mat2_psc_exp& ); //!<Sets buffer pointers to 0
+    Buffers_( mat2_psc_exp& );                   //!< Sets buffer pointers to 0
+    Buffers_( const Buffers_&, mat2_psc_exp& );  //!< Sets buffer pointers to 0
 
     /** buffers and sums up incoming spikes/currents */
     RingBuffer spikes_ex_;
@@ -292,14 +309,14 @@ private:
   {
 
     /** Amplitude of the synaptic current.
-    This value is chosen such that a post-synaptic potential with
+    This value is chosen such that a postsynaptic potential with
     weight one has an amplitude of 1 mV.
     @note mog - I assume this, not checked.
     */
     //    double PSCInitialValue_;
 
     // time evolution operator of membrane potential
-    double P20_; // constant currents
+    double P20_;  // constant currents
     double P11ex_;
     double P11in_;
     double P21ex_;
@@ -331,7 +348,6 @@ private:
   // ----------------------------------------------------------------
 
   /**
-   * @defgroup mat2_psc_exp_data
    * Instances of private data structures for the different types
    * of data pertaining to the model.
    * @note The order of definitions is important for speed.
@@ -348,8 +364,8 @@ private:
 };
 
 
-inline port
-mat2_psc_exp::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+mat2_psc_exp::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent e;
   e.set_sender( *this );
@@ -358,8 +374,8 @@ mat2_psc_exp::send_test_event( Node& target, rport receptor_type, synindex, bool
 }
 
 
-inline port
-mat2_psc_exp::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+mat2_psc_exp::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -368,8 +384,8 @@ mat2_psc_exp::handles_test_event( SpikeEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-mat2_psc_exp::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+mat2_psc_exp::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -378,8 +394,8 @@ mat2_psc_exp::handles_test_event( CurrentEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-mat2_psc_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+mat2_psc_exp::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -389,34 +405,34 @@ mat2_psc_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 }
 
 inline void
-mat2_psc_exp::get_status( DictionaryDatum& d ) const
+mat2_psc_exp::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d, P_ );
-  Archiving_Node::get_status( d );
+  ArchivingNode::get_status( d );
 
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-mat2_psc_exp::set_status( const DictionaryDatum& d )
+mat2_psc_exp::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_;                 // temporary copy in case of errors
-  const double delta_EL = ptmp.set( d ); // throws if BadProperty
-  State_ stmp = S_;                      // temporary copy in case of errors
-  stmp.set( d, ptmp, delta_EL );         // throws if BadProperty
+  Parameters_ ptmp = P_;                        // temporary copy in case of errors
+  const double delta_EL = ptmp.set( d, this );  // throws if BadProperty
+  State_ stmp = S_;                             // temporary copy in case of errors
+  stmp.set( d, ptmp, delta_EL, this );          // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // MAT2_PSC_EXP_H
+#endif  // MAT2_PSC_EXP_H

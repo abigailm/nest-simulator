@@ -24,23 +24,18 @@
 
 // Includes from nestkernel:
 #include "connector_model.h"
-#include "kernel_manager.h"
 #include "nest_timeconverter.h"
 #include "nest_types.h"
 #include "node.h"
 
-// Includes from sli:
-#include "dictdatum.h"
+// Includes from models:
+#include "weight_recorder.h"
 
 namespace nest
 {
 
-/**
- * Default implementation of an empty CommonSynapseProperties object.
- */
-
 CommonSynapseProperties::CommonSynapseProperties()
-  : weight_recorder_( 0 )
+  : weight_recorder_()
 {
 }
 
@@ -49,25 +44,32 @@ CommonSynapseProperties::~CommonSynapseProperties()
 }
 
 void
-CommonSynapseProperties::get_status( DictionaryDatum& d ) const
+CommonSynapseProperties::get_status( Dictionary& d ) const
 {
-  def< long >( d, names::weight_recorder, weight_recorder_ ? weight_recorder_->get_gid() : -1 );
+  d[ names::weight_recorder ] = NodeCollection::create( weight_recorder_ );
 }
 
 void
-CommonSynapseProperties::set_status( const DictionaryDatum& d, ConnectorModel& )
+CommonSynapseProperties::set_status( const Dictionary& d, ConnectorModel& )
 {
-  long wrgid;
-  if ( updateValue< long >( d, names::weight_recorder, wrgid ) )
+  NodeCollectionPTR wr_nc;
+  if ( d.update_value( names::weight_recorder, wr_nc ) )
   {
-    weight_recorder_ = kernel().node_manager.get_thread_siblings( wrgid );
-  }
-}
+    if ( wr_nc->size() != 1 )
+    {
+      throw BadProperty( "Property weight_recorder must be a single element NodeCollection" );
+    }
 
-Node*
-CommonSynapseProperties::get_node()
-{
-  return 0;
+    const size_t tid = kernel().vp_manager.get_thread_id();
+    Node* wr_node = kernel().node_manager.get_node_or_proxy( ( *wr_nc )[ 0 ], tid );
+    weight_recorder* wr = dynamic_cast< weight_recorder* >( wr_node );
+    if ( not wr )
+    {
+      throw BadProperty( "Property weight_recorder must be set to a node of type weight_recorder" );
+    }
+
+    weight_recorder_ = wr;
+  }
 }
 
 void
@@ -75,4 +77,4 @@ CommonSynapseProperties::calibrate( const TimeConverter& )
 {
 }
 
-} // namespace nest
+}  // namespace nest

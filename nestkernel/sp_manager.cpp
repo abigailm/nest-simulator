@@ -20,13 +20,6 @@
  *
  */
 
-/*
- * File:   sp_updater.cpp
- * Author: naveau
- *
- * Created on November 26, 2013, 2:28 PM
- */
-
 #include "sp_manager.h"
 
 // C++ includes:
@@ -39,123 +32,127 @@
 #include "connector_model.h"
 #include "kernel_manager.h"
 #include "nest_names.h"
+#include "sp_manager_impl.h"
 
 namespace nest
 {
 
-template < typename T >
-void
-print_vector( const std::vector< T >& vec )
-{
-  std::cout << "#######BEGIN############################\n";
-  for ( typename std::vector< T >::const_iterator cit = vec.begin(); cit != vec.end(); ++cit )
-  {
-    std::cout << *cit << ", ";
-  }
-  std::cout << "########END############################\n";
-}
-
 SPManager::SPManager()
   : ManagerInterface()
-  , structural_plasticity_update_interval_( 1000 )
+  , structural_plasticity_update_interval_( 10000. )
   , structural_plasticity_enabled_( false )
   , sp_conn_builders_()
-  , growthcurvedict_( new Dictionary() )
   , growthcurve_factories_()
+  , growthcurvedict_()
 {
 }
 
 SPManager::~SPManager()
 {
-  finalize();
 }
 
 void
-SPManager::initialize()
+SPManager::initialize( const bool adjust_number_of_threads_or_rng_only )
 {
-  structural_plasticity_update_interval_ = 1000;
+  if ( not adjust_number_of_threads_or_rng_only )
+  {
+    // Add MSP growth curves
+    register_growth_curve< GrowthCurveSigmoid >( "sigmoid" );
+    register_growth_curve< GrowthCurveGaussian >( "gaussian" );
+    register_growth_curve< GrowthCurveLinear >( "linear" );
+  }
+
+  structural_plasticity_update_interval_ = 10000.;
   structural_plasticity_enabled_ = false;
 }
 
 void
-SPManager::finalize()
+SPManager::finalize( const bool adjust_number_of_threads_or_rng_only )
 {
-  for ( std::vector< SPBuilder* >::const_iterator i = sp_conn_builders_.begin(); i != sp_conn_builders_.end(); i++ )
+  if ( not adjust_number_of_threads_or_rng_only )
   {
-    delete *i;
+    for ( auto spcb : sp_conn_builders_ )
+    {
+      delete spcb;
+    }
+    sp_conn_builders_.clear();
+
+    for ( auto gcf : growthcurve_factories_ )
+    {
+      delete gcf;
+    }
+    growthcurve_factories_.clear();
+    growthcurvedict_.clear();
   }
-  sp_conn_builders_.clear();
 }
 
-/*
- * Methods to retrieve data regarding structural plasticity variables
- */
 void
-SPManager::get_status( DictionaryDatum& d )
+SPManager::get_status( Dictionary& d )
 {
-  DictionaryDatum sp_synapses = DictionaryDatum( new Dictionary() );
-  DictionaryDatum sp_synapse;
-  def< DictionaryDatum >( d, names::structural_plasticity_synapses, sp_synapses );
+  Dictionary sp_synapses;
+
   for ( std::vector< SPBuilder* >::const_iterator i = sp_conn_builders_.begin(); i != sp_conn_builders_.end(); i++ )
   {
-    sp_synapse = DictionaryDatum( new Dictionary() );
-    def< std::string >( sp_synapse, names::pre_synaptic_element, ( *i )->get_pre_synaptic_element_name() );
-    def< std::string >( sp_synapse, names::post_synaptic_element, ( *i )->get_post_synaptic_element_name() );
-    def< std::string >( sp_synapse,
-      names::model,
-      kernel().model_manager.get_synapse_prototype( ( *i )->get_synapse_model(), 0 ).get_name() );
-    std::stringstream syn_name;
-    syn_name << "syn" << ( sp_conn_builders_.end() - i );
-    def< DictionaryDatum >( sp_synapses, syn_name.str(), sp_synapse );
+    Dictionary sp_synapse_params;
+    const std::string model = kernel().model_manager.get_connection_model( ( *i )->get_synapse_model(), 0 ).get_name();
+    sp_synapse_params[ names::synapse_model ] = model;
+    sp_synapse_params[ names::pre_synaptic_element ] = ( *i )->get_pre_synaptic_element_name();
+    sp_synapse_params[ names::post_synaptic_element ] = ( *i )->get_post_synaptic_element_name();
+    sp_synapse_params[ names::allow_autapses ] = ( *i )->allows_autapses();
+    sp_synapse_params[ names::allow_multapses ] = ( *i )->allows_multapses();
+
+    sp_synapses[ ( *i )->get_name() ] = sp_synapse_params;
   }
 
-  def< long >( d, names::structural_plasticity_update_interval, structural_plasticity_update_interval_ );
+  d[ names::structural_plasticity_synapses ] = sp_synapses;
+  d[ names::structural_plasticity_update_interval ] = structural_plasticity_update_interval_;
+
+  std::vector< std::string > growth_curves;
+  for ( auto const& element : growthcurvedict_ )
+  {
+    growth_curves.push_back( element.first );
+  }
+  d[ names::growth_curves ] = growth_curves;
 }
 
-/**
- * Set status of synaptic plasticity variables: synaptic update interval,
- * synapses and synaptic elements.
- * @param d Dictionary containing the values to be set
- */
 void
-SPManager::set_status( const DictionaryDatum& d )
+SPManager::set_status( const Dictionary& d )
 {
-  if ( d->known( names::structural_plasticity_update_interval ) )
-  {
-    updateValue< long >( d, names::structural_plasticity_update_interval, structural_plasticity_update_interval_ );
-  }
-  if ( not d->known( names::structural_plasticity_synapses ) )
+  d.update_value< double >( names::structural_plasticity_update_interval, structural_plasticity_update_interval_ );
+
+  if ( not d.known( names::structural_plasticity_synapses ) )
   {
     return;
-  } /*
-    * Configure synapses model updated during the simulation.
-    */
-  Token synmodel;
-  DictionaryDatum syn_specs, syn_spec;
-  DictionaryDatum conn_spec = DictionaryDatum( new Dictionary() );
+  }
 
-  if ( d->known( names::autapses ) )
-  {
-    def< bool >( conn_spec, names::autapses, getValue< bool >( d, names::autapses ) );
-  }
-  if ( d->known( names::multapses ) )
-  {
-    def< bool >( conn_spec, names::multapses, getValue< bool >( d, names::multapses ) );
-  }
-  GIDCollection sources = GIDCollection();
-  GIDCollection targets = GIDCollection();
+  Dictionary syn_specs;
+  Dictionary conn_spec;
+
+  NodeCollectionPTR sources( new NodeCollectionPrimitive() );
+  NodeCollectionPTR targets( new NodeCollectionPrimitive() );
 
   for ( std::vector< SPBuilder* >::const_iterator i = sp_conn_builders_.begin(); i != sp_conn_builders_.end(); i++ )
   {
     delete ( *i );
   }
   sp_conn_builders_.clear();
-  updateValue< DictionaryDatum >( d, names::structural_plasticity_synapses, syn_specs );
-  for ( Dictionary::const_iterator i = syn_specs->begin(); i != syn_specs->end(); ++i )
+
+  d.update_value< Dictionary >( names::structural_plasticity_synapses, syn_specs );
+  for ( auto& [ key, entry ] : syn_specs )
   {
-    syn_spec = getValue< DictionaryDatum >( syn_specs, i->first );
+    const auto syn_spec = syn_specs.get< Dictionary >( key );
+    if ( syn_spec.known( names::allow_autapses ) )
+    {
+      conn_spec[ names::allow_autapses ] = syn_spec.get< bool >( names::allow_autapses );
+    }
+    if ( syn_spec.known( names::allow_multapses ) )
+    {
+      conn_spec[ names::allow_multapses ] = syn_spec.get< bool >( names::allow_multapses );
+    }
+
     // We use a ConnBuilder with dummy values to check the synapse parameters
-    SPBuilder* conn_builder = new SPBuilder( sources, targets, conn_spec, syn_spec );
+    SPBuilder* conn_builder = new SPBuilder( sources, targets, /* third_out */ nullptr, conn_spec, { syn_spec } );
+    conn_builder->set_name( key );
 
     // check that the user defined the min and max delay properly, if the
     // default delay is not used.
@@ -169,11 +166,11 @@ SPManager::set_status( const DictionaryDatum& d )
   }
 }
 
-delay
+long
 SPManager::builder_min_delay() const
 {
-  delay min_delay = Time::pos_inf().get_steps();
-  delay builder_delay = Time::pos_inf().get_steps();
+  long min_delay = Time::pos_inf().get_steps();
+  long builder_delay = Time::pos_inf().get_steps();
 
   for ( std::vector< SPBuilder* >::const_iterator i = sp_conn_builders_.begin(); i != sp_conn_builders_.end(); i++ )
   {
@@ -183,11 +180,11 @@ SPManager::builder_min_delay() const
   return min_delay;
 }
 
-delay
+long
 SPManager::builder_max_delay() const
 {
-  delay max_delay = Time::neg_inf().get_steps();
-  delay builder_delay = Time::neg_inf().get_steps();
+  long max_delay = Time::neg_inf().get_steps();
+  long builder_delay = Time::neg_inf().get_steps();
 
   for ( std::vector< SPBuilder* >::const_iterator i = sp_conn_builders_.begin(); i != sp_conn_builders_.end(); i++ )
   {
@@ -197,63 +194,16 @@ SPManager::builder_max_delay() const
   return max_delay;
 }
 
-/**
- * Disconnects a single synapse. Uses the structural plasticity builder to
- * remove the synapse and updates number of connected synaptic elements.
- * @param sgid source id
- * @param target target node
- * @param target_thread target thread
- * @param syn dictionary with the synapse definition
- */
 void
-SPManager::disconnect_single( index sgid, Node* target, thread target_thread, DictionaryDatum& syn )
+SPManager::disconnect( const size_t snode_id, Node* target, size_t target_thread, const size_t syn_id )
 {
-  if ( kernel().connection_manager.have_connections_changed() )
-  {
-    if ( kernel().connection_manager.secondary_connections_exist() )
-    {
-      kernel().model_manager.create_secondary_events_prototypes(); // necessary before
-                                                                   // updating
-                                                                   // connection
-                                                                   // infrastructure
-    }
-#pragma omp parallel
-    {
-      const thread tid = kernel().vp_manager.get_thread_id();
-      kernel().simulation_manager.update_connection_infrastructure( tid );
-    }
-  }
-
-  // Disconnect if Structural plasticity is activated
-  if ( syn->known( names::pre_synaptic_element ) and syn->known( names::post_synaptic_element ) )
-  {
-    GIDCollection* sources = new GIDCollection();
-    GIDCollection* targets = new GIDCollection();
-    DictionaryDatum* conn_spec = new DictionaryDatum( new Dictionary() );
-    SPBuilder* cb = new SPBuilder( *sources, *targets, *conn_spec, syn );
-    cb->change_connected_synaptic_elements( sgid, target->get_gid(), target->get_thread(), -1 );
-  }
-  const std::string syn_name = ( *syn )[ names::model ];
-  disconnect( sgid, target, target_thread, kernel().model_manager.get_synapsedict()->lookup( syn_name ) );
-}
-
-/**
- * Deletes synapses between a source and a target.
- * @param sgid
- * @param target
- * @param target_thread
- * @param syn_id
- */
-void
-SPManager::disconnect( const index sgid, Node* target, thread target_thread, const index syn_id )
-{
-  Node* const source = kernel().node_manager.get_node( sgid );
+  Node* const source = kernel().node_manager.get_node_or_proxy( snode_id );
   // normal nodes and devices with proxies
   if ( target->has_proxies() )
   {
-    kernel().connection_manager.disconnect( target_thread, syn_id, sgid, target->get_gid() );
+    kernel().connection_manager.disconnect( target_thread, syn_id, snode_id, target->get_node_id() );
   }
-  else if ( target->local_receiver() ) // normal devices
+  else if ( target->local_receiver() )  // normal devices
   {
     if ( source->is_proxy() )
     {
@@ -262,98 +212,106 @@ SPManager::disconnect( const index sgid, Node* target, thread target_thread, con
     if ( ( source->get_thread() != target_thread ) and ( source->has_proxies() ) )
     {
       target_thread = source->get_thread();
-      target = kernel().node_manager.get_node( target->get_gid(), sgid );
+      target = kernel().node_manager.get_node_or_proxy( target->get_node_id(), target_thread );
     }
-    kernel().connection_manager.disconnect( target_thread, syn_id, sgid, target->get_gid() );
+
+    kernel().connection_manager.disconnect( target_thread, syn_id, snode_id, target->get_node_id() );
   }
-  else // globally receiving devices iterate over all target threads
+  else  // globally receiving devices iterate over all target threads
   {
     // we do not allow to connect a device to a global receiver at the moment
     if ( not source->has_proxies() )
     {
       return;
     }
-    const thread n_threads = kernel().vp_manager.get_num_threads();
-    for ( thread t = 0; t < n_threads; t++ )
+    const size_t n_threads = kernel().vp_manager.get_num_threads();
+    for ( size_t t = 0; t < n_threads; t++ )
     {
-      target = kernel().node_manager.get_node( target->get_gid(), t );
+      target = kernel().node_manager.get_node_or_proxy( target->get_node_id(), t );
       target_thread = target->get_thread();
-      kernel().connection_manager.disconnect( target_thread, syn_id, sgid, target->get_gid() );
+      kernel().connection_manager.disconnect( target_thread, syn_id, snode_id, target->get_node_id() );
     }
   }
 }
 
-/**
- * Obtains the right connection builder and performs a synapse deletion
- * according to the specified connection specs.
- * @param sources collection of sources
- * @param targets collection of targets
- * @param conn_spec disconnection specs. For now only all to all and one to one
- * rules are implemented.
- * @param syn_spec synapse specs
- */
 void
-SPManager::disconnect( GIDCollection& sources,
-  GIDCollection& targets,
-  DictionaryDatum& conn_spec,
-  DictionaryDatum& syn_spec )
+SPManager::disconnect( NodeCollectionPTR sources,
+  NodeCollectionPTR targets,
+  const Dictionary& conn_spec,
+  const std::vector< Dictionary >& syn_specs )
 {
-  if ( kernel().connection_manager.have_connections_changed() )
+  // probably not strictly necessarye here, but does nothing if all is up to date
+  kernel().node_manager.update_thread_local_node_data();
+
+  if ( kernel().connection_manager.connections_have_changed() )
   {
-    if ( kernel().connection_manager.secondary_connections_exist() )
-    {
-      kernel().model_manager.create_secondary_events_prototypes(); // necessary before
-                                                                   // updating
-                                                                   // connection
-                                                                   // infrastructure
-    }
 #pragma omp parallel
     {
-      const thread tid = kernel().vp_manager.get_thread_id();
+      const size_t tid = kernel().vp_manager.get_thread_id();
       kernel().simulation_manager.update_connection_infrastructure( tid );
     }
   }
 
-  ConnBuilder* cb = NULL;
-  conn_spec->clear_access_flags();
-  syn_spec->clear_access_flags();
+  BipartiteConnBuilder* cb = nullptr;
+  conn_spec.init_access_flags();
 
-  if ( not conn_spec->known( names::rule ) )
+  if ( not conn_spec.known( names::rule ) )
   {
     throw BadProperty( "Disconnection spec must contain disconnection rule." );
   }
-  const std::string rule_name = ( *conn_spec )[ names::rule ];
+  const std::string rule_name = conn_spec.get< std::string >( names::rule );
 
-  if ( not kernel().connection_manager.get_connruledict()->known( rule_name ) )
+  if ( not kernel().connection_manager.valid_connection_rule( rule_name ) )
   {
-    throw BadProperty( "Unknown connectivty rule: " + rule_name );
+    throw BadProperty( "Unknown connectivity rule: " + rule_name );
   }
 
+  if ( syn_specs.size() != 1 )
+  {
+    throw BadProperty( "Disconnect() only accepts a single synapse specification, no collocated synapses." );
+  }
+
+  syn_specs[ 0 ].init_access_flags();
+
   if ( not sp_conn_builders_.empty() )
-  { // Implement a getter for sp_conn_builders_
+  {  // Implement a getter for sp_conn_builders_
 
     for ( std::vector< SPBuilder* >::const_iterator i = sp_conn_builders_.begin(); i != sp_conn_builders_.end(); i++ )
     {
-      std::string synModel = getValue< std::string >( syn_spec, names::model );
-      if ( ( *i )->get_synapse_model() == ( index )( kernel().model_manager.get_synapsedict()->lookup( synModel ) ) )
+      const std::string syn_model = syn_specs[ 0 ].get< std::string >( names::synapse_model );
+      if ( ( *i )->get_synapse_model() == kernel().model_manager.get_synapse_model_id( syn_model ) )
       {
-        cb = kernel().connection_manager.get_conn_builder( rule_name, sources, targets, conn_spec, syn_spec );
-        cb->set_post_synaptic_element_name( ( *i )->get_post_synaptic_element_name() );
-        cb->set_pre_synaptic_element_name( ( *i )->get_pre_synaptic_element_name() );
+        cb = kernel().connection_manager.get_conn_builder( rule_name,
+          sources,
+          targets,
+          /* third_out */ nullptr,
+          conn_spec,
+          syn_specs );
+        cb->set_synaptic_element_names(
+          ( *i )->get_pre_synaptic_element_name(), ( *i )->get_post_synaptic_element_name() );
       }
     }
   }
   else
   {
-    cb = kernel().connection_manager.get_conn_builder( rule_name, sources, targets, conn_spec, syn_spec );
+    cb = kernel().connection_manager.get_conn_builder( rule_name,
+      sources,
+      targets,
+      /* third_out */ nullptr,
+      conn_spec,
+      syn_specs );
   }
-  assert( cb != 0 );
+  assert( cb );
 
-  // at this point, all entries in conn_spec and syn_spec have been checked
-  ALL_ENTRIES_ACCESSED( *conn_spec, "Connect", "Unread dictionary entries: " );
-  ALL_ENTRIES_ACCESSED( *syn_spec, "Connect", "Unread dictionary entries: " );
+  // At this point, all entries in conn_spec and syn_spec have been checked
+  conn_spec.all_entries_accessed( "Disconnect", "conn_spec" );
 
+  syn_specs[ 0 ].all_entries_accessed( "Disconnect", "syn_spec" );
+
+  // Set flag before calling cb->disconnect() in case exception is thrown after some connections have been removed.
+  kernel().connection_manager.set_connections_have_changed();
   cb->disconnect();
+
   delete cb;
 }
 
@@ -366,30 +324,23 @@ SPManager::update_structural_plasticity()
   }
 }
 
-/**
- * Handles the general dynamic creation and deletion of synapses when
- * structural plasticity is enabled. Retrieves the number of available
- * synaptic elements to create new synapses. Retrieves the number of
- * deleted synaptic elements to delete already created synapses.
- * @param sp_builder The structural plasticity connection builder to use
- */
 void
 SPManager::update_structural_plasticity( SPBuilder* sp_builder )
 {
   // Index of neurons having a vacant synaptic element
-  std::vector< index > pre_vacant_id;  // pre synaptic elements (e.g Axon)
-  std::vector< index > post_vacant_id; // post synaptic element (e.g Den)
-  std::vector< int > pre_vacant_n;     // number of synaptic elements
-  std::vector< int > post_vacant_n;    // number of synaptic elements
+  std::vector< size_t > pre_vacant_id;   // pre synaptic elements (e.g Axon)
+  std::vector< size_t > post_vacant_id;  // postsynaptic element (e.g Den)
+  std::vector< int > pre_vacant_n;       // number of synaptic elements
+  std::vector< int > post_vacant_n;      // number of synaptic elements
 
   // Index of neuron deleting a synaptic element
-  std::vector< index > pre_deleted_id, post_deleted_id;
+  std::vector< size_t > pre_deleted_id, post_deleted_id;
   std::vector< int > pre_deleted_n, post_deleted_n;
 
   // Global vector for vacant and deleted synaptic element
-  std::vector< index > pre_vacant_id_global, post_vacant_id_global;
+  std::vector< size_t > pre_vacant_id_global, post_vacant_id_global;
   std::vector< int > pre_vacant_n_global, post_vacant_n_global;
-  std::vector< index > pre_deleted_id_global, post_deleted_id_global;
+  std::vector< size_t > pre_deleted_id_global, post_deleted_id_global;
   std::vector< int > pre_deleted_n_global, post_deleted_n_global;
 
   // Vector of displacements for communication
@@ -414,10 +365,10 @@ SPManager::update_structural_plasticity( SPBuilder* sp_builder )
     get_synaptic_elements(
       sp_builder->get_pre_synaptic_element_name(), pre_vacant_id, pre_vacant_n, pre_deleted_id, pre_deleted_n );
   }
-  // Get post synaptic elements data from local nodes
+  // Get postsynaptic elements data from local nodes
   get_synaptic_elements(
     sp_builder->get_post_synaptic_element_name(), post_vacant_id, post_vacant_n, post_deleted_id, post_deleted_n );
-  // Communicate the number of deleted post-synaptic elements
+  // Communicate the number of deleted postsynaptic elements
   kernel().mpi_manager.communicate( post_deleted_id, post_deleted_id_global, displacements );
   kernel().mpi_manager.communicate( post_deleted_n, post_deleted_n_global, displacements );
 
@@ -440,31 +391,27 @@ SPManager::update_structural_plasticity( SPBuilder* sp_builder )
   kernel().mpi_manager.communicate( post_vacant_id, post_vacant_id_global, displacements );
   kernel().mpi_manager.communicate( post_vacant_n, post_vacant_n_global, displacements );
 
+  bool synapses_created = false;
   if ( pre_vacant_id_global.size() > 0 and post_vacant_id_global.size() > 0 )
   {
-    create_synapses(
+    synapses_created = create_synapses(
       pre_vacant_id_global, pre_vacant_n_global, post_vacant_id_global, post_vacant_n_global, sp_builder );
+  }
+  if ( synapses_created or post_deleted_id.size() > 0 or pre_deleted_id.size() > 0 )
+  {
+    kernel().connection_manager.set_connections_have_changed();
   }
 }
 
-/**
- * Dynamic creation of synapses
- * @param pre_id source id
- * @param pre_n number of available synaptic elements in the pre node
- * @param post_id target id
- * @param post_n number of available synaptic elements in the post node
- * @param sp_conn_builder structural plasticity connection builder to use
- */
-void
-SPManager::create_synapses( std::vector< index >& pre_id,
+bool
+SPManager::create_synapses( std::vector< size_t >& pre_id,
   std::vector< int >& pre_n,
-  std::vector< index >& post_id,
+  std::vector< size_t >& post_id,
   std::vector< int >& post_n,
   SPBuilder* sp_conn_builder )
 {
-  std::vector< index > pre_id_rnd;
-  std::vector< index > post_id_rnd;
-  std::vector< index >::iterator pre_it, post_it;
+  std::vector< size_t > pre_id_rnd;
+  std::vector< size_t > post_id_rnd;
 
   // shuffle the vacant element
   serialize_id( pre_id, pre_n, pre_id_rnd );
@@ -474,7 +421,7 @@ SPManager::create_synapses( std::vector< index >& pre_id,
   if ( pre_id_rnd.size() > post_id_rnd.size() )
   {
     // we only shuffle the n first items,
-    // where n is the number of post synaptic elements
+    // where n is the number of postsynaptic elements
     global_shuffle( pre_id_rnd, post_id_rnd.size() );
     pre_id_rnd.resize( post_id_rnd.size() );
   }
@@ -487,42 +434,29 @@ SPManager::create_synapses( std::vector< index >& pre_id,
   }
 
   // create synapse
-  GIDCollection sources = GIDCollection( pre_id_rnd );
-  GIDCollection targets = GIDCollection( post_id_rnd );
+  sp_conn_builder->sp_connect( pre_id_rnd, post_id_rnd );
 
-  sp_conn_builder->sp_connect( sources, targets );
+  return not pre_id_rnd.empty();
 }
 
-/**
- * Deletion of synapses due to the loss of a pre synaptic element. The
- * corresponding pre synaptic element will still remain available for a new
- * connection on the following updates in connectivity
- * @param pre_deleted_id Id of the node with the deleted pre synaptic element
- * @param pre_deleted_n number of deleted pre synaptic elements
- * @param synapse_model model name
- * @param se_pre_name pre synaptic element name
- * @param se_post_name post synaptic element name
- */
 void
-SPManager::delete_synapses_from_pre( const std::vector< index >& pre_deleted_id,
+SPManager::delete_synapses_from_pre( const std::vector< size_t >& pre_deleted_id,
   std::vector< int >& pre_deleted_n,
-  const index synapse_model,
+  const size_t synapse_model,
   const std::string& se_pre_name,
   const std::string& se_post_name )
 {
-  /*
-   * Synapses deletion due to the loss of a pre-synaptic element need a
-   * communication of the lists of target
-   */
+  // Synapses deletion due to the loss of a pre-synaptic element need a
+  // communication of the lists of target
 
   // Connectivity
-  std::vector< std::vector< index > > connectivity;
-  std::vector< index > global_targets;
+  std::vector< std::vector< size_t > > connectivity;
+  std::vector< size_t > global_targets;
   std::vector< int > displacements;
 
   // iterators
-  std::vector< std::vector< index > >::iterator connectivity_it;
-  std::vector< index >::const_iterator id_it;
+  std::vector< std::vector< size_t > >::iterator connectivity_it;
+  std::vector< size_t >::const_iterator id_it;
   std::vector< int >::iterator n_it;
 
   kernel().connection_manager.get_targets( pre_deleted_id, synapse_model, se_post_name, connectivity );
@@ -542,87 +476,64 @@ SPManager::delete_synapses_from_pre( const std::vector< index >& pre_deleted_id,
     }
     global_shuffle( global_targets, -( *n_it ) );
 
-    for ( int i = 0; i < -( *n_it ); ++i ) // n is negative
+    for ( int i = 0; i < -( *n_it ); ++i )  // n is negative
     {
       delete_synapse( *id_it, global_targets[ i ], synapse_model, se_pre_name, se_post_name );
     }
   }
 }
 
-/**
- * Handles the deletion of synapses between source and target nodes. The
- * deletion is defined by the pre and post synaptic elements and the synapse
- * type. Updates the number of connected synaptic elements in the source and
- * target.
- * @param sgid source id
- * @param tgid target id
- * @param syn_id synapse type
- * @param se_pre_name name of the pre synaptic element
- * @param se_post_name name of the post synaptic element
- */
 void
-SPManager::delete_synapse( const index sgid,
-  const index tgid,
+SPManager::delete_synapse( const size_t snode_id,
+  const size_t tnode_id,
   const long syn_id,
   const std::string se_pre_name,
   const std::string se_post_name )
 {
   // get thread id
-  const int tid = kernel().vp_manager.get_thread_id();
-  if ( kernel().node_manager.is_local_gid( sgid ) )
+  const size_t tid = kernel().vp_manager.get_thread_id();
+  if ( kernel().node_manager.is_local_node_id( snode_id ) )
   {
-    Node* const source = kernel().node_manager.get_node( sgid );
-    const thread source_thread = source->get_thread();
+    Node* const source = kernel().node_manager.get_node_or_proxy( snode_id );
+    const size_t source_thread = source->get_thread();
     if ( tid == source_thread )
     {
       source->connect_synaptic_element( se_pre_name, -1 );
     }
   }
 
-  if ( kernel().node_manager.is_local_gid( tgid ) )
+  if ( kernel().node_manager.is_local_node_id( tnode_id ) )
   {
-    Node* const target = kernel().node_manager.get_node( tgid );
-    const thread target_thread = target->get_thread();
+    Node* const target = kernel().node_manager.get_node_or_proxy( tnode_id );
+    const size_t target_thread = target->get_thread();
     if ( tid == target_thread )
     {
-      kernel().connection_manager.disconnect( tid, syn_id, sgid, tgid );
+      kernel().connection_manager.disconnect( tid, syn_id, snode_id, tnode_id );
 
       target->connect_synaptic_element( se_post_name, -1 );
     }
   }
 }
 
-/**
- * Deletion of synapses due to the loss of a post synaptic element. The
- * corresponding pre synaptic element will still remain available for a new
- * connection on the following updates in connectivity
- * @param post_deleted_id Id of the node with the deleted post synaptic element
- * @param post_deleted_n number of deleted post synaptic elements
- * @param synapse_model model name
- * @param se_pre_name pre synaptic element name
- * @param se_post_name post synaptic element name
- */
 void
-SPManager::delete_synapses_from_post( std::vector< index >& post_deleted_id,
+SPManager::delete_synapses_from_post( std::vector< size_t >& post_deleted_id,
   std::vector< int >& post_deleted_n,
-  index synapse_model,
+  size_t synapse_model,
   std::string se_pre_name,
   std::string se_post_name )
 {
-  /*
-   * TODO: Synapses deletion due to the loss of a post-synaptic element can
-   * be done locally (except for the update of the number of pre-synaptic
-   * element)
-   */
+  // TODO: Synapses deletion due to the loss of a postsynaptic element can
+  // be done locally (except for the update of the number of pre-synaptic
+  // element)
 
   // Connectivity
-  std::vector< std::vector< index > > connectivity;
-  std::vector< index > global_sources;
+  std::vector< std::vector< size_t > > connectivity;
+  std::vector< size_t > global_sources;
   std::vector< int > displacements;
 
   // iterators
-  std::vector< std::vector< index > >::iterator connectivity_it;
-  std::vector< index >::iterator id_it;
+  std::vector< std::vector< size_t > >::iterator connectivity_it;
+  std::vector< size_t >::iterator id_it;
   std::vector< int >::iterator n_it;
 
   // Retrieve the connected sources
@@ -644,7 +555,7 @@ SPManager::delete_synapses_from_post( std::vector< index >& post_deleted_id,
     }
     global_shuffle( global_sources, -( *n_it ) );
 
-    for ( int i = 0; i < -( *n_it ); i++ ) // n is negative
+    for ( int i = 0; i < -( *n_it ); i++ )  // n is negative
     {
       delete_synapse( global_sources[ i ], *id_it, synapse_model, se_pre_name, se_post_name );
     }
@@ -653,15 +564,15 @@ SPManager::delete_synapses_from_post( std::vector< index >& post_deleted_id,
 
 void
 nest::SPManager::get_synaptic_elements( std::string se_name,
-  std::vector< index >& se_vacant_id,
+  std::vector< size_t >& se_vacant_id,
   std::vector< int >& se_vacant_n,
-  std::vector< index >& se_deleted_id,
+  std::vector< size_t >& se_deleted_id,
   std::vector< int >& se_deleted_n )
 {
   // local nodes
-  index n_vacant_id = 0;
-  index n_deleted_id = 0;
-  index gid;
+  size_t n_vacant_id = 0;
+  size_t n_deleted_id = 0;
+  size_t node_id;
   int n;
   size_t n_nodes = kernel().node_manager.size();
   se_vacant_id.clear();
@@ -674,23 +585,24 @@ nest::SPManager::get_synaptic_elements( std::string se_name,
   se_deleted_id.resize( n_nodes );
   se_deleted_n.resize( n_nodes );
 
-  std::vector< index >::iterator vacant_id_it = se_vacant_id.begin();
+  std::vector< size_t >::iterator vacant_id_it = se_vacant_id.begin();
   std::vector< int >::iterator vacant_n_it = se_vacant_n.begin();
-  std::vector< index >::iterator deleted_id_it = se_deleted_id.begin();
+  std::vector< size_t >::iterator deleted_id_it = se_deleted_id.begin();
   std::vector< int >::iterator deleted_n_it = se_deleted_n.begin();
-  std::vector< Node* >::const_iterator node_it;
+  SparseNodeArray::const_iterator node_it;
 
-  for ( thread tid = 0; tid < kernel().vp_manager.get_num_threads(); ++tid )
+  for ( size_t tid = 0; tid < kernel().vp_manager.get_num_threads(); ++tid )
   {
-    for ( node_it = kernel().node_manager.get_nodes_on_thread( tid ).begin();
-          node_it < kernel().node_manager.get_nodes_on_thread( tid ).end();
-          node_it++ )
+    const SparseNodeArray& local_nodes = kernel().node_manager.get_local_nodes( tid );
+    SparseNodeArray::const_iterator node_it;
+    for ( node_it = local_nodes.begin(); node_it < local_nodes.end(); node_it++ )
     {
-      gid = ( *node_it )->get_gid();
-      n = ( *node_it )->get_synaptic_elements_vacant( se_name );
+      node_id = node_it->get_node_id();
+      Node* node = node_it->get_node();
+      n = node->get_synaptic_elements_vacant( se_name );
       if ( n > 0 )
       {
-        ( *vacant_id_it ) = gid;
+        ( *vacant_id_it ) = node_id;
         ( *vacant_n_it ) = n;
         n_vacant_id++;
         vacant_id_it++;
@@ -698,7 +610,7 @@ nest::SPManager::get_synaptic_elements( std::string se_name,
       }
       if ( n < 0 )
       {
-        ( *deleted_id_it ) = gid;
+        ( *deleted_id_it ) = node_id;
         ( *deleted_n_it ) = n;
         n_deleted_id++;
         deleted_id_it++;
@@ -713,11 +625,11 @@ nest::SPManager::get_synaptic_elements( std::string se_name,
 }
 
 void
-nest::SPManager::serialize_id( std::vector< index >& id, std::vector< int >& n, std::vector< index >& res )
+nest::SPManager::serialize_id( std::vector< size_t >& id, std::vector< int >& n, std::vector< size_t >& res )
 {
   // populate res with indexes of nodes corresponding to the number of elements
   res.clear();
-  std::vector< index >::iterator id_it;
+  std::vector< size_t >::iterator id_it;
   std::vector< int >::iterator n_it;
   int j;
   id_it = id.begin();
@@ -732,29 +644,26 @@ nest::SPManager::serialize_id( std::vector< index >& id, std::vector< int >& n, 
 }
 
 void
-nest::SPManager::global_shuffle( std::vector< index >& v )
+nest::SPManager::global_shuffle( std::vector< size_t >& v )
 {
   global_shuffle( v, v.size() );
 }
 
-/*
- * Shuffles the n first items of the vector v
- */
 void
-nest::SPManager::global_shuffle( std::vector< index >& v, size_t n )
+nest::SPManager::global_shuffle( std::vector< size_t >& v, size_t n )
 {
   assert( n <= v.size() );
 
   // shuffle res using the global random number generator
   unsigned int N = v.size();
-  std::vector< index > v2;
-  index tmp;
+  std::vector< size_t > v2;
+  size_t tmp;
   unsigned int rnd;
-  std::vector< index >::iterator rndi;
+  std::vector< size_t >::iterator rndi;
   for ( unsigned int i = 0; i < n; i++ )
   {
     N = v.size();
-    rnd = kernel().rng_manager.get_grng()->ulrand( N );
+    rnd = get_rank_synced_rng()->ulrand( N );
     tmp = v[ rnd ];
     v2.push_back( tmp );
     rndi = v.begin();
@@ -764,9 +673,6 @@ nest::SPManager::global_shuffle( std::vector< index >& v, size_t n )
 }
 
 
-/*
- * Enable structural plasticity
- */
 void
 nest::SPManager::enable_structural_plasticity()
 {
@@ -780,22 +686,19 @@ nest::SPManager::enable_structural_plasticity()
       "Structural plasticity can not be enabled if keep_source_table has been "
       "set to false." );
   }
-  if ( not kernel().connection_manager.get_sort_connections_by_source() )
+  if ( not kernel().connection_manager.use_compressed_spikes() )
   {
     throw KernelException(
-      "Structural plasticity can not be enabled if sort_connections_by_source "
+      "Structural plasticity can not be enabled if use_compressed_spikes "
       "has been set to false." );
   }
   structural_plasticity_enabled_ = true;
 }
 
-/*
- Disable  structural plasticity
- */
 void
 nest::SPManager::disable_structural_plasticity()
 {
   structural_plasticity_enabled_ = false;
 }
 
-} // namespace nest
+}  // namespace nest

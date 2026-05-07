@@ -25,31 +25,28 @@
 #ifdef HAVE_GSL
 
 // C++ includes:
-#include <limits>
-#include <iomanip>
-#include <iostream>
 #include <cstdio>
 
 // Includes from libnestutil:
+#include "compose.hpp"
+#include "dict_util.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-
-#include "compose.hpp"
-#include "propagator_stability.h"
-#include "event.h"
 
 namespace nest
 {
+void
+register_gif_cond_exp( const std::string& name )
+{
+  register_node_model< gif_cond_exp >( name );
+}
+
 
 /* ----------------------------------------------------------------
  * Recordables map
@@ -70,7 +67,7 @@ RecordablesMap< gif_cond_exp >::create()
   insert_( names::g_ex, &gif_cond_exp::get_y_elem_< gif_cond_exp::State_::G_EXC > );
   insert_( names::g_in, &gif_cond_exp::get_y_elem_< gif_cond_exp::State_::G_INH > );
 }
-} // namespace
+}  // namespace
 
 extern "C" int
 nest::gif_cond_exp_dynamics( double, const double y[], double f[], void* pnode )
@@ -82,19 +79,24 @@ nest::gif_cond_exp_dynamics( double, const double y[], double f[], void* pnode )
   assert( pnode );
   const nest::gif_cond_exp& node = *( reinterpret_cast< nest::gif_cond_exp* >( pnode ) );
 
+  const bool is_refractory = node.S_.r_ref_ > 0;
+
   // y[] here is---and must be---the state vector supplied by the integrator,
   // not the state vector in the node, node.S_.y[].
 
   // The following code is verbose for the sake of clarity. We assume that a
   // good compiler will optimize the verbosity away ...
 
-  const double I_syn_exc = y[ S::G_EXC ] * ( y[ S::V_M ] - node.P_.E_ex_ );
-  const double I_syn_inh = y[ S::G_INH ] * ( y[ S::V_M ] - node.P_.E_in_ );
-  const double I_L = node.P_.g_L_ * ( y[ S::V_M ] - node.P_.E_L_ );
+  // Clamp membrane potential to V_reset while refractory.
+  const double V = is_refractory ? node.P_.V_reset_ : y[ S::V_M ];
+
+  const double I_syn_exc = y[ S::G_EXC ] * ( V - node.P_.E_ex_ );
+  const double I_syn_inh = y[ S::G_INH ] * ( V - node.P_.E_in_ );
+  const double I_L = node.P_.g_L_ * ( V - node.P_.E_L_ );
   const double stc = node.S_.stc_;
 
   // V dot
-  f[ 0 ] = ( -I_L + node.S_.I_stim_ + node.P_.I_e_ - I_syn_exc - I_syn_inh - stc ) / node.P_.c_m_;
+  f[ 0 ] = is_refractory ? 0.0 : ( -I_L + node.S_.I_stim_ + node.P_.I_e_ - I_syn_exc - I_syn_inh - stc ) / node.P_.c_m_;
 
   f[ 1 ] = -y[ S::G_EXC ] / node.P_.tau_synE_;
   f[ 2 ] = -y[ S::G_INH ] / node.P_.tau_synI_;
@@ -107,23 +109,23 @@ nest::gif_cond_exp_dynamics( double, const double y[], double f[], void* pnode )
  * ---------------------------------------------------------------- */
 
 nest::gif_cond_exp::Parameters_::Parameters_()
-  : g_L_( 4.0 )        // nS
-  , E_L_( -70.0 )      // mV
-  , V_reset_( -55.0 )  // mV
-  , Delta_V_( 0.5 )    // mV
-  , V_T_star_( -35 )   // mV
-  , lambda_0_( 0.001 ) // 1/ms
-  , E_ex_( 0.0 )       // mV
-  , E_in_( -85.0 )     // mV
-  , tau_synE_( 2.0 )   // ms
-  , tau_synI_( 2.0 )   // ms
-  , t_ref_( 4.0 )      // ms
-  , c_m_( 80.0 )       // pF
-  , tau_stc_()         // ms
-  , q_stc_()           // nA
-  , tau_sfa_()         // ms
-  , q_sfa_()           // mV
-  , I_e_( 0.0 )        // pA
+  : g_L_( 4.0 )         // nS
+  , E_L_( -70.0 )       // mV
+  , V_reset_( -55.0 )   // mV
+  , Delta_V_( 0.5 )     // mV
+  , V_T_star_( -35 )    // mV
+  , lambda_0_( 0.001 )  // 1/ms
+  , E_ex_( 0.0 )        // mV
+  , E_in_( -85.0 )      // mV
+  , tau_synE_( 2.0 )    // ms
+  , tau_synI_( 2.0 )    // ms
+  , t_ref_( 4.0 )       // ms
+  , c_m_( 80.0 )        // pF
+  , tau_stc_()          // ms
+  , q_stc_()            // nA
+  , tau_sfa_()          // ms
+  , q_sfa_()            // mV
+  , I_e_( 0.0 )         // pA
   , gsl_error_tol( 1e-3 )
 {
 }
@@ -165,13 +167,13 @@ nest::gif_cond_exp::State_::State_( const State_& s )
   }
 }
 
-nest::gif_cond_exp::State_& nest::gif_cond_exp::State_::operator=( const State_& s )
+nest::gif_cond_exp::State_&
+nest::gif_cond_exp::State_::operator=( const State_& s )
 {
-  assert( this != &s ); // would be bad logical error in program
-  for ( size_t i = 0; i < STATE_VEC_SIZE; ++i )
-  {
-    neuron_state_[ i ] = s.neuron_state_[ i ];
-  }
+  I_stim_ = s.I_stim_;
+  sfa_ = s.sfa_;
+  stc_ = s.stc_;
+  r_ref_ = s.r_ref_;
 
   sfa_elems_.resize( s.sfa_elems_.size(), 0.0 );
   for ( size_t i = 0; i < sfa_elems_.size(); ++i )
@@ -184,12 +186,10 @@ nest::gif_cond_exp::State_& nest::gif_cond_exp::State_::operator=( const State_&
   {
     stc_elems_[ i ] = s.stc_elems_[ i ];
   }
-
-  I_stim_ = s.I_stim_;
-  sfa_ = s.sfa_;
-  stc_ = s.stc_;
-  r_ref_ = s.r_ref_;
-
+  for ( size_t i = 0; i < STATE_VEC_SIZE; ++i )
+  {
+    neuron_state_[ i ] = s.neuron_state_[ i ];
+  }
   return *this;
 }
 
@@ -198,81 +198,72 @@ nest::gif_cond_exp::State_& nest::gif_cond_exp::State_::operator=( const State_&
  * ---------------------------------------------------------------- */
 
 void
-nest::gif_cond_exp::Parameters_::get( DictionaryDatum& d ) const
+nest::gif_cond_exp::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::I_e, I_e_ );
-  def< double >( d, names::E_L, E_L_ );
-  def< double >( d, names::g_L, g_L_ );
-  def< double >( d, names::C_m, c_m_ );
-  def< double >( d, names::V_reset, V_reset_ );
-  def< double >( d, names::Delta_V, Delta_V_ );
-  def< double >( d, names::V_T_star, V_T_star_ );
-  def< double >( d, names::lambda_0, lambda_0_ * 1000.0 ); // convert to 1/s
-  def< double >( d, names::t_ref, t_ref_ );
-  def< double >( d, names::tau_syn_ex, tau_synE_ );
-  def< double >( d, names::tau_syn_in, tau_synI_ );
-  def< double >( d, names::E_ex, E_ex_ );
-  def< double >( d, names::E_in, E_in_ );
-  def< double >( d, names::gsl_error_tol, gsl_error_tol );
-
-  ArrayDatum tau_sfa_list_ad( tau_sfa_ );
-  def< ArrayDatum >( d, names::tau_sfa, tau_sfa_list_ad );
-
-  ArrayDatum q_sfa_list_ad( q_sfa_ );
-  def< ArrayDatum >( d, names::q_sfa, q_sfa_list_ad );
-
-  ArrayDatum tau_stc_list_ad( tau_stc_ );
-  def< ArrayDatum >( d, names::tau_stc, tau_stc_list_ad );
-
-  ArrayDatum q_stc_list_ad( q_stc_ );
-  def< ArrayDatum >( d, names::q_stc, q_stc_list_ad );
+  d[ names::I_e ] = I_e_;
+  d[ names::E_L ] = E_L_;
+  d[ names::g_L ] = g_L_;
+  d[ names::C_m ] = c_m_;
+  d[ names::V_reset ] = V_reset_;
+  d[ names::Delta_V ] = Delta_V_;
+  d[ names::V_T_star ] = V_T_star_;
+  d[ names::lambda_0 ] = lambda_0_ * 1000.0;  // convert to 1/s
+  d[ names::t_ref ] = t_ref_;
+  d[ names::tau_syn_ex ] = tau_synE_;
+  d[ names::tau_syn_in ] = tau_synI_;
+  d[ names::E_ex ] = E_ex_;
+  d[ names::E_in ] = E_in_;
+  d[ names::gsl_error_tol ] = gsl_error_tol;
+  d[ names::tau_sfa ] = tau_sfa_;
+  d[ names::q_sfa ] = q_sfa_;
+  d[ names::tau_stc ] = tau_stc_;
+  d[ names::q_stc ] = q_stc_;
 }
 
 void
-nest::gif_cond_exp::Parameters_::set( const DictionaryDatum& d )
+nest::gif_cond_exp::Parameters_::set( const Dictionary& d, Node* node )
 {
+  update_value_param( d, names::I_e, I_e_, node );
+  update_value_param( d, names::E_L, E_L_, node );
+  update_value_param( d, names::g_L, g_L_, node );
+  update_value_param( d, names::C_m, c_m_, node );
+  update_value_param( d, names::V_reset, V_reset_, node );
+  update_value_param( d, names::Delta_V, Delta_V_, node );
+  update_value_param( d, names::V_T_star, V_T_star_, node );
 
-  updateValue< double >( d, names::I_e, I_e_ );
-  updateValue< double >( d, names::E_L, E_L_ );
-  updateValue< double >( d, names::g_L, g_L_ );
-  updateValue< double >( d, names::C_m, c_m_ );
-  updateValue< double >( d, names::V_reset, V_reset_ );
-  updateValue< double >( d, names::Delta_V, Delta_V_ );
-  updateValue< double >( d, names::V_T_star, V_T_star_ );
-
-  if ( updateValue< double >( d, names::lambda_0, lambda_0_ ) )
+  if ( update_value_param( d, names::lambda_0, lambda_0_, node ) )
   {
-    lambda_0_ /= 1000.0; // convert to 1/ms
+    lambda_0_ /= 1000.0;  // convert to 1/ms
   }
 
-  updateValue< double >( d, names::t_ref, t_ref_ );
-  updateValue< double >( d, names::tau_syn_ex, tau_synE_ );
-  updateValue< double >( d, names::tau_syn_in, tau_synI_ );
-  updateValue< double >( d, names::E_ex, E_ex_ );
-  updateValue< double >( d, names::E_in, E_in_ );
-  updateValue< double >( d, names::gsl_error_tol, gsl_error_tol );
+  update_value_param( d, names::t_ref, t_ref_, node );
+  update_value_param( d, names::tau_syn_ex, tau_synE_, node );
+  update_value_param( d, names::tau_syn_in, tau_synI_, node );
+  update_value_param( d, names::E_ex, E_ex_, node );
+  update_value_param( d, names::E_in, E_in_, node );
+  update_value_param( d, names::gsl_error_tol, gsl_error_tol, node );
 
-  updateValue< std::vector< double > >( d, names::tau_sfa, tau_sfa_ );
-  updateValue< std::vector< double > >( d, names::q_sfa, q_sfa_ );
-  updateValue< std::vector< double > >( d, names::tau_stc, tau_stc_ );
-  updateValue< std::vector< double > >( d, names::q_stc, q_stc_ );
+  d.update_value( names::tau_sfa, tau_sfa_ );
+  d.update_value( names::q_sfa, q_sfa_ );
+  d.update_value( names::tau_stc, tau_stc_ );
+  d.update_value( names::q_stc, q_stc_ );
 
   if ( tau_sfa_.size() != q_sfa_.size() )
   {
-    throw BadProperty( String::compose(
-      "'tau_sfa' and 'q_sfa' need to have the same dimensions.\nSize of "
-      "tau_sfa: %1\nSize of q_sfa: %2",
-      tau_sfa_.size(),
-      q_sfa_.size() ) );
+    throw BadProperty(
+      String::compose( "'tau_sfa' and 'q_sfa' need to have the same dimensions.\nSize of "
+                       "tau_sfa: %1\nSize of q_sfa: %2",
+        tau_sfa_.size(),
+        q_sfa_.size() ) );
   }
 
   if ( tau_stc_.size() != q_stc_.size() )
   {
-    throw BadProperty( String::compose(
-      "'tau_stc' and 'q_stc' need to have the same dimensions.\nSize of "
-      "tau_stc: %1\nSize of q_stc: %2",
-      tau_stc_.size(),
-      q_stc_.size() ) );
+    throw BadProperty(
+      String::compose( "'tau_stc' and 'q_stc' need to have the same dimensions.\nSize of "
+                       "tau_stc: %1\nSize of q_stc: %2",
+        tau_stc_.size(),
+        q_stc_.size() ) );
   }
   if ( g_L_ <= 0 )
   {
@@ -317,24 +308,28 @@ nest::gif_cond_exp::Parameters_::set( const DictionaryDatum& d )
 }
 
 void
-nest::gif_cond_exp::State_::get( DictionaryDatum& d, const Parameters_& p ) const
+nest::gif_cond_exp::State_::get( Dictionary& d, const Parameters_& ) const
 {
-  def< double >( d, names::V_m, neuron_state_[ V_M ] ); // Membrane potential
-  def< double >( d, names::E_sfa, sfa_ );               // Adaptive threshold potential
-  def< double >( d, names::I_stc, stc_ );               // Spike-triggered current
+  d[ names::V_m ] = neuron_state_[ V_M ];  // Membrane potential
+  d[ names::g_ex ] = neuron_state_[ G_EXC ];
+  d[ names::g_in ] = neuron_state_[ G_INH ];
+  d[ names::E_sfa ] = sfa_;  // Adaptive threshold potential
+  d[ names::I_stc ] = stc_;  // Spike-triggered current
 }
 
 void
-nest::gif_cond_exp::State_::set( const DictionaryDatum& d, const Parameters_& p )
+nest::gif_cond_exp::State_::set( const Dictionary& d, const Parameters_&, Node* node )
 {
-  updateValue< double >( d, names::V_m, neuron_state_[ V_M ] );
+  update_value_param( d, names::V_m, neuron_state_[ V_M ], node );
+  update_value_param( d, names::g_ex, neuron_state_[ G_EXC ], node );
+  update_value_param( d, names::g_in, neuron_state_[ G_INH ], node );
 }
 
 nest::gif_cond_exp::Buffers_::Buffers_( gif_cond_exp& n )
   : logger_( n )
-  , s_( 0 )
-  , c_( 0 )
-  , e_( 0 )
+  , s_( nullptr )
+  , c_( nullptr )
+  , e_( nullptr )
 {
   // Initialization of the remaining members is deferred to
   // init_buffers_().
@@ -342,9 +337,9 @@ nest::gif_cond_exp::Buffers_::Buffers_( gif_cond_exp& n )
 
 nest::gif_cond_exp::Buffers_::Buffers_( const Buffers_&, gif_cond_exp& n )
   : logger_( n )
-  , s_( 0 )
-  , c_( 0 )
-  , e_( 0 )
+  , s_( nullptr )
+  , c_( nullptr )
+  , e_( nullptr )
 {
   // Initialization of the remaining members is deferred to
   // init_buffers_().
@@ -355,7 +350,7 @@ nest::gif_cond_exp::Buffers_::Buffers_( const Buffers_&, gif_cond_exp& n )
  * ---------------------------------------------------------------- */
 
 nest::gif_cond_exp::gif_cond_exp()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_( P_ )
   , B_( *this )
@@ -364,7 +359,7 @@ nest::gif_cond_exp::gif_cond_exp()
 }
 
 nest::gif_cond_exp::gif_cond_exp( const gif_cond_exp& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -393,25 +388,18 @@ nest::gif_cond_exp::~gif_cond_exp()
  * ---------------------------------------------------------------- */
 
 void
-nest::gif_cond_exp::init_state_( const Node& proto )
-{
-  const gif_cond_exp& pr = downcast< gif_cond_exp >( proto );
-  S_ = pr.S_;
-}
-
-void
 nest::gif_cond_exp::init_buffers_()
 {
-  B_.spike_exc_.clear(); // includes resize
-  B_.spike_inh_.clear(); // includes resize
-  B_.currents_.clear();  //!< includes resize
-  B_.logger_.reset();    //!< includes resize
-  Archiving_Node::clear_history();
+  B_.spike_exc_.clear();  // includes resize
+  B_.spike_inh_.clear();  // includes resize
+  B_.currents_.clear();   //!< includes resize
+  B_.logger_.reset();     //!< includes resize
+  ArchivingNode::clear_history();
 
   B_.step_ = Time::get_resolution().get_ms();
   B_.IntegrationStep_ = B_.step_;
 
-  if ( B_.s_ == 0 )
+  if ( not B_.s_ )
   {
     B_.s_ = gsl_odeiv_step_alloc( gsl_odeiv_step_rkf45, State_::STATE_VEC_SIZE );
   }
@@ -420,7 +408,7 @@ nest::gif_cond_exp::init_buffers_()
     gsl_odeiv_step_reset( B_.s_ );
   }
 
-  if ( B_.c_ == 0 )
+  if ( not B_.c_ )
   {
     B_.c_ = gsl_odeiv_control_y_new( P_.gsl_error_tol, 0.0 );
   }
@@ -429,7 +417,7 @@ nest::gif_cond_exp::init_buffers_()
     gsl_odeiv_control_init( B_.c_, P_.gsl_error_tol, 0.0, 1.0, 0.0 );
   }
 
-  if ( B_.e_ == 0 )
+  if ( not B_.e_ )
   {
     B_.e_ = gsl_odeiv_evolve_alloc( State_::STATE_VEC_SIZE );
   }
@@ -439,22 +427,20 @@ nest::gif_cond_exp::init_buffers_()
   }
 
   B_.sys_.function = gif_cond_exp_dynamics;
-  B_.sys_.jacobian = NULL;
+  B_.sys_.jacobian = nullptr;
   B_.sys_.dimension = State_::STATE_VEC_SIZE;
   B_.sys_.params = reinterpret_cast< void* >( this );
 }
 
 void
-nest::gif_cond_exp::calibrate()
+nest::gif_cond_exp::pre_run_hook()
 {
   B_.logger_.init();
 
   const double h = Time::get_resolution().get_ms();
-  V_.rng_ = kernel().rng_manager.get_rng( get_thread() );
+  V_.rng_ = get_vp_specific_rng( get_thread() );
 
   V_.RefractoryCounts_ = Time( Time::ms( P_.t_ref_ ) ).get_steps();
-  // since t_ref_ >= 0, this can only fail in error
-  assert( V_.RefractoryCounts_ >= 0 );
 
   // initializing adaptation (stc/sfa) variables
   V_.P_sfa_.resize( P_.tau_sfa_.size(), 0.0 );
@@ -480,10 +466,6 @@ nest::gif_cond_exp::calibrate()
 void
 nest::gif_cond_exp::update( Time const& origin, const long from, const long to )
 {
-
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   for ( long lag = from; lag < to; ++lag )
   {
 
@@ -522,11 +504,11 @@ nest::gif_cond_exp::update( Time const& origin, const long from, const long to )
       const int status = gsl_odeiv_evolve_apply( B_.e_,
         B_.c_,
         B_.s_,
-        &B_.sys_,             // system of ODE
-        &t,                   // from t
-        B_.step_,             // to t <= step
-        &B_.IntegrationStep_, // integration step size
-        S_.neuron_state_ );   // neuronal state
+        &B_.sys_,              // system of ODE
+        &t,                    // from t
+        B_.step_,              // to t <= step
+        &B_.IntegrationStep_,  // integration step size
+        S_.neuron_state_ );    // neuronal state
       if ( status != GSL_SUCCESS )
       {
         throw GSLSolverFailure( get_name(), status );
@@ -536,7 +518,7 @@ nest::gif_cond_exp::update( Time const& origin, const long from, const long to )
     S_.neuron_state_[ State_::G_EXC ] += B_.spike_exc_.get_value( lag );
     S_.neuron_state_[ State_::G_INH ] += B_.spike_inh_.get_value( lag );
 
-    if ( S_.r_ref_ == 0 ) // neuron is not in refractory period
+    if ( S_.r_ref_ == 0 )  // neuron is not in refractory period
     {
 
       const double lambda = P_.lambda_0_ * std::exp( ( S_.neuron_state_[ State_::V_M ] - S_.sfa_ ) / P_.Delta_V_ );
@@ -569,7 +551,7 @@ nest::gif_cond_exp::update( Time const& origin, const long from, const long to )
       }
     }
     else
-    { // neuron is absolute refractory
+    {  // neuron is absolute refractory
       --S_.r_ref_;
       S_.neuron_state_[ State_::V_M ] = P_.V_reset_;
     }
@@ -600,7 +582,7 @@ nest::gif_cond_exp::handle( SpikeEvent& e )
   {
     B_.spike_inh_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
       -e.get_weight() * e.get_multiplicity() );
-  } // keep conductance positive
+  }  // keep conductance positive
 }
 
 void
@@ -621,4 +603,4 @@ nest::gif_cond_exp::handle( DataLoggingRequest& e )
   B_.logger_.handle( e );
 }
 
-#endif // HAVE_GSL
+#endif  // HAVE_GSL

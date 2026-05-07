@@ -19,11 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
-""" Gap Junctions: Inhibitory network example
-----------------------------------------------
+"""
+Gap Junctions: Inhibitory network example
+-----------------------------------------
 
 This script simulates an inhibitory network of 500 Hodgkin-Huxley neurons.
-Without the gap junctions (meaning for `gap_weight = 0.0`) the network shows
+Without the gap junctions (meaning for ``gap_weight = 0.0``) the network shows
 an asynchronous irregular state that is caused by the external excitatory
 Poissonian drive being balanced by the inhibitory feedback within the
 network. With increasing `gap_weight` the network synchronizes:
@@ -33,131 +34,120 @@ state. With a weight of 0.54 nS the network switches randomly between the
 asynchronous to the synchronous state, while for a gap weight of 0.7 nS a
 stable synchronous state is reached.
 
-This example is also used as test case 2 (see figure 9 and 10)
-in [1].
+This example is also used as test case 2 (see Figure 9 and 10)
+in [1]_.
 
 References
-~~~~~~~~~~~
+~~~~~~~~~~
 
 .. [1] Hahne et al. (2015) A unified framework for spiking and gap-junction
        interactions in distributed neuronal network simulations, Front.
        Neuroinform. http://dx.doi.org/10.3389/neuro.11.012.2008
-
-See Also
-~~~~~~~~~~
-
-:Authors:
-
-KEYWORDS:
 """
 
+import matplotlib.pyplot as plt
 import nest
-import pylab as pl
 import numpy
-import random
 
 n_neuron = 500
 gap_per_neuron = 60
 inh_per_neuron = 50
 delay = 1.0
-j_exc = 300.
-j_inh = -50.
+j_exc = 300.0
+j_inh = -50.0
 threads = 8
 stepsize = 0.05
-simtime = 501.
+simtime = 501.0
 gap_weight = 0.3
 
 nest.ResetKernel()
 
 ###############################################################################
 # First we set the random seed, adjust the kernel settings and create
-# `hh_psc_alpha_gap` neurons, `spike_detector` and `poisson_generator`.
+# ``hh_psc_alpha_gap`` neurons, ``spike_recorder`` and ``poisson_generator``.
 
-random.seed(1)
+numpy.random.seed(1)
 
-nest.SetKernelStatus({'resolution': 0.05,
-                      'total_num_virtual_procs': threads,
-                      'print_time': True,
-                      # Settings for waveform relaxation
-                      # 'use_wfr': False uses communication in every step
-                      # instead of an iterative solution
-                      'use_wfr': True,
-                      'wfr_comm_interval': 1.0,
-                      'wfr_tol': 0.0001,
-                      'wfr_max_iterations': 15,
-                      'wfr_interpolation_order': 3})
+nest.resolution = 0.05
+nest.total_num_virtual_procs = threads
+nest.print_time = True
 
-neurons = nest.Create('hh_psc_alpha_gap', n_neuron)
+# Settings for waveform relaxation. If 'use_wfr' is set to False,
+# communication takes place in every step instead of using an
+# iterative solution
+nest.use_wfr = True
+nest.wfr_comm_interval = 1.0
+nest.wfr_tol = 0.0001
+nest.wfr_max_iterations = 15
+nest.wfr_interpolation_order = 3
 
-sd = nest.Create("spike_detector", params={'to_file': False,
-                                           'to_memory': True})
-pg = nest.Create("poisson_generator", params={'rate': 500.0})
+neurons = nest.Create("hh_psc_alpha_gap", n_neuron)
+
+sr = nest.Create("spike_recorder")
+pg = nest.Create("poisson_generator", params={"rate": 500.0})
 
 ###############################################################################
-# Each neuron shall receive `inh_per_neuron = 50` inhibitory synapti inputs
+# Each neuron shall receive ``inh_per_neuron = 50`` inhibitory synaptic inputs
 # that are randomly selected from all other neurons, each with synaptic
-# weight `j_inh = -50.0` pA and a synaptic delay of 1.0 ms. Furthermore each
-#  neuron shall receive an excitatory external Poissonian input of 500.0 Hz
-# with synaptic weight `j_exc = 300.0` pA and the same delay.
+# weight ``j_inh = -50.0`` pA and a synaptic delay of 1.0 ms. Furthermore each
+# neuron shall receive an excitatory external Poissonian input of 500.0 Hz
+# with synaptic weight ``j_exc = 300.0`` pA and the same delay.
 # The desired connections are created with the following commands:
 
-conn_dict = {'rule': 'fixed_indegree',
-             'indegree': inh_per_neuron,
-             'autapses': False,
-             'multapses': True}
+conn_dict = {"rule": "fixed_indegree", "indegree": inh_per_neuron, "allow_autapses": False, "allow_multapses": True}
 
-syn_dict = {'model': 'static_synapse',
-            'weight': j_inh,
-            'delay': delay}
+syn_dict = {"synapse_model": "static_synapse", "weight": j_inh, "delay": delay}
 
 nest.Connect(neurons, neurons, conn_dict, syn_dict)
 
-nest.Connect(pg, neurons, 'all_to_all', syn_spec={'model': 'static_synapse',
-                                                  'weight': j_exc,
-                                                  'delay': delay})
+nest.Connect(pg, neurons, "all_to_all", syn_spec={"synapse_model": "static_synapse", "weight": j_exc, "delay": delay})
 
 ###############################################################################
-# Then the neurons are connected to the `spike_detector` and the initial
+# Then the neurons are connected to the ``spike_recorder`` and the initial
 # membrane potential of each neuron is set randomly between -40 and -80 mV.
 
-nest.Connect(neurons, sd)
+nest.Connect(neurons, sr)
 
-for i in range(n_neuron):
-    nest.SetStatus([neurons[i]], {'V_m': (-40. - 40. * random.random())})
+neurons.V_m = nest.random.uniform(min=-80.0, max=-40.0)
 
-###############################################################################
-# Finally gap junctions are added to the network. (60*500)/2 `gap_junction`
+#######################################################################################
+# Finally gap junctions are added to the network. :math:`(60*500)/2` ``gap_junction``
 # connections are added randomly resulting in an average of 60 gap-junction
-# connections per neuron. We must not use the `fixed_indegree` oder
-# `fixed_outdegree` functionality of `nest.Connect()` to create the
-# connections, as `gap_junction` connections are bidirectional connections
+# connections per neuron. We must not use the ``fixed_indegree`` oder
+# ``fixed_outdegree`` functionality of ``nest.Connect()`` to create the
+# connections, as ``gap_junction`` connections are bidirectional connections
 # and we need to make sure that the same neurons are connected in both ways.
 # This is achieved by creating the connections on the Python level with the
 # `random` module of the Python Standard Library and connecting the neurons
-# using the `make_symmetric` flag for `one_to_one` connections.
+# using the ``make_symmetric`` flag for ``one_to_one`` connections.
 
 n_connection = int(n_neuron * gap_per_neuron / 2)
-connections = numpy.transpose(
-    [random.sample(neurons, 2) for _ in range(n_connection)])
+neuron_list = neurons.tolist()
+connections = numpy.random.choice(neuron_list, [n_connection, 2])
 
-nest.Connect(connections[0], connections[1],
-             {'rule': 'one_to_one', 'make_symmetric': True},
-             {'model': 'gap_junction', 'weight': gap_weight})
+for source_node_id, target_node_id in connections:
+    nest.Connect(
+        nest.NodeCollection([source_node_id]),
+        nest.NodeCollection([target_node_id]),
+        {"rule": "one_to_one", "make_symmetric": True},
+        {"synapse_model": "gap_junction", "weight": gap_weight},
+    )
 
 ###############################################################################
 # In the end we start the simulation and plot the spike pattern.
 
 nest.Simulate(simtime)
 
-times = nest.GetStatus(sd, 'events')[0]['times']
-spikes = nest.GetStatus(sd, 'events')[0]['senders']
-n_spikes = nest.GetStatus(sd, 'n_events')[0]
+events = sr.events
+times = events["times"]
+spikes = events["senders"]
+n_spikes = sr.n_events
 
-hz_rate = (1000.0 * n_spikes / simtime) / n_neuron
+spike_rate = (1000.0 * n_spikes / simtime) / n_neuron
 
-pl.figure(1)
-pl.plot(times, spikes, 'o')
-pl.title('Average spike rate (Hz): %.2f' % hz_rate)
-pl.xlabel('time (ms)')
-pl.ylabel('neuron no')
-pl.show()
+plt.figure(1)
+plt.plot(times, spikes, "o")
+plt.title(f"Average spike rate: {spike_rate:.2f} spks/s")
+plt.xlabel("time (ms)")
+plt.ylabel("neuron no")
+plt.show()

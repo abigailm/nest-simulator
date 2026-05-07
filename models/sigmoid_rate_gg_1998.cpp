@@ -22,19 +22,36 @@
 
 #include "sigmoid_rate_gg_1998.h"
 
+// Includes from nestkernel
+#include "kernel_manager.h"
+#include "model_manager_impl.h"
+#include "nest_impl.h"
+
 namespace nest
 {
-
 void
-nonlinearities_sigmoid_rate_gg_1998::get( DictionaryDatum& d ) const
+register_sigmoid_rate_gg_1998_ipn( const std::string& name )
 {
-  def< double >( d, names::g, g_ );
+  register_node_model< sigmoid_rate_gg_1998_ipn >( name );
 }
 
 void
-nonlinearities_sigmoid_rate_gg_1998::set( const DictionaryDatum& d )
+register_rate_transformer_sigmoid_gg_1998( const std::string& name )
 {
-  updateValue< double >( d, names::g, g_ );
+  register_node_model< rate_transformer_sigmoid_gg_1998 >( name );
+}
+
+
+void
+nonlinearities_sigmoid_rate_gg_1998::get( Dictionary& d ) const
+{
+  d[ names::g ] = g_;
+}
+
+void
+nonlinearities_sigmoid_rate_gg_1998::set( const Dictionary& d, Node* node )
+{
+  update_value_param( d, names::g, g_, node );
 }
 
 /*
@@ -45,7 +62,7 @@ template <>
 void
 RecordablesMap< nest::sigmoid_rate_gg_1998_ipn >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::rate, &nest::sigmoid_rate_gg_1998_ipn::get_rate_ );
   insert_( names::noise, &nest::sigmoid_rate_gg_1998_ipn::get_noise_ );
 }
@@ -54,8 +71,8 @@ template <>
 void
 RecordablesMap< nest::rate_transformer_sigmoid_gg_1998 >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::rate, &nest::rate_transformer_sigmoid_gg_1998::get_rate_ );
 }
 
-} // namespace nest
+}  // namespace nest

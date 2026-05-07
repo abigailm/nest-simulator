@@ -29,6 +29,8 @@
 
 // C includes:
 #include <gsl/gsl_integration.h>
+#include <gsl/gsl_sf_dawson.h>
+#include <gsl/gsl_sf_erf.h>
 
 // Includes from nestkernel:
 #include "archiving_node.h"
@@ -36,61 +38,68 @@
 #include "event.h"
 #include "nest_types.h"
 #include "node.h"
-#include "normal_randomdev.h"
-#include "poisson_randomdev.h"
-#include "ring_buffer.h"
 #include "recordables_map.h"
+#include "ring_buffer.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup rate
+/* BeginUserDocs: neuron, rate
 
-Name: siegert_neuron
+Short description
++++++++++++++++++
 
-Description:
+model for mean-field analysis of spiking networks
 
-siegert_neuron is an implementation of a rate model with the
+Description
++++++++++++
+
+``siegert_neuron`` is an implementation of a rate model with the
 non-linearity given by the gain function of the
 leaky-integrate-and-fire neuron with delta or exponentially decaying
-synapses [2] and [3, their eq. 25]. The model can be used for a
-mean-field analysis of spiking networks.
+synapses [2]_ and [3]_ (their eq. 25). The model can be used for a
+mean-field analysis of spiking networks. A constant mean input can be
+provided to create neurons with a target rate, e.g. to model a constant
+external input.
 
 The model supports connections to other rate models with zero
 delay, and uses the secondary_event concept introduced with the
 gap-junction framework.
 
-Parameters:
+For details on the numerical solution of the Siegert integral, you can
+check out the `Siegert_neuron_integration
+<../model_details/siegert_neuron_integration.ipynb>`_
+notebook in the NEST source code.
 
-The following parameters can be set in the status dictionary.
-\verbatim embed:rst
+See also [1]_, [4]_.
+
+Parameters
+++++++++++
+
+The following parameters can be set in the status Dictionary.
+
 =====  ====== ==============================
  rate  1/s    Rate (1/s)
  tau   ms     Time constant
- mean  real   Additional constant input
+ mean  1/s    Additional constant input
 =====  ====== ==============================
-\endverbatim
 
 The following parameters can be set in the status directory and are
 used in the evaluation of the gain function. Parameters as in
 iaf_psc_exp/delta.
 
-\verbatim embed:rst
-=========  ======  =====================================================
+=========  ======  ================================================
  tau_m     ms      Membrane time constant
  tau_syn   ms      Time constant of postsynaptic currents
  t_ref     ms      Duration of refractory period
  theta     mV      Threshold relative to resting potential
- V_reset   mV      Reset relative to resting membrane potential
-=========  ======  =====================================================
-\endverbatim
+ V_reset   mV      Reset relative to resting potential
+=========  ======  ================================================
 
-References:
+References
+++++++++++
 
-\verbatim embed:rst
 .. [1] Hahne J, Dahmen D, Schuecker J, Frommer A, Bolten M, Helias M,
        Diesmann M (2017). Integration of continuous-time dynamics in a
        spiking neural network simulator. Frontiers in Neuroinformatics, 11:34.
@@ -106,17 +115,33 @@ References:
        (2015). A unified framework for spiking and gap-junction interactions
        in distributed neuronal network simulations. Frontiers in
        Neuroinformatics, 9:22. DOI: https://doi.org/10.3389/fninf.2015.00022
-\endverbatim
 
-Sends: DiffusionConnectionEvent
+Sends
++++++
 
-Receives: DiffusionConnectionEvent, DataLoggingRequest
+DiffusionConnectionEvent
 
-Author: Jannis Schuecker, David Dahmen, Jan Hahne
+Receives
+++++++++
 
-SeeAlso: diffusion_connection
-*/
-class siegert_neuron : public Archiving_Node
+DiffusionConnectionEvent, DataLoggingRequest
+
+See also
+++++++++
+
+diffusion_connection
+
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: siegert_neuron
+
+EndUserDocs */
+
+void register_siegert_neuron( const std::string& name );
+
+class siegert_neuron : public ArchivingNode
 {
 
 public:
@@ -125,7 +150,7 @@ public:
   siegert_neuron();
   siegert_neuron( const siegert_neuron& );
 
-  ~siegert_neuron();
+  ~siegert_neuron() override;
 
   /**
    * Import sets of overloaded virtual functions.
@@ -133,39 +158,37 @@ public:
    * Hiding
    */
   using Node::handle;
+  using Node::handles_test_event;
   using Node::sends_secondary_event;
 
-  void handle( DiffusionConnectionEvent& );
-  void handle( DataLoggingRequest& );
+  void handle( DiffusionConnectionEvent& ) override;
+  void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( DiffusionConnectionEvent&, rport );
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( DiffusionConnectionEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
   void
-  sends_secondary_event( DiffusionConnectionEvent& )
+  sends_secondary_event( DiffusionConnectionEvent& ) override
   {
   }
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
   /** This is the actual update function. The additional boolean parameter
    * determines if the function is called by update (false) or wfr_update (true)
    */
   bool update_( Time const&, const long, const long, const bool );
 
-  void update( Time const&, const long, const long );
-  bool wfr_update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
+  bool wfr_update( Time const&, const long, const long ) override;
 
-  // siegert functions and helpers
+  // siegert function
   double siegert( double, double );
-  double siegert1( double, double, double, double );
-  double siegert2( double, double, double, double );
 
   // The next two classes need to be friends to access the State_ class/member
   friend class RecordablesMap< siegert_neuron >;
@@ -190,7 +213,7 @@ private:
     /** Refractory period in ms. */
     double t_ref_;
 
-    /** Constant input in Hz. */
+    /** Constant input in 1/s. */
     double mean_;
 
     /** Threshold in mV. */
@@ -199,11 +222,11 @@ private:
     /** reset value in mV. */
     double V_reset_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in Dictionary
 
-    void set( const DictionaryDatum& );
+    void set( const Dictionary&, Node* node );
   };
 
   // ----------------------------------------------------------------
@@ -213,12 +236,12 @@ private:
    */
   struct State_
   {
-    double r_; //!< Rate
+    double r_;  //!< Rate
 
-    State_(); //!< Default initialization
+    State_();  //!< Default initialization
 
-    void get( DictionaryDatum& ) const;
-    void set( const DictionaryDatum& );
+    void get( Dictionary& ) const;
+    void set( const Dictionary&, Node* node );
   };
 
   // ----------------------------------------------------------------
@@ -231,11 +254,11 @@ private:
     Buffers_( siegert_neuron& );
     Buffers_( const Buffers_&, siegert_neuron& );
 
-    std::vector< double > drift_input_;     //!< buffer for drift term received by DiffusionConnection
-    std::vector< double > diffusion_input_; //!< buffer for diffusion term
+    std::vector< double > drift_input_;      //!< buffer for drift term received by DiffusionConnection
+    std::vector< double > diffusion_input_;  //!< buffer for diffusion term
     // received by DiffusionConnection
-    std::vector< double > last_y_values;           //!< remembers y_values from last wfr_update
-    UniversalDataLogger< siegert_neuron > logger_; //!< Logger for all analog data
+    std::vector< double > last_y_values;            //!< remembers y_values from last wfr_update
+    UniversalDataLogger< siegert_neuron > logger_;  //!< Logger for all analog data
   };
 
   // ----------------------------------------------------------------
@@ -280,15 +303,15 @@ siegert_neuron::update( Time const& origin, const long from, const long to )
 inline bool
 siegert_neuron::wfr_update( Time const& origin, const long from, const long to )
 {
-  State_ old_state = S_; // save state before wfr update
+  State_ old_state = S_;  // save state before wfr update
   const bool wfr_tol_exceeded = update_( origin, from, to, true );
-  S_ = old_state; // restore old state
+  S_ = old_state;  // restore old state
 
   return not wfr_tol_exceeded;
 }
 
-inline port
-siegert_neuron::handles_test_event( DiffusionConnectionEvent&, rport receptor_type )
+inline size_t
+siegert_neuron::handles_test_event( DiffusionConnectionEvent&, size_t receptor_type )
 {
   if ( receptor_type == 0 )
   {
@@ -304,8 +327,8 @@ siegert_neuron::handles_test_event( DiffusionConnectionEvent&, rport receptor_ty
   }
 }
 
-inline port
-siegert_neuron::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+siegert_neuron::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -315,34 +338,34 @@ siegert_neuron::handles_test_event( DataLoggingRequest& dlr, rport receptor_type
 }
 
 inline void
-siegert_neuron::get_status( DictionaryDatum& d ) const
+siegert_neuron::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d );
-  Archiving_Node::get_status( d );
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  ArchivingNode::get_status( d );
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-siegert_neuron::set_status( const DictionaryDatum& d )
+siegert_neuron::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
-  State_ stmp = S_;      // temporary copy in case of errors
-  stmp.set( d );         // throws if BadProperty
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
+  ptmp.set( d, this );    // throws if BadProperty
+  State_ stmp = S_;       // temporary copy in case of errors
+  stmp.set( d, this );    // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // HAVE_GSL
-#endif // SIEGERT_NEURON_H
+#endif  // HAVE_GSL
+#endif  // SIEGERT_NEURON_H

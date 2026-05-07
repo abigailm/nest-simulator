@@ -28,21 +28,23 @@
 #include <limits>
 
 // Includes from libnestutil:
+#include "dict_util.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
-
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 namespace nest
 {
+void
+register_iaf_psc_delta( const std::string& name )
+{
+  register_node_model< iaf_psc_delta >( name );
+}
+
 
 /* ----------------------------------------------------------------
  * Recordables map
@@ -56,7 +58,7 @@ template <>
 void
 RecordablesMap< iaf_psc_delta >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::V_m, &iaf_psc_delta::get_V_m_ );
 }
 
@@ -65,14 +67,14 @@ RecordablesMap< iaf_psc_delta >::create()
  * ---------------------------------------------------------------- */
 
 nest::iaf_psc_delta::Parameters_::Parameters_()
-  : tau_m_( 10.0 )                                  // ms
-  , c_m_( 250.0 )                                   // pF
-  , t_ref_( 2.0 )                                   // ms
-  , E_L_( -70.0 )                                   // mV
-  , I_e_( 0.0 )                                     // pA
-  , V_th_( -55.0 - E_L_ )                           // mV, rel to E_L_
-  , V_min_( -std::numeric_limits< double >::max() ) // relative E_L_-55.0-E_L_
-  , V_reset_( -70.0 - E_L_ )                        // mV, rel to E_L_
+  : tau_m_( 10.0 )                                   // ms
+  , c_m_( 250.0 )                                    // pF
+  , t_ref_( 2.0 )                                    // ms
+  , E_L_( -70.0 )                                    // mV
+  , I_e_( 0.0 )                                      // pA
+  , V_th_( -55.0 - E_L_ )                            // mV, rel to E_L_
+  , V_min_( -std::numeric_limits< double >::max() )  // relative E_L_-55.0-E_L_
+  , V_reset_( -70.0 - E_L_ )                         // mV, rel to E_L_
   , with_refr_input_( false )
 {
 }
@@ -90,29 +92,29 @@ nest::iaf_psc_delta::State_::State_()
  * ---------------------------------------------------------------- */
 
 void
-nest::iaf_psc_delta::Parameters_::get( DictionaryDatum& d ) const
+nest::iaf_psc_delta::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::E_L, E_L_ ); // Resting potential
-  def< double >( d, names::I_e, I_e_ );
-  def< double >( d, names::V_th, V_th_ + E_L_ ); // threshold value
-  def< double >( d, names::V_reset, V_reset_ + E_L_ );
-  def< double >( d, names::V_min, V_min_ + E_L_ );
-  def< double >( d, names::C_m, c_m_ );
-  def< double >( d, names::tau_m, tau_m_ );
-  def< double >( d, names::t_ref, t_ref_ );
-  def< bool >( d, names::refractory_input, with_refr_input_ );
+  d[ names::E_L ] = E_L_;  // Resting potential
+  d[ names::I_e ] = I_e_;
+  d[ names::V_th ] = V_th_ + E_L_;  // threshold value
+  d[ names::V_reset ] = V_reset_ + E_L_;
+  d[ names::V_min ] = V_min_ + E_L_;
+  d[ names::C_m ] = c_m_;
+  d[ names::tau_m ] = tau_m_;
+  d[ names::t_ref ] = t_ref_;
+  d[ names::refractory_input ] = with_refr_input_;
 }
 
 double
-nest::iaf_psc_delta::Parameters_::set( const DictionaryDatum& d )
+nest::iaf_psc_delta::Parameters_::set( const Dictionary& d, Node* node )
 {
   // if E_L_ is changed, we need to adjust all variables defined relative to
   // E_L_
   const double ELold = E_L_;
-  updateValue< double >( d, names::E_L, E_L_ );
+  update_value_param( d, names::E_L, E_L_, node );
   const double delta_EL = E_L_ - ELold;
 
-  if ( updateValue< double >( d, names::V_reset, V_reset_ ) )
+  if ( update_value_param( d, names::V_reset, V_reset_, node ) )
   {
     V_reset_ -= E_L_;
   }
@@ -121,7 +123,7 @@ nest::iaf_psc_delta::Parameters_::set( const DictionaryDatum& d )
     V_reset_ -= delta_EL;
   }
 
-  if ( updateValue< double >( d, names::V_th, V_th_ ) )
+  if ( update_value_param( d, names::V_th, V_th_, node ) )
   {
     V_th_ -= E_L_;
   }
@@ -130,7 +132,7 @@ nest::iaf_psc_delta::Parameters_::set( const DictionaryDatum& d )
     V_th_ -= delta_EL;
   }
 
-  if ( updateValue< double >( d, names::V_min, V_min_ ) )
+  if ( update_value_param( d, names::V_min, V_min_, node ) )
   {
     V_min_ -= E_L_;
   }
@@ -139,17 +141,17 @@ nest::iaf_psc_delta::Parameters_::set( const DictionaryDatum& d )
     V_min_ -= delta_EL;
   }
 
-  updateValue< double >( d, names::I_e, I_e_ );
-  updateValue< double >( d, names::C_m, c_m_ );
-  updateValue< double >( d, names::tau_m, tau_m_ );
-  updateValue< double >( d, names::t_ref, t_ref_ );
+  update_value_param( d, names::I_e, I_e_, node );
+  update_value_param( d, names::C_m, c_m_, node );
+  update_value_param( d, names::tau_m, tau_m_, node );
+  update_value_param( d, names::t_ref, t_ref_, node );
   if ( V_reset_ >= V_th_ )
   {
     throw BadProperty( "Reset potential must be smaller than threshold." );
   }
   if ( c_m_ <= 0 )
   {
-    throw BadProperty( "Capacitance must be >0." );
+    throw BadProperty( "Capacitance must be > 0." );
   }
   if ( t_ref_ < 0 )
   {
@@ -160,21 +162,21 @@ nest::iaf_psc_delta::Parameters_::set( const DictionaryDatum& d )
     throw BadProperty( "Membrane time constant must be > 0." );
   }
 
-  updateValue< bool >( d, names::refractory_input, with_refr_input_ );
+  update_value_param( d, names::refractory_input, with_refr_input_, node );
 
   return delta_EL;
 }
 
 void
-nest::iaf_psc_delta::State_::get( DictionaryDatum& d, const Parameters_& p ) const
+nest::iaf_psc_delta::State_::get( Dictionary& d, const Parameters_& p ) const
 {
-  def< double >( d, names::V_m, y3_ + p.E_L_ ); // Membrane potential
+  d[ names::V_m ] = y3_ + p.E_L_;  // Membrane potential
 }
 
 void
-nest::iaf_psc_delta::State_::set( const DictionaryDatum& d, const Parameters_& p, double delta_EL )
+nest::iaf_psc_delta::State_::set( const Dictionary& d, const Parameters_& p, double delta_EL, Node* node )
 {
-  if ( updateValue< double >( d, names::V_m, y3_ ) )
+  if ( update_value_param( d, names::V_m, y3_, node ) )
   {
     y3_ -= p.E_L_;
   }
@@ -199,7 +201,7 @@ nest::iaf_psc_delta::Buffers_::Buffers_( const Buffers_&, iaf_psc_delta& n )
  * ---------------------------------------------------------------- */
 
 nest::iaf_psc_delta::iaf_psc_delta()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_()
   , B_( *this )
@@ -208,7 +210,7 @@ nest::iaf_psc_delta::iaf_psc_delta()
 }
 
 nest::iaf_psc_delta::iaf_psc_delta( const iaf_psc_delta& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -220,23 +222,16 @@ nest::iaf_psc_delta::iaf_psc_delta( const iaf_psc_delta& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::iaf_psc_delta::init_state_( const Node& proto )
-{
-  const iaf_psc_delta& pr = downcast< iaf_psc_delta >( proto );
-  S_ = pr.S_;
-}
-
-void
 nest::iaf_psc_delta::init_buffers_()
 {
-  B_.spikes_.clear();   // includes resize
-  B_.currents_.clear(); // includes resize
-  B_.logger_.reset();   // includes resize
-  Archiving_Node::clear_history();
+  B_.spikes_.clear();    // includes resize
+  B_.currents_.clear();  // includes resize
+  B_.logger_.reset();    // includes resize
+  ArchivingNode::clear_history();
 }
 
 void
-nest::iaf_psc_delta::calibrate()
+nest::iaf_psc_delta::pre_run_hook()
 {
   B_.logger_.init();
 
@@ -276,9 +271,6 @@ nest::iaf_psc_delta::calibrate()
 void
 nest::iaf_psc_delta::update( Time const& origin, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   const double h = Time::get_resolution().get_ms();
   for ( long lag = from; lag < to; ++lag )
   {
@@ -289,7 +281,7 @@ nest::iaf_psc_delta::update( Time const& origin, const long from, const long to 
 
       // if we have accumulated spikes from refractory period,
       // add and reset accumulator
-      if ( P_.with_refr_input_ && S_.refr_spikes_buffer_ != 0.0 )
+      if ( P_.with_refr_input_ and S_.refr_spikes_buffer_ != 0.0 )
       {
         S_.y3_ += S_.refr_spikes_buffer_;
         S_.refr_spikes_buffer_ = 0.0;
@@ -298,7 +290,7 @@ nest::iaf_psc_delta::update( Time const& origin, const long from, const long to 
       // lower bound of membrane potential
       S_.y3_ = ( S_.y3_ < P_.V_min_ ? P_.V_min_ : S_.y3_ );
     }
-    else // neuron is absolute refractory
+    else  // neuron is absolute refractory
     {
       // read spikes from buffer and accumulate them, discounting
       // for decay until end of refractory period
@@ -308,8 +300,9 @@ nest::iaf_psc_delta::update( Time const& origin, const long from, const long to 
       }
       else
       {
+        // clear buffer entry, ignore spike
         B_.spikes_.get_value( lag );
-      } // clear buffer entry, ignore spike
+      }
 
       --S_.r_;
     }
@@ -366,4 +359,4 @@ nest::iaf_psc_delta::handle( DataLoggingRequest& e )
   B_.logger_.handle( e );
 }
 
-} // namespace
+}  // namespace

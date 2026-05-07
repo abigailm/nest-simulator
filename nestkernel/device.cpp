@@ -31,8 +31,6 @@
 #include "nest_names.h"
 #include "node.h"
 
-// Includes from sli:
-#include "dictutils.h"
 
 /* ----------------------------------------------------------------
  * Default constructor defining default parameters
@@ -50,13 +48,22 @@ nest::Device::Parameters_::Parameters_( const Parameters_& p )
   , start_( p.start_ )
   , stop_( p.stop_ )
 {
-  /* The resolution of the simulation may have changed since the
-     original parameters were set. We thus must calibrate the copies
-     to ensure consistency of the time values.
-  */
+  // The resolution of the simulation may have changed since the
+  // original parameters were set. We thus must calibrate the copies
+  // to ensure consistency of the time values.
   origin_.calibrate();
   start_.calibrate();
   stop_.calibrate();
+}
+
+nest::Device::Parameters_&
+nest::Device::Parameters_::operator=( const Parameters_& p )
+{
+  origin_ = p.origin_;
+  start_ = p.start_;
+  stop_ = p.stop_;
+
+  return *this;
 }
 
 
@@ -65,40 +72,38 @@ nest::Device::Parameters_::Parameters_( const Parameters_& p )
  * ---------------------------------------------------------------- */
 
 void
-nest::Device::Parameters_::get( DictionaryDatum& d ) const
+nest::Device::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::origin ] = origin_.get_ms();
-  ( *d )[ names::start ] = start_.get_ms();
-  ( *d )[ names::stop ] = stop_.get_ms();
+  d[ names::origin ] = origin_.get_ms();
+  d[ names::start ] = start_.get_ms();
+  d[ names::stop ] = stop_.get_ms();
 }
 
 void
-nest::Device::Parameters_::update_( const DictionaryDatum& d, const Name& name, Time& value )
+nest::Device::Parameters_::update_( const Dictionary& d, const std::string& name, Time& value )
 {
-  /* We cannot update the Time values directly, since updateValue()
-         doesn't support Time objects. We thus read the value in ms into
-         a double first and then update the time object if a value was
-         given.
-
-         To be valid, time values must either be on the time grid,
-         or be infinite. Infinite values are handled gracefully.
-  */
+  // We cannot update the Time values directly, since updateValue()
+  // doesn't support Time objects. We thus read the value in ms into
+  // a double first and then update the time object if a value was
+  // given.
+  //
+  // To be valid, time values must either be on the time grid,
+  // or be infinite. Infinite values are handled gracefully.
 
   double val;
-  if ( updateValue< double >( d, name, val ) )
+  if ( d.update_value( name, val ) )
   {
     const Time t = Time::ms( val );
     if ( t.is_finite() and not t.is_grid_time() )
     {
-      throw BadProperty( name.toString() +  " must be a multiple "
-                                 "of the simulation resolution." );
+      throw BadProperty( name + " must be a multiple of the simulation resolution." );
     }
     value = t;
   }
 }
 
 void
-nest::Device::Parameters_::set( const DictionaryDatum& d )
+nest::Device::Parameters_::set( const Dictionary& d )
 {
   update_( d, names::origin, origin_ );
   update_( d, names::start, start_ );
@@ -131,19 +136,13 @@ nest::Device::Device( const Device& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::Device::init_parameters( const Device& proto )
-{
-  P_ = Parameters_( proto.P_ ); // force recalibration of Time objects
-}
-
-void
-nest::Device::calibrate()
+nest::Device::pre_run_hook()
 {
   // We do not need to recalibrate time objects, since they are
   // recalibrated on instance construction and resolution cannot
   // change after a single node instance has been created.
-
-  // by adding time objects, all overflows will be handled gracefully
+  //
+  //  by adding time objects, all overflows will be handled gracefully
   V_.t_min_ = ( P_.origin_ + P_.start_ ).get_steps();
   V_.t_max_ = ( P_.origin_ + P_.stop_ ).get_steps();
 }

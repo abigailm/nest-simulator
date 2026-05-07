@@ -39,8 +39,8 @@
 #include "event.h"
 #include "nest_types.h"
 #include "node.h"
-#include "ring_buffer.h"
 #include "recordables_map.h"
+#include "ring_buffer.h"
 #include "universal_data_logger.h"
 
 namespace nest
@@ -58,24 +58,23 @@ namespace nest
  */
 extern "C" int hh_psc_alpha_gap_dynamics( double, const double*, double*, void* );
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup psc
-@ingroup hh
-@ingroup gap
+/* BeginUserDocs: neuron, current-based, Hodgkin-Huxley, gap junction, soft threshold
 
-Name: hh_psc_alpha_gap - Hodgkin-Huxley neuron model with gap-junction support.
+Short description
++++++++++++++++++
 
-Description:
+Hodgkin-Huxley neuron model with gap-junction support
 
-hh_psc_alpha_gap is an implementation of a spiking neuron using the
-Hodgkin-Huxley formalism. In contrast to hh_psc_alpha the implementation
+Description
++++++++++++
+
+``hh_psc_alpha_gap`` is an implementation of a spiking neuron using the
+Hodgkin-Huxley formalism. In contrast to ``hh_psc_alpha`` the implementation
 additionally supports gap junctions.
 
-
-1. Post-synaptic currents
-Incoming spike events induce a post-synaptic change of current modelled
-by an alpha function. The alpha function is normalised such that an event of
+1. Postsynaptic currents
+Incoming spike events induce a postsynaptic change of current modelled
+by an alpha function. The alpha function is normalized such that an event of
 weight 1.0 results in a peak current of 1 pA.
 
 2. Spike Detection
@@ -85,14 +84,19 @@ it is considered a spike.
 
 3. Gap Junctions
 Gap Junctions are implemented by a gap current of the form
-\f$ g_ij( V_i - V_j) \f$.
+:math:`g_{ij}( V_i - V_j)`.
 
-Parameters:
+See also [1]_, [2]_, [3]_, [4]_.
 
-The following parameters can be set in the status dictionary.
+For details on asynchronicity in spike and firing events with Hodgkin Huxley models
+see :ref:`here <hh_details>`.
 
-\verbatim embed:rst
-===========  ======  ============================================================
+Parameters
+++++++++++
+
+The following parameters can be set in the status Dictionary.
+
+===========  ====== ============================================================
 tau_ex       ms      Rise time of the excitatory synaptic alpha function
 tau_in       ms      Rise time of the inhibitory synaptic alpha function
 g_K          nS      Potassium peak conductance
@@ -100,6 +104,7 @@ V_m          mV      Membrane potential
 E_L          mV      Leak reversal potential
 g_L          nS      Leak conductance
 C_m          pF      Capacity of the membrane
+t_ref        ms      Duration of refractory period
 tau_syn_ex   ms      Rise time of the excitatory synaptic alpha function
 tau_syn_in   ms      Rise time of the inhibitory synaptic alpha function
 E_Na         mV      Sodium reversal potential
@@ -111,12 +116,11 @@ Act_m        real    Activation variable m
 Inact_h      real    Inactivation variable h
 Act_n        real    Activation variable n
 I_e          pA      External input current
-===========  ======  ============================================================
-\endverbatim
+===========  ====== ============================================================
 
-References:
+References
+++++++++++
 
-\verbatim embed:rst
 .. [1] Gerstner W, Kistler W. Spiking neuron models: Single neurons,
        populations, plasticity. Cambridge University Press
 .. [2] Mancilla JG, Lewis TG, Pinto DJ, Rinzel J, Connors BW (2007).
@@ -132,18 +136,32 @@ References:
        (2015). A unified framework for spiking and gap-junction interactions
        in distributed neuronal netowrk simulations. Frontiers in
        Neuroinformatics, 9:22. DOI: https://doi.org/10.3389/fninf.2015.00022
-\endverbatim
 
+Sends
++++++
 
-Sends: SpikeEvent, GapJunctionEvent
+SpikeEvent, GapJunctionEvent
 
-Receives: SpikeEvent, GapJunctionEvent, CurrentEvent, DataLoggingRequest
+Receives
+++++++++
 
-Author: Jan Hahne, Moritz Helias, Susanne Kunkel
+SpikeEvent, GapJunctionEvent, CurrentEvent, DataLoggingRequest
 
-SeeAlso: hh_psc_alpha, hh_cond_exp_traub, gap_junction
-*/
-class hh_psc_alpha_gap : public Archiving_Node
+See also
+++++++++
+
+hh_psc_alpha, hh_cond_exp_traub, gap_junction
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: hh_psc_alpha_gap
+
+EndUserDocs */
+
+void register_hh_psc_alpha_gap( const std::string& name );
+
+class hh_psc_alpha_gap : public ArchivingNode
 {
 
 public:
@@ -151,7 +169,7 @@ public:
 
   hh_psc_alpha_gap();
   hh_psc_alpha_gap( const hh_psc_alpha_gap& );
-  ~hh_psc_alpha_gap();
+  ~hh_psc_alpha_gap() override;
 
   /**
    * Import sets of overloaded virtual functions.
@@ -162,38 +180,37 @@ public:
   using Node::handles_test_event;
   using Node::sends_secondary_event;
 
-  port send_test_event( Node& target, rport receptor_type, synindex, bool );
+  size_t send_test_event( Node& target, size_t receptor_type, synindex, bool ) override;
 
-  void handle( SpikeEvent& );
-  void handle( CurrentEvent& );
-  void handle( DataLoggingRequest& );
-  void handle( GapJunctionEvent& );
+  void handle( SpikeEvent& ) override;
+  void handle( CurrentEvent& ) override;
+  void handle( DataLoggingRequest& ) override;
+  void handle( GapJunctionEvent& ) override;
 
-  port handles_test_event( SpikeEvent&, rport );
-  port handles_test_event( CurrentEvent&, rport );
-  port handles_test_event( DataLoggingRequest&, rport );
-  port handles_test_event( GapJunctionEvent&, rport );
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
+  size_t handles_test_event( GapJunctionEvent&, size_t ) override;
 
   void
-  sends_secondary_event( GapJunctionEvent& )
+  sends_secondary_event( GapJunctionEvent& ) override
   {
   }
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
   /** This is the actual update function. The additional boolean parameter
    * determines if the function is called by update (false) or wfr_update (true)
    */
   bool update_( Time const&, const long, const long, const bool );
 
-  void update( Time const&, const long, const long );
-  bool wfr_update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
+  bool wfr_update( Time const&, const long, const long ) override;
 
   // END Boilerplate function declarations ----------------------------
 
@@ -212,23 +229,23 @@ private:
   //! Independent parameters
   struct Parameters_
   {
-    double t_ref_;   //!< refractory time in ms
-    double g_Na;     //!< Sodium Conductance in nS
-    double g_Kv1;    //!< Potassium Conductance in nS
-    double g_Kv3;    //!< Potassium Conductance in nS
-    double g_L;      //!< Leak Conductance in nS
-    double C_m;      //!< Membrane Capacitance in pF
-    double E_Na;     //!< Sodium Reversal Potential in mV
-    double E_K;      //!< Potassium Reversal Potential in mV
-    double E_L;      //!< Leak reversal Potential (aka resting potential) in mV
-    double tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
-    double tau_synI; //!< Synaptic Time Constant for Inhibitory Synapse in ms
-    double I_e;      //!< Constant Current in pA
+    double t_ref_;    //!< refractory time in ms
+    double g_Na;      //!< Sodium Conductance in nS
+    double g_Kv1;     //!< Potassium Conductance in nS
+    double g_Kv3;     //!< Potassium Conductance in nS
+    double g_L;       //!< Leak Conductance in nS
+    double C_m;       //!< Membrane Capacitance in pF
+    double E_Na;      //!< Sodium Reversal Potential in mV
+    double E_K;       //!< Potassium Reversal Potential in mV
+    double E_L;       //!< Leak reversal Potential (aka resting potential) in mV
+    double tau_synE;  //!< Synaptic Time Constant Excitatory Synapse in ms
+    double tau_synI;  //!< Synaptic Time Constant for Inhibitory Synapse in ms
+    double I_e;       //!< Constant Current in pA
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;              //!< Store current values in Dictionary
+    void set( const Dictionary&, Node* node );  //!< Set values from Dictionary
   };
 
 public:
@@ -236,12 +253,10 @@ public:
 
   /**
    * State variables of the model.
-   * @note Copy constructor and assignment operator required because
-   *       of C-style array.
+   * @note Copy constructor required because of C-style array.
    */
   struct State_
   {
-
     /**
      * Enumeration identifying elements in state array State_::y_.
      * The state vector must be passed to GSL as a C array. This enum
@@ -251,27 +266,28 @@ public:
     enum StateVecElems
     {
       V_M = 0,
-      HH_M,   // 1
-      HH_H,   // 2
-      HH_N,   // 3
-      HH_P,   // 4
-      DI_EXC, // 5
-      I_EXC,  // 6
-      DI_INH, // 7
-      I_INH,  // 8
+      HH_M,    // 1
+      HH_H,    // 2
+      HH_N,    // 3
+      HH_P,    // 4
+      DI_EXC,  // 5
+      I_EXC,   // 6
+      DI_INH,  // 7
+      I_INH,   // 8
       STATE_VEC_SIZE
     };
 
     //! neuron state, must be C-array for GSL solver
     double y_[ STATE_VEC_SIZE ];
-    int r_; //!< number of refractory steps remaining
+    int r_;  //!< number of refractory steps remaining
 
-    State_( const Parameters_& ); //!< Default initialization
+    State_( const Parameters_& );  //!< Default initialization
     State_( const State_& );
+
     State_& operator=( const State_& );
 
-    void get( DictionaryDatum& ) const;
-    void set( const DictionaryDatum& );
+    void get( Dictionary& ) const;
+    void set( const Dictionary&, Node* node );
   };
 
   // ----------------------------------------------------------------
@@ -282,7 +298,7 @@ private:
    */
   struct Buffers_
   {
-    Buffers_( hh_psc_alpha_gap& ); //!<Sets buffer pointers to 0
+    Buffers_( hh_psc_alpha_gap& );  //!< Sets buffer pointers to 0
     //! Sets buffer pointers to 0
     Buffers_( const Buffers_&, hh_psc_alpha_gap& );
 
@@ -295,17 +311,16 @@ private:
     RingBuffer currents_;
 
     /** GSL ODE stuff */
-    gsl_odeiv_step* s_;    //!< stepping function
-    gsl_odeiv_control* c_; //!< adaptive stepsize control function
-    gsl_odeiv_evolve* e_;  //!< evolution function
-    gsl_odeiv_system sys_; //!< struct describing system
+    gsl_odeiv_step* s_;     //!< stepping function
+    gsl_odeiv_control* c_;  //!< adaptive stepsize control function
+    gsl_odeiv_evolve* e_;   //!< evolution function
+    gsl_odeiv_system sys_;  //!< struct describing system
 
-    // IntergrationStep_ should be reset with the neuron on ResetNetwork,
-    // but remain unchanged during calibration. Since it is initialized with
-    // step_, and the resolution cannot change after nodes have been created,
-    // it is safe to place both here.
-    double step_;            //!< step size in ms
-    double IntegrationStep_; //!< current integration time step, updated by GSL
+    // Since IntegrationStep_ is initialized with step_, and the resolution
+    // cannot change after nodes have been created, it is safe to place both
+    // here.
+    double step_;             //!< step size in ms
+    double IntegrationStep_;  //!< current integration time step, updated by GSL
 
     // remembers current lag for piecewise interpolation
     long lag_;
@@ -372,15 +387,15 @@ hh_psc_alpha_gap::update( Time const& origin, const long from, const long to )
 inline bool
 hh_psc_alpha_gap::wfr_update( Time const& origin, const long from, const long to )
 {
-  State_ old_state = S_; // save state before wfr_update
+  State_ old_state = S_;  // save state before wfr_update
   const bool wfr_tol_exceeded = update_( origin, from, to, true );
-  S_ = old_state; // restore old state
+  S_ = old_state;  // restore old state
 
   return not wfr_tol_exceeded;
 }
 
-inline port
-hh_psc_alpha_gap::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+hh_psc_alpha_gap::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent se;
   se.set_sender( *this );
@@ -388,8 +403,8 @@ hh_psc_alpha_gap::send_test_event( Node& target, rport receptor_type, synindex, 
 }
 
 
-inline port
-hh_psc_alpha_gap::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+hh_psc_alpha_gap::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -398,8 +413,8 @@ hh_psc_alpha_gap::handles_test_event( SpikeEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-hh_psc_alpha_gap::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+hh_psc_alpha_gap::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -408,8 +423,8 @@ hh_psc_alpha_gap::handles_test_event( CurrentEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-hh_psc_alpha_gap::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+hh_psc_alpha_gap::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -418,8 +433,8 @@ hh_psc_alpha_gap::handles_test_event( DataLoggingRequest& dlr, rport receptor_ty
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 
-inline port
-hh_psc_alpha_gap::handles_test_event( GapJunctionEvent&, rport receptor_type )
+inline size_t
+hh_psc_alpha_gap::handles_test_event( GapJunctionEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -429,35 +444,35 @@ hh_psc_alpha_gap::handles_test_event( GapJunctionEvent&, rport receptor_type )
 }
 
 inline void
-hh_psc_alpha_gap::get_status( DictionaryDatum& d ) const
+hh_psc_alpha_gap::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d );
-  Archiving_Node::get_status( d );
+  ArchivingNode::get_status( d );
 
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-hh_psc_alpha_gap::set_status( const DictionaryDatum& d )
+hh_psc_alpha_gap::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
-  State_ stmp = S_;      // temporary copy in case of errors
-  stmp.set( d );         // throws if BadProperty
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
+  ptmp.set( d, this );    // throws if BadProperty
+  State_ stmp = S_;       // temporary copy in case of errors
+  stmp.set( d, this );    // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // HAVE_GSL
-#endif // HH_PSC_ALPHA_GAP_H
+#endif  // HAVE_GSL
+#endif  // HH_PSC_ALPHA_GAP_H

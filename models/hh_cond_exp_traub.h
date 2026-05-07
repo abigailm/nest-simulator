@@ -55,48 +55,52 @@ namespace nest
  */
 extern "C" int hh_cond_exp_traub_dynamics( double, const double*, double*, void* );
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup hh
-@ingroup cond
+/* BeginUserDocs: neuron, Hodgkin-Huxley, conductance-based, soft threshold
 
-Name: hh_cond_exp_traub - Hodgkin-Huxley model for Brette et al (2007) review
+Short description
++++++++++++++++++
 
-Description:
+Hodgkin-Huxley model for Brette et al (2007) review
 
-hh_cond_exp_traub is an implementation of a modified Hodgkin-Huxley model
+Description
++++++++++++
 
-This model was specifically developed for a major review of simulators [1],
-based on a model of hippocampal pyramidal cells by Traub and Miles[2].
-The key differences between the current model and the model in [2] are:
+``hh_cond_exp_traub`` is an implementation of a modified Hodgkin-Huxley model.
+
+This model was specifically developed for a major review of simulators [1]_,
+based on a model of hippocampal pyramidal cells by Traub and Miles [2]_.
+The key differences between the current model and the model in [2]_ are:
 
 - This model is a point neuron, not a compartmental model.
-- This model includes only I_Na and I_K, with simpler I_K dynamics than
-  in [2], so it has only three instead of eight gating variables;
+- This model includes only ``I_Na`` and ``I_K``, with simpler ``I_K`` dynamics than
+  in [2]_, so it has only three instead of eight gating variables;
   in particular, all Ca dynamics have been removed.
 - Incoming spikes induce an instantaneous conductance change followed by
   exponential decay instead of activation over time.
 
 This model is primarily provided as reference implementation for hh_coba
 example of the Brette et al (2007) review. Default parameter values are chosen
-to match those used with NEST 1.9.10 when preparing data for [1]. Code for all
-simulators covered is available from ModelDB [3].
+to match those used with NEST 1.9.10 when preparing data for [1]_. Code for all
+simulators covered is available from ModelDB [3]_.
 
-Note:
-In this model, a spike is emitted if
+.. note::
 
-@f[ V_m >= V_T + 30 mV and V_m has fallen during the current time step @f]
+   In this model, a spike is emitted if :math:`V_m \geq V_T + 30` mV and :math:`V_m`
+   has fallen during the current time step.
 
-To avoid that this leads to multiple spikes during the falling flank of a
-spike, it is essential to chose a sufficiently long refractory period.
-Traub and Miles used \f$ t_ref = 3 ms \f$ [2, p 118], while we used
-\f$ t_ref = 2 ms \f$ in [2].
+   To avoid multiple spikes from occurring during the falling flank of a
+   spike, it is essential to choose a sufficiently long refractory period.
+   Traub and Miles used  :math:`t_{ref} = 3` ms ([2]_, p 118), while we used
+   :math:`t_{ref} = 2` ms in [2]_.
 
-Parameters:
+   For further details on asynchronicity in spike and firing events with Hodgkin Huxley models
+   see :ref:`here <hh_details>`.
 
-The following parameters can be set in the status dictionary.
+Parameters
+++++++++++
 
-\verbatim embed:rst
+The following parameters can be set in the status Dictionary.
+
 =========== ======  =========================================================
 V_m          mV     Membrane potential
 V_T          mV     Voltage offset that controls dynamics. For default
@@ -118,35 +122,48 @@ E_K          mV     Potassium reversal potential
 g_K          nS     Potassium peak conductance
 I_e          pA     External input current
 =========== ======  =========================================================
-\endverbatim
 
+References
+++++++++++
 
-References:
-
-\verbatim embed:rst
 .. [1] Brette R et al. (2007). Simulation of networks of spiking neurons: A
        review of tools and strategies. Journal of Computational Neuroscience
        23:349-98. DOI: https://doi.org/10.1007/s10827-007-0038-6
 .. [2] Traub RD and Miles R (1991). Neuronal networks of the hippocampus.
        Cambridge University Press, Cambridge UK.
 .. [3] http://modeldb.yale.edu/83319
-\envverbatim
 
-Sends: SpikeEvent
+Sends
++++++
 
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+SpikeEvent
 
-Author: Schrader
+Receives
+++++++++
 
-SeeAlso: hh_psc_alpha
-*/
-class hh_cond_exp_traub : public Archiving_Node
+SpikeEvent, CurrentEvent, DataLoggingRequest
+
+See also
+++++++++
+
+hh_psc_alpha
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: hh_cond_exp_traub
+
+EndUserDocs */
+
+void register_hh_cond_exp_traub( const std::string& name );
+
+class hh_cond_exp_traub : public ArchivingNode
 {
 
 public:
   hh_cond_exp_traub();
   hh_cond_exp_traub( const hh_cond_exp_traub& );
-  ~hh_cond_exp_traub();
+  ~hh_cond_exp_traub() override;
 
   /**
    * Import sets of overloaded virtual functions.
@@ -156,25 +173,24 @@ public:
   using Node::handle;
   using Node::handles_test_event;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void handle( SpikeEvent& );
-  void handle( CurrentEvent& );
-  void handle( DataLoggingRequest& );
+  void handle( SpikeEvent& ) override;
+  void handle( CurrentEvent& ) override;
+  void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( SpikeEvent&, rport );
-  port handles_test_event( CurrentEvent&, rport );
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
-  void update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
 
   // END Boilerplate function declarations ----------------------------
 
@@ -195,29 +211,29 @@ private:
    */
   struct Parameters_
   {
-    double g_Na; //!< Sodium Conductance in nS
-    double g_K;  //!< Potassium Conductance in nS
-    double g_L;  //!< Leak Conductance in nS
-    double C_m;  //!< Membrane Capacitance in pF
+    double g_Na;  //!< Sodium Conductance in nS
+    double g_K;   //!< Potassium Conductance in nS
+    double g_L;   //!< Leak Conductance in nS
+    double C_m;   //!< Membrane Capacitance in pF
 
-    double E_Na; //!< Sodium Reversal Potential in mV
-    double E_K;  //!< Potassium Reversal Potential in mV
-    double E_L;  //!< Leak Reversal Potential in mV
+    double E_Na;  //!< Sodium Reversal Potential in mV
+    double E_K;   //!< Potassium Reversal Potential in mV
+    double E_L;   //!< Leak Reversal Potential in mV
 
     //! Voltage offset for dynamics (adjusts threshold to around -50 mV)
     double V_T;
 
-    double E_ex;     //!< Excitatory reversal Potential in mV
-    double E_in;     //!< Inhibitory reversal Potential in mV
-    double tau_synE; //!< Synaptic Time Constant Excitatory Synapse in ms
-    double tau_synI; //!< Synaptic Time Constant Inhibitory Synapse in ms
-    double t_ref_;   //!< Refractory time in ms
-    double I_e;      //!< External Current in pA
+    double E_ex;      //!< Excitatory reversal Potential in mV
+    double E_in;      //!< Inhibitory reversal Potential in mV
+    double tau_synE;  //!< Synaptic Time Constant Excitatory Synapse in ms
+    double tau_synI;  //!< Synaptic Time Constant Inhibitory Synapse in ms
+    double t_ref_;    //!< Refractory time in ms
+    double I_e;       //!< External Current in pA
 
     Parameters_();
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;              //!< Store current values in Dictionary
+    void set( const Dictionary&, Node* node );  //!< Set values from Dictionary
   };
 
 public:
@@ -228,30 +244,29 @@ public:
    */
   struct State_
   {
-
     //! Symbolic indices to the elements of the state vector y
     enum StateVecElems
     {
       V_M = 0,
-      HH_M,  // 1
-      HH_H,  // 2
-      HH_N,  // 3
-      G_EXC, // 4
-      G_INH, // 5
+      HH_M,   // 1
+      HH_H,   // 2
+      HH_N,   // 3
+      G_EXC,  // 4
+      G_INH,  // 5
       STATE_VEC_SIZE
     };
 
     //! neuron state, must be C-array for GSL solver
     double y_[ STATE_VEC_SIZE ];
-    int r_; //!< number of refractory steps remaining
+    int r_;  //!< number of refractory steps remaining
 
     State_( const Parameters_& p );
     State_( const State_& s );
 
-    State_& operator=( const State_& s );
+    State_& operator=( const State_& );
 
-    void get( DictionaryDatum& ) const;
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary& ) const;
+    void set( const Dictionary&, const Parameters_&, Node* );
   };
 
   // ----------------------------------------------------------------
@@ -262,7 +277,7 @@ public:
   struct Variables_
   {
     int refractory_counts_;
-    double U_old_; // for spike-detection
+    double U_old_;  // for spike-detection
   };
 
   // ----------------------------------------------------------------
@@ -272,7 +287,7 @@ public:
    */
   struct Buffers_
   {
-    Buffers_( hh_cond_exp_traub& ); //!<Sets buffer pointers to 0
+    Buffers_( hh_cond_exp_traub& );  //!< Sets buffer pointers to 0
     //! Sets buffer pointers to 0
     Buffers_( const Buffers_&, hh_cond_exp_traub& );
 
@@ -285,17 +300,16 @@ public:
     RingBuffer currents_;
 
     /** GSL ODE stuff */
-    gsl_odeiv_step* s_;    //!< stepping function
-    gsl_odeiv_control* c_; //!< adaptive stepsize control function
-    gsl_odeiv_evolve* e_;  //!< evolution function
-    gsl_odeiv_system sys_; //!< struct describing system
+    gsl_odeiv_step* s_;     //!< stepping function
+    gsl_odeiv_control* c_;  //!< adaptive stepsize control function
+    gsl_odeiv_evolve* e_;   //!< evolution function
+    gsl_odeiv_system sys_;  //!< struct describing system
 
-    // IntergrationStep_ should be reset with the neuron on ResetNetwork,
-    // but remain unchanged during calibration. Since it is initialized with
-    // step_, and the resolution cannot change after nodes have been created,
-    // it is safe to place both here.
-    double step_;            //!< step size in ms
-    double IntegrationStep_; //!< current integration time step, updated by GSL
+    // Since IntegrationStep_ is initialized with step_, and the resolution
+    // cannot change after nodes have been created, it is safe to place both
+    // here.
+    double step_;             //!< step size in ms
+    double IntegrationStep_;  //!< current integration time step, updated by GSL
 
     /**
      * Input current injected by CurrentEvent.
@@ -326,8 +340,8 @@ public:
   static RecordablesMap< hh_cond_exp_traub > recordablesMap_;
 };
 
-inline port
-hh_cond_exp_traub::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+hh_cond_exp_traub::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent e;
   e.set_sender( *this );
@@ -336,8 +350,8 @@ hh_cond_exp_traub::send_test_event( Node& target, rport receptor_type, synindex,
 }
 
 
-inline port
-hh_cond_exp_traub::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+hh_cond_exp_traub::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -346,8 +360,8 @@ hh_cond_exp_traub::handles_test_event( SpikeEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-hh_cond_exp_traub::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+hh_cond_exp_traub::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -356,8 +370,8 @@ hh_cond_exp_traub::handles_test_event( CurrentEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-hh_cond_exp_traub::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+hh_cond_exp_traub::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -367,40 +381,40 @@ hh_cond_exp_traub::handles_test_event( DataLoggingRequest& dlr, rport receptor_t
 }
 
 inline void
-hh_cond_exp_traub::get_status( DictionaryDatum& d ) const
+hh_cond_exp_traub::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d );
-  Archiving_Node::get_status( d );
+  ArchivingNode::get_status( d );
 
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  d[ names::recordables ] = recordablesMap_.get_list();
 
-  def< double >( d, names::t_spike, get_spiketime_ms() );
+  d[ names::t_spike ] = get_spiketime_ms();
 }
 
 inline void
-hh_cond_exp_traub::set_status( const DictionaryDatum& d )
+hh_cond_exp_traub::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
-  State_ stmp = S_;      // temporary copy in case of errors
-  stmp.set( d, ptmp );   // throws if BadProperty
+  Parameters_ ptmp = P_;      // temporary copy in case of errors
+  ptmp.set( d, this );        // throws if BadProperty
+  State_ stmp = S_;           // temporary copy in case of errors
+  stmp.set( d, ptmp, this );  // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 
-  calibrate();
+  pre_run_hook();
 }
 
-} // namespace
+}  // namespace
 
 
-#endif // HAVE_GSL
-#endif // HH_COND_EXP_TRAUB_H
+#endif  // HAVE_GSL
+#endif  // HH_COND_EXP_TRAUB_H

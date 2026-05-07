@@ -21,44 +21,169 @@
  */
 
 #include "kernel_manager.h"
+#include "stopwatch_impl.h"
 
-nest::KernelManager* nest::KernelManager::kernel_manager_instance_ = 0;
+nest::KernelManager* nest::KernelManager::kernel_manager_instance_ = nullptr;
+
+
+Dictionary
+nest::KernelManager::get_build_info_()
+{
+  // Exit codes
+  constexpr unsigned int EXITCODE_UNKNOWN_ERROR = 10;
+  constexpr unsigned int EXITCODE_USERABORT = 15;
+  constexpr unsigned int EXITCODE_EXCEPTION = 125;
+  constexpr unsigned int EXITCODE_SCRIPTERROR = 126;
+  constexpr unsigned int EXITCODE_FATAL = 127;
+
+  // The range 200-215 is reserved for test skipping exitcodes. Any new codes must
+  // also be added to testsuite/do_tests_sh.in.
+  constexpr unsigned int EXITCODE_SKIPPED = 200;
+  constexpr unsigned int EXITCODE_SKIPPED_NO_MPI = 201;
+  constexpr unsigned int EXITCODE_SKIPPED_HAVE_MPI = 202;
+  constexpr unsigned int EXITCODE_SKIPPED_NO_THREADING = 203;
+  constexpr unsigned int EXITCODE_SKIPPED_NO_GSL = 204;
+  constexpr unsigned int EXITCODE_SKIPPED_NO_MUSIC = 205;
+
+  Dictionary build_info;
+
+  build_info[ "version" ] = std::string( NEST_VERSION );
+  build_info[ "exitcode" ] = EXIT_SUCCESS;
+  build_info[ "built" ] = std::string( String::compose( "%1 %2", __DATE__, __TIME__ ) );
+  build_info[ "datadir" ] = std::string( NEST_INSTALL_PREFIX "/" NEST_INSTALL_DATADIR );
+  build_info[ "docdir" ] = std::string( NEST_INSTALL_PREFIX "/" NEST_INSTALL_DOCDIR );
+  build_info[ "prefix" ] = std::string( NEST_INSTALL_PREFIX );
+  build_info[ "host" ] = std::string( NEST_HOST );
+  build_info[ "hostos" ] = std::string( NEST_HOSTOS );
+  build_info[ "hostvendor" ] = std::string( NEST_HOSTVENDOR );
+  build_info[ "hostcpu" ] = std::string( NEST_HOSTCPU );
+
+#ifdef _OPENMP
+  build_info[ "have_threads" ] = true;
+  build_info[ "threads_model" ] = std::string( "openmp" );
+#else
+  build_info[ "have_threads" ] = false;
+#endif
+
+#ifdef HAVE_MPI
+  build_info[ "have_mpi" ] = true;
+  build_info[ "mpiexec" ] = std::string( MPIEXEC );
+  build_info[ "mpiexec_numproc_flag" ] = std::string( MPIEXEC_NUMPROC_FLAG );
+  build_info[ "mpiexec_max_numprocs" ] = std::string( MPIEXEC_MAX_NUMPROCS );
+  build_info[ "mpiexec_preflags" ] = std::string( MPIEXEC_PREFLAGS );
+  build_info[ "mpiexec_postflags" ] = std::string( MPIEXEC_POSTFLAGS );
+#else
+  build_info[ "have_mpi" ] = false;
+#endif
+
+#ifdef HAVE_GSL
+  build_info[ "have_gsl" ] = true;
+#else
+  build_info[ "have_gsl" ] = false;
+#endif
+
+#ifdef HAVE_BOOST
+  build_info[ "have_boost" ] = true;
+#else
+  build_info[ "have_boost" ] = false;
+#endif
+
+#ifdef HAVE_MUSIC
+  build_info[ "have_music" ] = true;
+#else
+  build_info[ "have_music" ] = false;
+#endif
+
+#ifdef HAVE_LIBNEUROSIM
+  build_info[ "have_libneurosim" ] = true;
+#else
+  build_info[ "have_libneurosim" ] = false;
+#endif
+
+#ifdef HAVE_SIONLIB
+  build_info[ "have_sionlib" ] = true;
+#else
+  build_info[ "have_sionlib" ] = false;
+#endif
+
+#ifdef HAVE_HDF5
+  build_info[ "have_hdf5" ] = true;
+#else
+  build_info[ "have_hdf5" ] = false;
+#endif
+
+#ifdef NDEBUG
+  build_info[ "ndebug" ] = true;
+#else
+  build_info[ "ndebug" ] = false;
+#endif
+
+  Dictionary exitcodes;
+
+  exitcodes[ "success" ] = EXIT_SUCCESS;
+  exitcodes[ "skipped" ] = EXITCODE_SKIPPED;
+  exitcodes[ "skipped_no_mpi" ] = EXITCODE_SKIPPED_NO_MPI;
+  exitcodes[ "skipped_have_mpi" ] = EXITCODE_SKIPPED_HAVE_MPI;
+  exitcodes[ "skipped_no_threading" ] = EXITCODE_SKIPPED_NO_THREADING;
+  exitcodes[ "skipped_no_gsl" ] = EXITCODE_SKIPPED_NO_GSL;
+  exitcodes[ "skipped_no_music" ] = EXITCODE_SKIPPED_NO_MUSIC;
+  exitcodes[ "scripterror" ] = EXITCODE_SCRIPTERROR;
+  exitcodes[ "abort" ] = NEST_EXITCODE_ABORT;
+  exitcodes[ "userabort" ] = EXITCODE_USERABORT;
+  exitcodes[ "segfault" ] = NEST_EXITCODE_SEGFAULT;
+  exitcodes[ "exception" ] = EXITCODE_EXCEPTION;
+  exitcodes[ "fatal" ] = EXITCODE_FATAL;
+  exitcodes[ "unknownerror" ] = EXITCODE_UNKNOWN_ERROR;
+
+  build_info[ "test_exitcodes" ] = exitcodes;
+
+  return build_info;
+}
 
 void
 nest::KernelManager::create_kernel_manager()
 {
-#pragma omp critical( create_kernel_manager )
+#pragma omp master
   {
-    if ( kernel_manager_instance_ == 0 )
+    if ( not kernel_manager_instance_ )
     {
       kernel_manager_instance_ = new KernelManager();
       assert( kernel_manager_instance_ );
     }
   }
-}
-
-void
-nest::KernelManager::destroy_kernel_manager()
-{
-  kernel_manager_instance_->logging_manager.set_logging_level( M_QUIET );
-  kernel_manager_instance_->finalize();
-  delete kernel_manager_instance_;
+#pragma omp barrier
 }
 
 nest::KernelManager::KernelManager()
-  : logging_manager()
-  , io_manager()
+  : fingerprint_( 0 )
+  , logging_manager()
   , mpi_manager()
   , vp_manager()
-  , rng_manager()
+  , module_manager()
+  , random_manager()
   , simulation_manager()
   , modelrange_manager()
   , connection_manager()
   , sp_manager()
   , event_delivery_manager()
+  , io_manager()
   , model_manager()
   , music_manager()
   , node_manager()
+  , managers( { &logging_manager,
+      &mpi_manager,
+      &vp_manager,
+      &module_manager,
+      &random_manager,
+      &simulation_manager,
+      &modelrange_manager,
+      &connection_manager,
+      &sp_manager,
+      &event_delivery_manager,
+      &io_manager,
+      &model_manager,
+      &music_manager,
+      &node_manager } )
   , initialized_( false )
 {
 }
@@ -70,66 +195,52 @@ nest::KernelManager::~KernelManager()
 void
 nest::KernelManager::initialize()
 {
-  logging_manager.initialize(); // must come first so others can log
-  io_manager.initialize();      // independent of others
+  for ( auto& manager : managers )
+  {
+    manager->initialize( /* adjust_number_of_threads_or_rng_only */ false );
+  }
 
-  mpi_manager.initialize(); // set up inter-process communication
-  vp_manager.initialize();  // set up threads
+  sw_omp_synchronization_construction_.reset();
+  sw_omp_synchronization_simulation_.reset();
+  sw_mpi_synchronization_.reset();
 
-  // invariant: process infrastructure (MPI, threads) in place
-
-  rng_manager.initialize(); // depends on number of VPs
-
-  // invariant: supporting managers set up
-
-  // "Core kernel managers" follow
-  simulation_manager.initialize(); // independent of others
-  modelrange_manager.initialize(); // independent of others
-  model_manager.initialize();      // depends on number of threads
-  // prerequisites:
-  //   - vp_manager for number of threads
-  //   - modelmanager for number of prototypes
-  connection_manager.initialize();
-  sp_manager.initialize();
-
-  // prerequisites:
-  //   - min_delay/max_delay available (connection_manager)
-  //   - clock initialized (simulation_manager)
-  event_delivery_manager.initialize();
-
-  music_manager.initialize();
-
-  // prerequisites:
-  //   - modelrange_manager initialized
-  //   - model_manager for pristine models
-  //   - vp_manager for number of threads
-  node_manager.initialize(); // must come last
-
+  ++fingerprint_;
   initialized_ = true;
+  FULL_LOGGING_ONLY( dump_.open(
+    String::compose( "dump_%1_%2.log", mpi_manager.get_num_processes(), mpi_manager.get_rank() ).c_str() ); )
+}
+
+void
+nest::KernelManager::prepare()
+{
+  for ( auto& manager : managers )
+  {
+    manager->prepare();
+  }
+
+  sw_omp_synchronization_simulation_.reset();
+  sw_mpi_synchronization_.reset();
+}
+
+void
+nest::KernelManager::cleanup()
+{
+  for ( auto&& m_it = managers.rbegin(); m_it != managers.rend(); ++m_it )
+  {
+    ( *m_it )->cleanup();
+  }
 }
 
 void
 nest::KernelManager::finalize()
 {
+  FULL_LOGGING_ONLY( dump_.close(); )
+
+  for ( auto&& m_it = managers.rbegin(); m_it != managers.rend(); ++m_it )
+  {
+    ( *m_it )->finalize( /* adjust_number_of_threads_or_rng_only */ false );
+  }
   initialized_ = false;
-
-  // reverse order of calls as in initialize()
-  node_manager.finalize();
-  music_manager.finalize();
-  event_delivery_manager.finalize();
-  sp_manager.finalize();
-  connection_manager.finalize();
-  model_manager.finalize();
-  modelrange_manager.finalize();
-  simulation_manager.finalize();
-
-  rng_manager.finalize();
-
-  vp_manager.finalize();
-  mpi_manager.finalize();
-
-  io_manager.finalize();
-  logging_manager.finalize();
 }
 
 void
@@ -140,69 +251,171 @@ nest::KernelManager::reset()
 }
 
 void
-nest::KernelManager::change_num_threads( size_t num_threads )
+nest::KernelManager::change_number_of_threads( size_t new_num_threads )
 {
-  node_manager.finalize();
-  connection_manager.finalize();
-  model_manager.finalize();
-  modelrange_manager.finalize();
-  rng_manager.finalize();
+  // Inputs are checked in VPManager::set_status().
+  // Just double check here that all values are legal.
+  assert( node_manager.size() == 0 );
+  assert( not connection_manager.get_user_set_delay_extrema() );
+  assert( not simulation_manager.has_been_simulated() );
+  assert( not sp_manager.is_structural_plasticity_enabled() or new_num_threads == 1 );
 
-  vp_manager.set_num_threads( num_threads );
+  // Finalize in reverse order of initialization with old thread number set
+  for ( auto mgr_it = managers.rbegin(); mgr_it != managers.rend(); ++mgr_it )
+  {
+    ( *mgr_it )->finalize( /* adjust_number_of_threads_or_rng_only */ true );
+  }
 
-  rng_manager.initialize();
-  // independent of threads, but node_manager needs it reset
-  modelrange_manager.initialize();
-  model_manager.initialize();
-  connection_manager.initialize();
-  event_delivery_manager.initialize();
-  music_manager.initialize();
-  node_manager.initialize();
+  vp_manager.set_num_threads( new_num_threads );
+
+  // Initialize in original order with new number of threads set
+  for ( auto& manager : managers )
+  {
+    manager->initialize( /* adjust_number_of_threads_or_rng_only */ true );
+  }
+
+  // Finalizing deleted all register components. Now that all infrastructure
+  // is in place again, we can tell modules to re-register the components
+  // they provide.
+  module_manager.reinitialize_dynamic_modules();
+
+  // Prepare timers and set the number of threads for multi-threaded timers
+  kernel().simulation_manager.reset_timers_for_preparation();
+  kernel().simulation_manager.reset_timers_for_dynamics();
+  kernel().event_delivery_manager.reset_timers_for_preparation();
+  kernel().event_delivery_manager.reset_timers_for_dynamics();
+
+  sw_omp_synchronization_construction_.reset();
+  sw_omp_synchronization_simulation_.reset();
+  sw_mpi_synchronization_.reset();
 }
 
 void
-nest::KernelManager::set_status( const DictionaryDatum& dict )
+nest::KernelManager::set_status( const Dictionary& dict )
 {
   assert( is_initialized() );
-  logging_manager.set_status( dict );
-  io_manager.set_status( dict );
 
-  mpi_manager.set_status( dict );
-  vp_manager.set_status( dict );
-
-  // set RNGs --- MUST come after n_threads_ is updated
-  rng_manager.set_status( dict );
-  simulation_manager.set_status( dict );
-  modelrange_manager.set_status( dict );
-  model_manager.set_status( dict );
-  connection_manager.set_status( dict );
-  sp_manager.set_status( dict );
-
-  event_delivery_manager.set_status( dict );
-  music_manager.set_status( dict );
-
-  node_manager.set_status( dict ); // has to be called last
+  for ( auto& manager : managers )
+  {
+    manager->set_status( dict );
+  }
 }
 
 void
-nest::KernelManager::get_status( DictionaryDatum& dict )
+nest::KernelManager::get_status( Dictionary& dict )
 {
   assert( is_initialized() );
-  logging_manager.get_status( dict );
-  io_manager.get_status( dict );
 
-  mpi_manager.get_status( dict );
-  vp_manager.get_status( dict );
+  for ( auto& manager : managers )
+  {
+    manager->get_status( dict );
+  }
 
-  rng_manager.get_status( dict );
-  simulation_manager.get_status( dict );
-  modelrange_manager.get_status( dict );
-  model_manager.get_status( dict );
-  connection_manager.get_status( dict );
-  sp_manager.get_status( dict );
+  dict[ "build_info" ] = get_build_info_();
+  if ( NEST_HOSTOS == std::string( "linux" ) )
+  {
+    dict[ "memory_size" ] = static_cast< long >( get_memsize_linux_() );
+  }
+  else if ( NEST_HOSTOS == std::string( "darwin" ) )
+  {
+    dict[ "memory_size" ] = static_cast< long >( get_memsize_darwin_() );
+  }
+  else
+  {
+    // Not available for this OS.
+    dict[ "memory_size" ] = -1;
+  }
 
-  event_delivery_manager.get_status( dict );
-  music_manager.get_status( dict );
-
-  node_manager.get_status( dict );
+  sw_omp_synchronization_construction_.get_status(
+    dict, names::time_omp_synchronization_construction, names::time_omp_synchronization_construction_cpu );
+  sw_omp_synchronization_simulation_.get_status(
+    dict, names::time_omp_synchronization_simulation, names::time_omp_synchronization_simulation_cpu );
+  sw_mpi_synchronization_.get_status( dict, names::time_mpi_synchronization, names::time_mpi_synchronization_cpu );
 }
+
+void
+nest::KernelManager::write_to_dump( const std::string& msg )
+{
+#pragma omp critical
+  // In critical section to avoid any garbling of output.
+  {
+    dump_ << msg << std::endl << std::flush;
+  }
+}
+
+#ifdef __linux__
+
+#include <fstream>
+#include <sstream>
+size_t
+nest::KernelManager::get_memsize_linux_() const
+{
+  // code based on mistral.ai
+  std::ifstream file( "/proc/self/status" );
+  if ( not file.is_open() )
+  {
+    throw std::runtime_error( "Could not open /proc/self/status" );
+  }
+
+  std::string line;
+  while ( std::getline( file, line ) )
+  {
+    if ( line.rfind( "VmSize:", 0 ) == 0 )
+    {
+      std::istringstream stream( line );
+      std::string key;
+      size_t value;
+      std::string unit;
+      stream >> key >> value >> unit;
+      file.close();
+      if ( unit != "kB" )
+      {
+        throw std::runtime_error( "VmSize not reported in kB" );
+      }
+      return value;
+    }
+  }
+
+  file.close();
+  throw std::runtime_error( "VmSize not found in /proc/self/status" );
+}
+
+#else
+
+size_t
+nest::KernelManager::get_memsize_linux_() const
+{
+  assert( false || "Only implemented on Linux systems." );
+  return 0;
+}
+
+#endif
+
+
+#if defined __APPLE__
+
+#include <mach/mach.h>
+size_t
+nest::KernelManager::get_memsize_darwin_() const
+{
+  struct task_basic_info t_info;
+  mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+
+  kern_return_t result = task_info( mach_task_self(), TASK_BASIC_INFO, ( task_info_t ) &t_info, &t_info_count );
+  assert( result == KERN_SUCCESS || "Problem occurred during getting of task_info." );
+
+  // For macOS, vmsize is not informative, it is an extremly large address range, usually O(2^40).
+  // resident_size gives the most reasonable information. Information is in bytes, thus divide.
+  return t_info.resident_size / 1024;
+}
+
+#else
+
+size_t
+nest::KernelManager::get_memsize_darwin_() const
+{
+  assert( false || "Only implemented on macOS." );
+  return 0;
+}
+
+#endif

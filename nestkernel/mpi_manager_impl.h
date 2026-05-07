@@ -25,9 +25,6 @@
 
 #include "config.h"
 
-/* To avoid problems on BlueGene/L, mpi.h MUST be the
- first included file after config.h.
- */
 #ifdef HAVE_MPI
 // C includes:
 #include <mpi.h>
@@ -38,8 +35,8 @@
 // Includes from nestkernel:
 #include "kernel_manager.h"
 
-inline nest::thread
-nest::MPIManager::get_process_id_of_vp( const thread vp ) const
+inline size_t
+nest::MPIManager::get_process_id_of_vp( const size_t vp ) const
 {
   return vp % num_processes_;
 }
@@ -47,23 +44,8 @@ nest::MPIManager::get_process_id_of_vp( const thread vp ) const
 #ifdef HAVE_MPI
 
 // Variable to hold the MPI communicator to use.
-#ifdef HAVE_MUSIC
-extern MPI::Intracomm comm;
-#else  /* #ifdef HAVE_MUSIC */
 extern MPI_Comm comm;
-#endif /* #ifdef HAVE_MUSIC */
 
-
-/* ------------------------------------------------------
-   The following datatypes are defined here in communicator_impl.h
-   file instead of as static class members, to avoid inclusion
-   of mpi.h in the .h file. This is necessary, because on
-   BlueGene/L mpi.h MUST be included FIRST. Having mpi.h in
-   the .h file would lead to requirements on include-order
-   throughout the NEST code base and is not acceptable.
-   Reported by Mikael Djurfeldt.
-   Hans Ekkehard Plesser, 2010-01-28
- */
 template < typename T >
 struct MPI_Type
 {
@@ -78,7 +60,7 @@ nest::MPIManager::communicate_Allgatherv( std::vector< T >& send_buffer,
   std::vector< int >& recv_counts )
 {
   // attempt Allgather
-  MPI_Allgatherv( &send_buffer[ 0 ],
+  MPI_Allgatherv( &( *send_buffer.begin() ),
     send_buffer.size(),
     MPI_Type< T >::type,
     &recv_buffer[ 0 ],
@@ -88,264 +70,21 @@ nest::MPIManager::communicate_Allgatherv( std::vector< T >& send_buffer,
     comm );
 }
 
-template < typename NodeListType >
-void
-nest::MPIManager::communicate( const NodeListType& local_nodes,
-  std::vector< NodeAddressingData >& all_nodes,
-  bool remote )
+inline size_t
+nest::MPIManager::get_process_id_of_node_id( const size_t node_id ) const
 {
-  size_t np = get_num_processes();
-  if ( np > 1 and remote )
-  {
-    std::vector< long > localnodes;
-    for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-    {
-      localnodes.push_back( ( *n )->get_gid() );
-      localnodes.push_back( ( ( *n )->get_parent() )->get_gid() );
-      localnodes.push_back( ( *n )->get_vp() );
-    }
-    // get size of buffers
-    std::vector< int > n_nodes( np );
-    n_nodes[ get_rank() ] = localnodes.size();
-    communicate( n_nodes );
-    // Set up displacements vector.
-    std::vector< int > displacements( np, 0 );
-    for ( size_t i = 1; i < np; ++i )
-    {
-      displacements.at( i ) = displacements.at( i - 1 ) + n_nodes.at( i - 1 );
-    }
-
-    // Calculate total number of node data items to be gathered.
-    size_t n_globals = std::accumulate( n_nodes.begin(), n_nodes.end(), 0 );
-    assert( n_globals % 3 == 0 );
-    std::vector< long > globalnodes;
-    if ( n_globals != 0 )
-    {
-      globalnodes.resize( n_globals, 0L );
-      communicate_Allgatherv< long >( localnodes, globalnodes, displacements, n_nodes );
-
-      // Create unflattened vector
-      for ( size_t i = 0; i < n_globals - 2; i += 3 )
-      {
-        all_nodes.push_back( NodeAddressingData( globalnodes[ i ], globalnodes[ i + 1 ], globalnodes[ i + 2 ] ) );
-      }
-
-      // get rid of any multiple entries
-      std::sort( all_nodes.begin(), all_nodes.end() );
-      std::vector< NodeAddressingData >::iterator it;
-      it = std::unique( all_nodes.begin(), all_nodes.end() );
-      all_nodes.resize( it - all_nodes.begin() );
-    }
-  }
-  else // on one proc or not including remote nodes
-  {
-    for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-    {
-      all_nodes.push_back(
-        NodeAddressingData( ( *n )->get_gid(), ( ( *n )->get_parent() )->get_gid(), ( *n )->get_vp() ) );
-    }
-    std::sort( all_nodes.begin(), all_nodes.end() );
-  }
+  return node_id % kernel().vp_manager.get_num_virtual_processes() % num_processes_;
 }
 
+#else  // HAVE_MPI
 
-template < typename NodeListType >
-void
-nest::MPIManager::communicate( const NodeListType& local_nodes,
-  std::vector< NodeAddressingData >& all_nodes,
-  DictionaryDatum params,
-  bool remote )
-{
-  size_t np = get_num_processes();
 
-  if ( np > 1 and remote )
-  {
-    std::vector< long > localnodes;
-    if ( params->empty() )
-    {
-      for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-      {
-        localnodes.push_back( ( *n )->get_gid() );
-        localnodes.push_back( ( ( *n )->get_parent() )->get_gid() );
-        localnodes.push_back( ( *n )->get_vp() );
-      }
-    }
-    else
-    {
-      for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-      {
-        // select those nodes fulfilling the key/value pairs of the dictionary
-        bool match = true;
-        index gid = ( *n )->get_gid();
-        DictionaryDatum node_status = kernel().node_manager.get_status( gid );
-        for ( Dictionary::iterator i = params->begin(); i != params->end(); ++i )
-        {
-          if ( node_status->known( i->first ) )
-          {
-            const Token token = node_status->lookup( i->first );
-            if ( not( token == i->second or token.matches_as_string( i->second ) ) )
-            {
-              match = false;
-              break;
-            }
-          }
-        }
-        if ( match )
-        {
-          localnodes.push_back( gid );
-          localnodes.push_back( ( ( *n )->get_parent() )->get_gid() );
-          localnodes.push_back( ( *n )->get_vp() );
-        }
-      }
-    }
-
-    // get size of buffers
-    std::vector< int > n_nodes( np );
-    n_nodes[ get_rank() ] = localnodes.size();
-    communicate( n_nodes );
-
-    // Set up displacements vector.
-    std::vector< int > displacements( np, 0 );
-    for ( size_t i = 1; i < np; ++i )
-    {
-      displacements.at( i ) = displacements.at( i - 1 ) + n_nodes.at( i - 1 );
-    }
-
-    // Calculate sum of global connections.
-    size_t n_globals = std::accumulate( n_nodes.begin(), n_nodes.end(), 0 );
-    assert( n_globals % 3 == 0 );
-    std::vector< long > globalnodes;
-    if ( n_globals != 0 )
-    {
-      globalnodes.resize( n_globals, 0L );
-      communicate_Allgatherv< long >( localnodes, globalnodes, displacements, n_nodes );
-
-      // Create unflattened vector
-      for ( size_t i = 0; i < n_globals - 2; i += 3 )
-      {
-        all_nodes.push_back( NodeAddressingData( globalnodes[ i ], globalnodes[ i + 1 ], globalnodes[ i + 2 ] ) );
-      }
-
-      // get rid of any multiple entries
-      std::sort( all_nodes.begin(), all_nodes.end() );
-      std::vector< NodeAddressingData >::iterator it;
-      it = std::unique( all_nodes.begin(), all_nodes.end() );
-      all_nodes.resize( it - all_nodes.begin() );
-    }
-  }
-  else // on one proc or not including remote nodes
-  {
-    if ( params->empty() )
-    {
-      for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-      {
-        all_nodes.push_back(
-          NodeAddressingData( ( *n )->get_gid(), ( ( *n )->get_parent() )->get_gid(), ( *n )->get_vp() ) );
-      }
-    }
-    else
-    {
-      // select those nodes fulfilling the key/value pairs of the dictionary
-      for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-      {
-        bool match = true;
-        index gid = ( *n )->get_gid();
-        DictionaryDatum node_status = kernel().node_manager.get_status( gid );
-        for ( Dictionary::iterator i = params->begin(); i != params->end(); ++i )
-        {
-          if ( node_status->known( i->first ) )
-          {
-            const Token token = node_status->lookup( i->first );
-            if ( not( token == i->second or token.matches_as_string( i->second ) ) )
-            {
-              match = false;
-              break;
-            }
-          }
-        }
-        if ( match )
-        {
-          all_nodes.push_back(
-            NodeAddressingData( ( *n )->get_gid(), ( ( *n )->get_parent() )->get_gid(), ( *n )->get_vp() ) );
-        }
-      }
-    }
-    std::sort( all_nodes.begin(), all_nodes.end() );
-  }
-}
-
-inline nest::thread
-nest::MPIManager::get_process_id_of_gid( const index gid ) const
-{
-  return gid % kernel().vp_manager.get_num_virtual_processes() % num_processes_;
-}
-
-#else // HAVE_MPI
-
-template < typename NodeListType >
-void
-nest::MPIManager::communicate( const NodeListType& local_nodes, std::vector< NodeAddressingData >& all_nodes, bool )
-{
-  for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-  {
-    all_nodes.push_back(
-      NodeAddressingData( ( *n )->get_gid(), ( ( *n )->get_parent() )->get_gid(), ( *n )->get_vp() ) );
-  }
-  std::sort( all_nodes.begin(), all_nodes.end() );
-}
-
-template < typename NodeListType >
-void
-nest::MPIManager::communicate( const NodeListType& local_nodes,
-  std::vector< NodeAddressingData >& all_nodes,
-  DictionaryDatum params,
-  bool )
-{
-
-  if ( params->empty() )
-  {
-    for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-    {
-      all_nodes.push_back(
-        NodeAddressingData( ( *n )->get_gid(), ( ( *n )->get_parent() )->get_gid(), ( *n )->get_vp() ) );
-    }
-  }
-  else
-  {
-    // select those nodes fulfilling the key/value pairs of the dictionary
-    for ( typename NodeListType::iterator n = local_nodes.begin(); n != local_nodes.end(); ++n )
-    {
-      bool match = true;
-      index gid = ( *n )->get_gid();
-      DictionaryDatum node_status = kernel().node_manager.get_status( gid );
-      for ( Dictionary::iterator i = params->begin(); i != params->end(); ++i )
-      {
-        if ( node_status->known( i->first ) )
-        {
-          const Token token = node_status->lookup( i->first );
-          if ( not( token == i->second or token.matches_as_string( i->second ) ) )
-          {
-            match = false;
-            break;
-          }
-        }
-      }
-      if ( match )
-      {
-        all_nodes.push_back(
-          NodeAddressingData( ( *n )->get_gid(), ( ( *n )->get_parent() )->get_gid(), ( *n )->get_vp() ) );
-      }
-    }
-  }
-  std::sort( all_nodes.begin(), all_nodes.end() );
-}
-
-inline nest::thread
-nest::MPIManager::get_process_id_of_gid( const index gid ) const
+inline size_t
+nest::MPIManager::get_process_id_of_node_id( const size_t ) const
 {
   return 0;
 }
 
-#endif
+#endif /* HAVE_MPI */
 
 #endif /* MPI_MANAGER_IMPL_H */

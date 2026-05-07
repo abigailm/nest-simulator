@@ -20,7 +20,6 @@
  *
  */
 
-
 #ifndef IAF_TUM_2000_H
 #define IAF_TUM_2000_H
 
@@ -29,116 +28,134 @@
 #include "connection.h"
 #include "event.h"
 #include "nest_types.h"
+#include "recordables_map.h"
 #include "ring_buffer.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup iaf
+// clang-format off
+/* BeginUserDocs: neuron, integrate-and-fire, current-based, short-term plasticity, hard threshold
 
-Name: iaf_tum_2000 - Leaky integrate-and-fire neuron model with exponential
-                    PSCs.
+Short description
++++++++++++++++++
 
-Description:
+Leaky integrate-and-fire neuron model with exponential PSCs and integrated short-term plasticity synapse
 
-iaf_tum_2000 is an implementation of a leaky integrate-and-fire model
-with exponential shaped postsynaptic currents (PSCs) according to [1].
-The postsynaptic currents have an infinitely short rise time.
-In particular, this model allows setting an absolute and relative
-refractory time separately, as required by [1].
+Description
++++++++++++
 
-The threshold crossing is followed by an absolute refractory period
-(t_ref_abs) during which the membrane potential is clamped to the resting
-potential. During the total refractory period (t_ref_tot), the membrane
-potential evolves, but the neuron will not emit a spike, even if the
-membrane potential reaches threshold. The total refractory time must be
-larger or equal to the absolute refractory time. If equal, the
-refractoriness of the model if equivalent to the other models of NEST.
+``iaf_tum_2000`` is a leaky integrate-and-fire neuron model with short-term synaptic
+plasticity and exponential shaped postsynaptic currents (PSCs). In particular,
+``iaf_tum_2000`` implements short-term depression and short-term facilitation
+according to [1]_ by solving Eqs. (3) and (4) from that paper in an exact manner.
 
-The linear subthreshold dynamics is integrated by the Exact
-Integration scheme [2]. The neuron dynamics is solved on the time
-grid given by the computation step size. Incoming as well as emitted
-spikes are forced to that grid.
+``iaf_tum_2000`` differs from :doc:`iaf_psc_exp </models/iaf_psc_exp>` by the addition
+of synaptic state variables :math:`x`, :math:`z` and :math:`u`, which together
+with the membrane potential :math:`V_\text{m}` and synaptic current :math:`I_\text{syn}`
+obey the following dynamics:
 
-An additional state variable and the corresponding differential
-equation represents a piecewise constant external current.
+.. math::
 
-The general framework for the consistent formulation of systems with
-neuron like dynamics interacting by point events is described in
-[2]. A flow chart can be found in [3].
+   \frac{dV_\text{m}}{dt} &= -\frac{V_{\text{m}} - E_\text{L}}{\tau_{\text{m}}} + \frac{I_{\text{syn}} + I_\text{e}}{C_{\text{m}}}
 
-Remarks:
+   I_{\text{syn}} &= I_\text{syn,ex} + I_\text{syn,in}
 
-The present implementation uses individual variables for the
-components of the state vector and the non-zero matrix elements of
-the propagator.  Because the propagator is a lower triangular matrix
-no full matrix multiplication needs to be carried out and the
-computation can be done "in place" i.e. no temporary state vector
-object is required.
+   I_\text{syn,X} &= \sum_{j \in \Gamma_X} w_j y_j
 
-The template support of recent C++ compilers enables a more succinct
-formulation without loss of runtime performance already at minimal
-optimization levels. A future version of iaf_tum_2000 will probably
-address the problem of efficient usage of appropriate vector and
-matrix objects.
+   \frac{dx_j}{dt} &= \frac{z_j}{\tau_{\text{rec}}} - u_j x_j \delta(t - t_j)
+
+   \frac{dy_j}{dt} &= -\frac{y_j}{\tau_{\text{syn},X}} + u_j x_j \delta(t - t_j)
+
+   \frac{dz_j}{dt} &= \frac{y_j}{\tau_{\text{syn},X}} - \frac{y_j}{\tau_{\text{rec}}}
+
+   \frac{du_j}{dt} &= -\frac{u}{\tau_{\text{fac}}} + U(1 - u) \delta(t - t_j)
 
 
-Parameters:
+where :math:`\Gamma_X` is an index set over either excitatory (:math:`\text{X} = \text{ex}`) or inhibitory (:math:`\text{X} = \text{in}`) presynaptic neurons,
+:math:`k` indexes the spike times of neuron :math:`j`, and :math:`d_j`
+is the delay from neuron :math:`j`.
+
+``iaf_tum_2000`` incorporates the :doc:`tsodyks_synapse </models/tsodyks_synapse>`
+computations directly in the presynaptic neuron, that is, the  synaptic state
+variables :math:`x,y,z,u` are integrated in the presynaptic neuron instead of
+the synapse model. For a presynaptic neuron with :math:`K` outgoing connections
+following the ``tsodyks_synapse`` dynamics, ``iaf_tum_2000`` saves :math:`K-1`
+integrations of the synaptic ODEs. This makes ``iaf_tum_2000`` very computationally
+efficient in network simulations. Since the synaptic ODEs are linear, the
+postsynaptic current can be found as the sum of all presynaptic synaptic
+currents computed in the presynaptic neurons.
+
+In order for synaptic depression or facilitation to take effect, both the
+presynaptic and postsynaptic neuron must be of type ``iaf_tum_2000``.
+
+.. note::
+
+  Connections between ``iaf_tum_2000`` neurons must be through ``receptor_type`` 1.
+
+.. warning::
+
+  ``iaf_tum_2000`` does not support :ref:`precise spike timing <sim_precise_spike_times>`.
+  Using precise spike timing will result in incorrect dynamics and must therefore
+  be avoided.
+
+Parameters
+++++++++++
 
 The following parameters can be set in the status dictionary.
-\verbatim embed:rst
-===========  ====== ========================================================
- E_L          mV     Resting membrane potenial
- C_m          pF     Capacity of the membrane
- tau_m        ms     Membrane time constant
- tau_syn_ex   ms     Time constant of postsynaptic excitatory currents
- tau_syn_in   ms     Time constant of postsynaptic inhibitory currents
- t_ref_abs    ms     Duration of absolute refractory period (V_m = V_reset)
- t_ref_tot    ms     Duration of total refractory period (no spiking)
- V_m          mV     Membrane potential
- V_th         mV     Spike threshold
- V_reset      mV     Reset membrane potential after a spike
- I_e          pA     Constant input current
- t_spike      ms     Point in time of last spike
-===========  ====== ========================================================
-\endverbatim
 
-Remarks:
+=============== ======== =============================== ========================================================================
+**Parameter**   **Unit** **Math equivalent**             **Description**
+=============== ======== =============================== ========================================================================
+ ``V_m``         mV       :math:`V_{\text{m}}`           Membrane potential
+ ``E_L``         mV       :math:`E_\text{L}`             Resting membrane potential
+ ``C_m``         pF       :math:`C_{\text{m}}`           Capacity of the membrane
+ ``tau_m``       ms       :math:`\tau_{\text{m}}`        Membrane time constant
+ ``t_ref``       ms       :math:`t_{\text{ref}}`         Duration of refractory period
+ ``V_th``        mV       :math:`V_{\text{th}}`          Spike threshold
+ ``V_reset``     mV       :math:`V_{\text{reset}}`       Reset potential of the membrane
+ ``tau_syn_ex``  ms       :math:`\tau_{\text{syn, ex}}`  Excitatory synaptic time constant
+ ``tau_syn_in``  ms       :math:`\tau_{\text{syn, in}}`  Inhibitory synaptic time constant
+ ``U``           real     :math:`U`                      Parameter determining the increase in u with each spike [0,1]
+ ``tau_fac``     ms       :math:`\tau_{\text{fac}}`      Time constant for facilitation
+ ``tau_rec``     ms       :math:`\tau_{\text{rec}}`      Time constant for depression
+ ``x``           real     :math:`x`                      Initial fraction of synaptic vesicles in the readily releasable pool [0,1]
+ ``y``           real     :math:`y`                      Initial fraction of synaptic vesicles in the synaptic cleft [0,1]
+ ``u``           real     :math:`u`                      Initial release probability of synaptic vesicles [0,1]
+ ``I_e``         pA       :math:`I_\text{e}`             Constant input current
+ ``V_min``       mV       :math:`V_{\text{min}}`         Absolute lower value for the membrane potenial (default :math:`-\infty`)
+=============== ======== =============================== ========================================================================
 
-If tau_m is very close to tau_syn_ex or tau_syn_in, the model
-will numerically behave as if tau_m is equal to tau_syn_ex or
-tau_syn_in, respectively, to avoid numerical instabilities.
-For details, please see IAF_neurons_singularity.ipynb in
-the NEST source code (docs/model_details).
 
-References:
+References
+++++++++++
 
-\verbatim embed:rst
 .. [1] Tsodyks M, Uziel A, Markram H (2000). Synchrony generation in recurrent
-       networks with frequency-dependent synapses. The Journal of Neuroscience,
-       20,RC50:1-5. URL: https://infoscience.epfl.ch/record/183402
-.. [2] Rotter S,  Diesmann M (1999). Exact simulation of
-       time-invariant linear systems with applications to neuronal
-       modeling. Biologial Cybernetics 81:381-402.
-       DOI: https://doi.org/10.1007/s004220050570
-.. [3] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001). State
-       space analysis of synchronous spiking in cortical neural
-       networks. Neurocomputing 38-40:565-571.
-       DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
-\endverbatim
+       networks with frequency-dependent synapses. Journal of Neuroscience,
+       20 RC50. URL: http://infoscience.epfl.ch/record/183402
 
-Sends: SpikeEvent
+Transmits
++++++++++
 
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+SpikeEvent
 
-FirstVersion: March 2006
+See also
+++++++++
 
-Author: Moritz Helias
-*/
-class iaf_tum_2000 : public Archiving_Node
+iaf_psc_exp, tsodyks_synapse, stdp_synapse, static_synapse
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: iaf_tum_2000
+
+EndUserDocs */
+// clang-format on
+
+void register_iaf_tum_2000( const std::string& name );
+
+class iaf_tum_2000 : public ArchivingNode
 {
 
 public:
@@ -153,25 +170,33 @@ public:
   using Node::handle;
   using Node::handles_test_event;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void handle( SpikeEvent& );
-  void handle( CurrentEvent& );
-  void handle( DataLoggingRequest& );
+  void handle( SpikeEvent& ) override;
+  void handle( CurrentEvent& ) override;
+  void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( SpikeEvent&, rport );
-  port handles_test_event( CurrentEvent&, rport );
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
+
+  bool
+  is_off_grid() const override
+  {
+    return true;
+  }
 
 private:
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
-  void update( Time const&, const long, const long );
+  void update( const Time&, const long, const long ) override;
+
+  // intensity function
+  double phi_() const;
 
   // The next two classes need to be friends to access the State_ class/member
   friend class RecordablesMap< iaf_tum_2000 >;
@@ -184,7 +209,6 @@ private:
    */
   struct Parameters_
   {
-
     /** Membrane time constant in ms. */
     double Tau_;
 
@@ -192,8 +216,7 @@ private:
     double C_;
 
     /** Refractory period in ms. */
-    double tau_ref_tot_;
-    double tau_ref_abs_;
+    double t_ref_;
 
     /** Resting potential in mV. */
     double E_L_;
@@ -214,14 +237,25 @@ private:
     /** Time constant of inhibitory synaptic current in ms. */
     double tau_in_;
 
-    Parameters_(); //!< Sets default parameter values
+    /** Stochastic firing intensity at threshold in 1/s. */
+    double rho_;
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    /** Width of threshold region in mV. */
+    double delta_;
+
+    double tau_fac_;
+    double tau_psc_;
+    double tau_rec_;
+    double U_;
+
+    Parameters_();  //!< Sets default parameter values
+
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
 
     /** Set values from dictionary.
      * @returns Change in reversal potential E_L, to be passed to State_::set()
      */
-    double set( const DictionaryDatum& );
+    double set( const Dictionary&, Node* node );
   };
 
   // ----------------------------------------------------------------
@@ -232,25 +266,28 @@ private:
   struct State_
   {
     // state variables
-    double i_0_;      //!< synaptic dc input current, variable 0
-    double i_syn_ex_; //!< postsynaptic current for exc. inputs, variable 1
-    double i_syn_in_; //!< postsynaptic current for inh. inputs, variable 1
-    double V_m_;      //!< membrane potential, variable 2
+    double i_0_;       //!< Stepwise constant input current
+    double i_1_;       //!< Current input that is filtered through the excitatory synapse exponential kernel
+    double i_syn_ex_;  //!< Postsynaptic current for excitatory inputs (includes contribution from current input on
+                       //!< receptor type 1)
+    double i_syn_in_;  //!< Postsynaptic current for inhibitory inputs
+    double V_m_;       //!< Membrane potential
+    int r_ref_;        //!< Absolute refractory counter (no membrane potential propagation)
 
-    //! absolute refractory counter (no membrane potential propagation)
-    int r_abs_;
-    int r_tot_; //!< total refractory counter (no spikes can be generated)
+    double x_;
+    double y_;
+    double u_;
 
-    State_(); //!< Default initialization
+    State_();  //!< Default initialization
 
-    void get( DictionaryDatum&, const Parameters_& ) const;
+    void get( Dictionary&, const Parameters_& ) const;
 
     /** Set values from dictionary.
      * @param dictionary to take data from
      * @param current parameters
      * @param Change in reversal potential E_L specified by this dict
      */
-    void set( const DictionaryDatum&, const Parameters_&, double delta_EL );
+    void set( const Dictionary&, const Parameters_&, const double, Node* );
   };
 
   // ----------------------------------------------------------------
@@ -263,10 +300,18 @@ private:
     Buffers_( iaf_tum_2000& );
     Buffers_( const Buffers_&, iaf_tum_2000& );
 
+    //! Indices for access to different channels of input_buffer_
+    enum
+    {
+      SYN_IN = 0,
+      SYN_EX,
+      I0,
+      I1,
+      NUM_INPUT_CHANNELS
+    };
+
     /** buffers and sums up incoming spikes/currents */
-    RingBuffer spikes_ex_;
-    RingBuffer spikes_in_;
-    RingBuffer currents_;
+    MultiChannelInputBuffer< NUM_INPUT_CHANNELS > input_buffer_;
 
     //! Logger for all analog data
     UniversalDataLogger< iaf_tum_2000 > logger_;
@@ -280,7 +325,7 @@ private:
   struct Variables_
   {
     /** Amplitude of the synaptic current.
-        This value is chosen such that a post-synaptic potential with
+        This value is chosen such that a postsynaptic potential with
         weight one has an amplitude of 1 mV.
         @note mog - I assume this, not checked.
     */
@@ -294,24 +339,30 @@ private:
     double P21in_;
     double P22_;
 
-    int RefractoryCountsAbs_;
-    int RefractoryCountsTot_;
+    double weighted_spikes_ex_;
+    double weighted_spikes_in_;
+
+    int RefractoryCounts_;
+
+    RngPtr rng_;  //!< random number generator of my own thread
   };
 
   // Access functions for UniversalDataLogger -------------------------------
 
   //! Read out the real membrane potential
-  double
+  inline double
   get_V_m_() const
   {
-    return S_.V_m_;
+    return S_.V_m_ + P_.E_L_;
   }
-  double
+
+  inline double
   get_I_syn_ex_() const
   {
     return S_.i_syn_ex_;
   }
-  double
+
+  inline double
   get_I_syn_in_() const
   {
     return S_.i_syn_in_;
@@ -320,7 +371,6 @@ private:
   // ----------------------------------------------------------------
 
   /**
-   * @defgroup iaf_tum_2000_data
    * Instances of private data structures for the different types
    * of data pertaining to the model.
    * @note The order of definitions is important for speed.
@@ -337,36 +387,52 @@ private:
 };
 
 
-inline port
-iaf_tum_2000::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+nest::iaf_tum_2000::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
+  if ( target.get_model_id() != this->get_model_id() and target.is_off_grid() )
+  {
+    throw IllegalConnection( "iaf_tum_2000 neurons cannot be connected to precise spiking neurons." );
+  }
+
   SpikeEvent e;
   e.set_sender( *this );
   return target.handles_test_event( e, receptor_type );
 }
 
-inline port
-iaf_tum_2000::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+iaf_tum_2000::handles_test_event( SpikeEvent& e, size_t receptor_type )
 {
-  if ( receptor_type != 0 )
+  if ( receptor_type > 1 )
   {
     throw UnknownReceptorType( receptor_type, get_name() );
   }
-  return 0;
+  else if ( receptor_type != 1 and e.get_sender().get_model_id() == this->get_model_id() )
+  {
+    throw IllegalConnection( "iaf_tum_2000 neurons must be connected via receptor_type 1." );
+  }
+  return receptor_type;
 }
 
-inline port
-iaf_tum_2000::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+iaf_tum_2000::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
-  if ( receptor_type != 0 )
+  if ( receptor_type == 0 )
+  {
+    return 0;
+  }
+  else if ( receptor_type == 1 )
+  {
+    return 1;
+  }
+  else
   {
     throw UnknownReceptorType( receptor_type, get_name() );
   }
-  return 0;
 }
 
-inline port
-iaf_tum_2000::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+iaf_tum_2000::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -375,35 +441,35 @@ iaf_tum_2000::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
   return B_.logger_.connect_logging_device( dlr, recordablesMap_ );
 }
 
-
 inline void
-iaf_tum_2000::get_status( DictionaryDatum& d ) const
+iaf_tum_2000::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d, P_ );
-  Archiving_Node::get_status( d );
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  ArchivingNode::get_status( d );
+
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-iaf_tum_2000::set_status( const DictionaryDatum& d )
+iaf_tum_2000::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_;                 // temporary copy in case of errors
-  const double delta_EL = ptmp.set( d ); // throws if BadProperty
-  State_ stmp = S_;                      // temporary copy in case of errors
-  stmp.set( d, ptmp, delta_EL );         // throws if BadProperty
+  Parameters_ ptmp = P_;                        // temporary copy in case of errors
+  const double delta_EL = ptmp.set( d, this );  // throws if BadProperty
+  State_ stmp = S_;                             // temporary copy in case of errors
+  stmp.set( d, ptmp, delta_EL, this );          // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // IAF_TUM_2000_H
+#endif  // IAF_TUM_2000_H

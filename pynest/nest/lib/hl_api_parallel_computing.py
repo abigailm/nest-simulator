@@ -23,20 +23,18 @@
 Functions for parallel computing
 """
 
-from ..ll_api import *
-from .. import pynestkernel as kernel
-from .hl_api_helper import *
+from .. import nestkernel_api as nestkernel
 
 __all__ = [
-    'NumProcesses',
-    'Rank',
-    'SetAcceptableLatency',
-    'SetMaxBuffered',
-    'SyncProcesses',
+    "NumProcesses",
+    "Rank",
+    "GetLocalVPs",
+    "SetAcceptableLatency",
+    "SetMaxBuffered",
+    "SyncProcesses",
 ]
 
 
-@check_stack
 def Rank():
     """Return the MPI rank of the local process.
 
@@ -47,7 +45,7 @@ def Rank():
 
     Note
     ----
-    DO NOT USE Rank() TO EXECUTE ANY FUNCTION IMPORTED FROM THE nest
+    DO NOT USE `Rank()` TO EXECUTE ANY FUNCTION IMPORTED FROM THE `nest`
     MODULE ON A SUBSET OF RANKS IN AN MPI-PARALLEL SIMULATION.
 
     This will lead to unpredictable behavior. Symptoms may be an
@@ -56,11 +54,9 @@ def Rank():
     may complete but generate nonsensical results.
     """
 
-    sr("Rank")
-    return spp()
+    return nestkernel.llapi_get_kernel_status()["mpi_rank"]
 
 
-@check_stack
 def NumProcesses():
     """Return the overall number of MPI processes.
 
@@ -70,13 +66,11 @@ def NumProcesses():
         Number of overall MPI processes
     """
 
-    sr("NumProcesses")
-    return spp()
+    return nestkernel.llapi_get_kernel_status()["num_processes"]
 
 
-@check_stack
 def SetAcceptableLatency(port_name, latency):
-    """Set the acceptable latency (in ms) for a MUSIC port.
+    """Set the acceptable `latency` (in ms) for a MUSIC port.
 
     Parameters
     ----------
@@ -86,12 +80,13 @@ def SetAcceptableLatency(port_name, latency):
         Latency in ms
     """
 
-    sps(kernel.SLILiteral(port_name))
-    sps(latency)
-    sr("SetAcceptableLatency")
+    # TODO-PYNEST-NG
+    # sps(kernel.SLILiteral(port_name))
+    # sps(latency)
+    # sr("SetAcceptableLatency")
+    raise NotImplementedError
 
 
-@check_stack
 def SetMaxBuffered(port_name, size):
     """Set the maximum buffer size for a MUSIC port.
 
@@ -103,14 +98,25 @@ def SetMaxBuffered(port_name, size):
         Buffer size
     """
 
-    sps(kernel.SLILiteral(port_name))
-    sps(size)
-    sr("SetMaxBuffered")
+    # TODO-PYNEST-NG
+    # sps(kernel.SLILiteral(port_name))
+    # sps(size)
+    # sr("SetMaxBuffered")
+    raise NotImplementedError
 
 
-@check_stack
 def SyncProcesses():
-    """Synchronize all MPI processes.
-    """
+    """Synchronize all MPI processes."""
 
-    sr("SyncProcesses")
+    nestkernel.llapi_synchronize()
+
+
+def GetLocalVPs():
+    """Return iterable representing the VPs local to the MPI rank."""
+
+    # Compute local VPs as range based on round-robin logic in
+    # VPManager::get_vp(). mpitest_get_local_vps ensures this is in
+    # sync with the kernel.
+
+    n_vp = nestkernel.llapi_get_kernel_status()["total_num_virtual_procs"]
+    return range(Rank(), n_vp, NumProcesses())

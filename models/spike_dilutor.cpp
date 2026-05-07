@@ -22,18 +22,23 @@
 
 #include "spike_dilutor.h"
 
-// Includes from librandom:
-#include "gslrandomgen.h"
-#include "random_datums.h"
+// Includes from libnestutil:
+#include "dict_util.h"
 
 // Includes from nestkernel:
 #include "event_delivery_manager_impl.h"
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "model_manager_impl.h"
+#include "nest_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
+
+void
+nest::register_spike_dilutor( const std::string& name )
+{
+  register_node_model< spike_dilutor >( name );
+}
+
 
 /* ----------------------------------------------------------------
  * Default constructors defining default parameter
@@ -44,26 +49,21 @@ nest::spike_dilutor::Parameters_::Parameters_()
 {
 }
 
-nest::spike_dilutor::Parameters_::Parameters_( const Parameters_& p )
-  : p_copy_( p.p_copy_ )
-{
-}
-
 /* ----------------------------------------------------------------
  * Parameter extraction and manipulation functions
  * ---------------------------------------------------------------- */
 
 void
-nest::spike_dilutor::Parameters_::get( DictionaryDatum& d ) const
+nest::spike_dilutor::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::p_copy ] = p_copy_;
+  d[ names::p_copy ] = p_copy_;
 }
 
 void
-nest::spike_dilutor::Parameters_::set( const DictionaryDatum& d )
+nest::spike_dilutor::Parameters_::set( const Dictionary& d, Node* node )
 {
-  updateValue< double >( d, names::p_copy, p_copy_ );
-  if ( p_copy_ < 0 || p_copy_ > 1 )
+  update_value_param( d, names::p_copy, p_copy_, node );
+  if ( p_copy_ < 0 or p_copy_ > 1 )
   {
     throw BadProperty( "Copy probability must be in [0, 1]." );
   }
@@ -92,24 +92,30 @@ nest::spike_dilutor::spike_dilutor( const spike_dilutor& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::spike_dilutor::init_state_( const Node& proto )
+nest::spike_dilutor::init_state_()
 {
-  const spike_dilutor& pr = downcast< spike_dilutor >( proto );
+  // This check cannot be done in the copy constructor because that is also used to
+  // create model prototypes. Since spike_dilutor is deprecated anyways, we put this
+  // brute-force solution here.
+  if ( kernel().vp_manager.get_num_threads() > 1 )
+  {
+    throw KernelException( "The network contains a spike_dilutor which cannot be used with multiple threads." );
+  }
 
-  device_.init_state( pr.device_ );
+  device_.init_state();
 }
 
 void
 nest::spike_dilutor::init_buffers_()
 {
-  B_.n_spikes_.clear(); // includes resize
+  B_.n_spikes_.clear();  // includes resize
   device_.init_buffers();
 }
 
 void
-nest::spike_dilutor::calibrate()
+nest::spike_dilutor::pre_run_hook()
 {
-  device_.calibrate();
+  device_.pre_run_hook();
 }
 
 /* ----------------------------------------------------------------
@@ -119,18 +125,15 @@ nest::spike_dilutor::calibrate()
 void
 nest::spike_dilutor::update( Time const& T, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   for ( long lag = from; lag < to; ++lag )
   {
     if ( not device_.is_active( T ) )
     {
-      return; // no spikes to be repeated
+      return;  // no spikes to be repeated
     }
 
     // generate spikes of mother process for each time slice
-    unsigned long n_mother_spikes = static_cast< unsigned long >( B_.n_spikes_.get_value( lag ) );
+    const unsigned long n_mother_spikes = static_cast< unsigned long >( B_.n_spikes_.get_value( lag ) );
 
     if ( n_mother_spikes )
     {
@@ -145,24 +148,22 @@ nest::spike_dilutor::update( Time const& T, const long from, const long to )
 void
 nest::spike_dilutor::event_hook( DSSpikeEvent& e )
 {
-  // note: event_hook() receives a reference of the spike event that
-  // was originally created in the update function. there we set
-  // the multiplicty to store the number of mother spikes. the *same*
+  // Note: event_hook() receives a reference of the spike event that
+  // was originally created in the update function. There we set
+  // the multiplicity to store the number of mother spikes. The *same*
   // reference will be delivered multiple times to the event hook,
-  // once for every receiver. when calling handle() of the receiver
-  // above, we need to change the multiplicty to the number of copied
+  // once for every receiver. When calling handle() of the receiver
+  // above, we need to change the multiplicity to the number of copied
   // child process spikes, so afterwards it needs to be reset to correctly
   // store the number of mother spikes again during the next call of
   // event_hook().
-  // reichert
 
-  librandom::RngPtr rng = kernel().rng_manager.get_rng( get_thread() );
   unsigned long n_mother_spikes = e.get_multiplicity();
   unsigned long n_spikes = 0;
 
   for ( unsigned long n = 0; n < n_mother_spikes; n++ )
   {
-    if ( rng->drand() < P_.p_copy_ )
+    if ( get_vp_specific_rng( get_thread() )->drand() < P_.p_copy_ )
     {
       n_spikes++;
     }

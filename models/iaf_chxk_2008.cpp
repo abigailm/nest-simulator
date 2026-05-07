@@ -26,23 +26,17 @@
 
 // C++ includes:
 #include <cstdio>
-#include <iomanip>
-#include <iostream>
-#include <limits>
 
 // Includes from libnestutil:
+#include "dict_util.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 /* ----------------------------------------------------------------
  * Recordables map
@@ -50,8 +44,14 @@
 
 nest::RecordablesMap< nest::iaf_chxk_2008 > nest::iaf_chxk_2008::recordablesMap_;
 
-namespace nest // template specialization must be placed in namespace
+namespace nest  // template specialization must be placed in namespace
 {
+void
+register_iaf_chxk_2008( const std::string& name )
+{
+  register_node_model< iaf_chxk_2008 >( name );
+}
+
 /*
  * Override the create() method with one call to RecordablesMap::insert_()
  * for each quantity to be recorded.
@@ -60,7 +60,6 @@ template <>
 void
 RecordablesMap< iaf_chxk_2008 >::create()
 {
-  // use standard names wherever you can for consistency!
   insert_( names::V_m, &iaf_chxk_2008::get_y_elem_< iaf_chxk_2008::State_::V_M > );
   insert_( names::g_ex, &iaf_chxk_2008::get_y_elem_< iaf_chxk_2008::State_::G_EXC > );
   insert_( names::g_in, &iaf_chxk_2008::get_y_elem_< iaf_chxk_2008::State_::G_INH > );
@@ -119,20 +118,20 @@ nest::iaf_chxk_2008_dynamics( double, const double y[], double f[], void* pnode 
  * ---------------------------------------------------------------- */
 
 nest::iaf_chxk_2008::Parameters_::Parameters_()
-  : // Default values chosen based on values found in
+  :  // Default values chosen based on values found in
   // Alex Casti's simulator
-  V_th( -45.0 )     // mV
-  , g_L( 100.0 )    // nS
-  , C_m( 1000.0 )   // pF
-  , E_ex( 20.0 )    // mV
-  , E_in( -90.0 )   // mV
-  , E_L( -60.0 )    // mV
-  , tau_synE( 1.0 ) // ms
-  , tau_synI( 1.0 ) // ms
-  , I_e( 0.0 )      // pA
-  , tau_ahp( 0.5 )  // ms
-  , g_ahp( 443.8 )  // nS
-  , E_ahp( -95.0 )  // mV
+  V_th( -45.0 )      // mV
+  , g_L( 100.0 )     // nS
+  , C_m( 1000.0 )    // pF
+  , E_ex( 20.0 )     // mV
+  , E_in( -90.0 )    // mV
+  , E_L( -60.0 )     // mV
+  , tau_synE( 1.0 )  // ms
+  , tau_synI( 1.0 )  // ms
+  , I_e( 0.0 )       // pA
+  , tau_ahp( 0.5 )   // ms
+  , g_ahp( 443.8 )   // nS
+  , E_ahp( -95.0 )   // mV
   , ahp_bug( false )
 
 {
@@ -142,8 +141,8 @@ nest::iaf_chxk_2008::Parameters_::Parameters_()
 nest::iaf_chxk_2008::State_::State_( const Parameters_& p )
   : r( 0 )
 {
-  y[ V_M ] = p.E_L; // initialize to reversal potential
-  for ( size_t i = 2; i < STATE_VEC_SIZE; ++i )
+  y[ V_M ] = p.E_L;  // initialize to reversal potential
+  for ( size_t i = DG_EXC; i < STATE_VEC_SIZE; ++i )
   {
     y[ i ] = 0;
   }
@@ -158,26 +157,22 @@ nest::iaf_chxk_2008::State_::State_( const State_& s )
   }
 }
 
-nest::iaf_chxk_2008::State_& nest::iaf_chxk_2008::State_::operator=( const State_& s )
+nest::iaf_chxk_2008::State_&
+nest::iaf_chxk_2008::State_::operator=( const State_& s )
 {
-  if ( this == &s ) // avoid assignment to self
-  {
-    return *this;
-  }
+  r = s.r;
   for ( size_t i = 0; i < STATE_VEC_SIZE; ++i )
   {
     y[ i ] = s.y[ i ];
   }
-
-  r = s.r;
   return *this;
 }
 
 nest::iaf_chxk_2008::Buffers_::Buffers_( iaf_chxk_2008& n )
   : logger_( n )
-  , s_( 0 )
-  , c_( 0 )
-  , e_( 0 )
+  , s_( nullptr )
+  , c_( nullptr )
+  , e_( nullptr )
 {
   // Initialization of the remaining members is deferred to
   // init_buffers_().
@@ -185,9 +180,9 @@ nest::iaf_chxk_2008::Buffers_::Buffers_( iaf_chxk_2008& n )
 
 nest::iaf_chxk_2008::Buffers_::Buffers_( const Buffers_&, iaf_chxk_2008& n )
   : logger_( n )
-  , s_( 0 )
-  , c_( 0 )
-  , e_( 0 )
+  , s_( nullptr )
+  , c_( nullptr )
+  , e_( nullptr )
 {
   // Initialization of the remaining members is deferred to
   // init_buffers_().
@@ -198,60 +193,60 @@ nest::iaf_chxk_2008::Buffers_::Buffers_( const Buffers_&, iaf_chxk_2008& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::iaf_chxk_2008::Parameters_::get( DictionaryDatum& d ) const
+nest::iaf_chxk_2008::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::V_th, V_th );
-  def< double >( d, names::g_L, g_L );
-  def< double >( d, names::C_m, C_m );
-  def< double >( d, names::E_ex, E_ex );
-  def< double >( d, names::E_in, E_in );
-  def< double >( d, names::E_L, E_L );
-  def< double >( d, names::tau_syn_ex, tau_synE );
-  def< double >( d, names::tau_syn_in, tau_synI );
-  def< double >( d, names::I_e, I_e );
-  def< double >( d, names::tau_ahp, tau_ahp );
-  def< double >( d, names::E_ahp, E_ahp );
-  def< double >( d, names::g_ahp, g_ahp );
-  def< bool >( d, names::ahp_bug, ahp_bug );
+  d[ names::V_th ] = V_th;
+  d[ names::g_L ] = g_L;
+  d[ names::C_m ] = C_m;
+  d[ names::E_ex ] = E_ex;
+  d[ names::E_in ] = E_in;
+  d[ names::E_L ] = E_L;
+  d[ names::tau_syn_ex ] = tau_synE;
+  d[ names::tau_syn_in ] = tau_synI;
+  d[ names::I_e ] = I_e;
+  d[ names::tau_ahp ] = tau_ahp;
+  d[ names::E_ahp ] = E_ahp;
+  d[ names::g_ahp ] = g_ahp;
+  d[ names::ahp_bug ] = ahp_bug;
 }
 
 void
-nest::iaf_chxk_2008::Parameters_::set( const DictionaryDatum& d )
+nest::iaf_chxk_2008::Parameters_::set( const Dictionary& d, Node* node )
 {
   // allow setting the membrane potential
-  updateValue< double >( d, names::V_th, V_th );
-  updateValue< double >( d, names::g_L, g_L );
-  updateValue< double >( d, names::C_m, C_m );
-  updateValue< double >( d, names::E_ex, E_ex );
-  updateValue< double >( d, names::E_in, E_in );
-  updateValue< double >( d, names::E_L, E_L );
-  updateValue< double >( d, names::tau_syn_ex, tau_synE );
-  updateValue< double >( d, names::tau_syn_in, tau_synI );
-  updateValue< double >( d, names::I_e, I_e );
-  updateValue< double >( d, names::tau_ahp, tau_ahp );
-  updateValue< double >( d, names::E_ahp, E_ahp );
-  updateValue< double >( d, names::g_ahp, g_ahp );
-  updateValue< bool >( d, names::ahp_bug, ahp_bug );
+  update_value_param( d, names::V_th, V_th, node );
+  update_value_param( d, names::g_L, g_L, node );
+  update_value_param( d, names::C_m, C_m, node );
+  update_value_param( d, names::E_ex, E_ex, node );
+  update_value_param( d, names::E_in, E_in, node );
+  update_value_param( d, names::E_L, E_L, node );
+  update_value_param( d, names::tau_syn_ex, tau_synE, node );
+  update_value_param( d, names::tau_syn_in, tau_synI, node );
+  update_value_param( d, names::I_e, I_e, node );
+  update_value_param( d, names::tau_ahp, tau_ahp, node );
+  update_value_param( d, names::E_ahp, E_ahp, node );
+  update_value_param( d, names::g_ahp, g_ahp, node );
+  update_value_param( d, names::ahp_bug, ahp_bug, node );
   if ( C_m <= 0 )
   {
     throw BadProperty( "Capacitance must be strictly positive." );
   }
-  if ( tau_synE <= 0 || tau_synI <= 0 || tau_ahp <= 0 )
+  if ( tau_synE <= 0 or tau_synI <= 0 or tau_ahp <= 0 )
   {
     throw BadProperty( "All time constants must be strictly positive." );
   }
 }
 
 void
-nest::iaf_chxk_2008::State_::get( DictionaryDatum& d ) const
+nest::iaf_chxk_2008::State_::get( Dictionary& d ) const
 {
-  def< double >( d, names::V_m, y[ V_M ] ); // Membrane potential
+  d[ names::V_m ] = y[ V_M ];  // Membrane potential
 }
 
 void
-nest::iaf_chxk_2008::State_::set( const DictionaryDatum& d, const Parameters_& )
+nest::iaf_chxk_2008::State_::set( const Dictionary& d, const Parameters_&, Node* node )
 {
-  updateValue< double >( d, names::V_m, y[ V_M ] );
+  update_value_param( d, names::V_m, y[ V_M ], node );
 }
 
 /* ----------------------------------------------------------------
@@ -259,7 +254,7 @@ nest::iaf_chxk_2008::State_::set( const DictionaryDatum& d, const Parameters_& )
  * ---------------------------------------------------------------- */
 
 nest::iaf_chxk_2008::iaf_chxk_2008()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_( P_ )
   , B_( *this )
@@ -267,7 +262,7 @@ nest::iaf_chxk_2008::iaf_chxk_2008()
 }
 
 nest::iaf_chxk_2008::iaf_chxk_2008( const iaf_chxk_2008& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -296,27 +291,20 @@ nest::iaf_chxk_2008::~iaf_chxk_2008()
  * ---------------------------------------------------------------- */
 
 void
-nest::iaf_chxk_2008::init_state_( const Node& proto )
-{
-  const iaf_chxk_2008& pr = downcast< iaf_chxk_2008 >( proto );
-  S_ = pr.S_;
-}
-
-void
 nest::iaf_chxk_2008::init_buffers_()
 {
-  Archiving_Node::clear_history();
+  ArchivingNode::clear_history();
 
-  B_.spike_exc_.clear(); // includes resize
-  B_.spike_inh_.clear(); // includes resize
-  B_.currents_.clear();  // includes resize
+  B_.spike_exc_.clear();  // includes resize
+  B_.spike_inh_.clear();  // includes resize
+  B_.currents_.clear();   // includes resize
 
   B_.logger_.reset();
 
   B_.step_ = Time::get_resolution().get_ms();
   B_.IntegrationStep_ = B_.step_;
 
-  if ( B_.s_ == 0 )
+  if ( not B_.s_ )
   {
     B_.s_ = gsl_odeiv_step_alloc( gsl_odeiv_step_rkf45, State_::STATE_VEC_SIZE );
   }
@@ -325,7 +313,7 @@ nest::iaf_chxk_2008::init_buffers_()
     gsl_odeiv_step_reset( B_.s_ );
   }
 
-  if ( B_.c_ == 0 )
+  if ( not B_.c_ )
   {
     B_.c_ = gsl_odeiv_control_y_new( 1e-3, 0.0 );
   }
@@ -334,7 +322,7 @@ nest::iaf_chxk_2008::init_buffers_()
     gsl_odeiv_control_init( B_.c_, 1e-3, 0.0, 1.0, 0.0 );
   }
 
-  if ( B_.e_ == 0 )
+  if ( not B_.e_ )
   {
     B_.e_ = gsl_odeiv_evolve_alloc( State_::STATE_VEC_SIZE );
   }
@@ -344,7 +332,7 @@ nest::iaf_chxk_2008::init_buffers_()
   }
 
   B_.sys_.function = iaf_chxk_2008_dynamics;
-  B_.sys_.jacobian = NULL;
+  B_.sys_.jacobian = nullptr;
   B_.sys_.dimension = State_::STATE_VEC_SIZE;
   B_.sys_.params = reinterpret_cast< void* >( this );
 
@@ -352,7 +340,7 @@ nest::iaf_chxk_2008::init_buffers_()
 }
 
 void
-nest::iaf_chxk_2008::calibrate()
+nest::iaf_chxk_2008::pre_run_hook()
 {
   // ensures initialization in case mm connected after Simulate
   B_.logger_.init();
@@ -369,10 +357,6 @@ nest::iaf_chxk_2008::calibrate()
 void
 nest::iaf_chxk_2008::update( Time const& origin, const long from, const long to )
 {
-
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   for ( long lag = from; lag < to; ++lag )
   {
 
@@ -399,46 +383,47 @@ nest::iaf_chxk_2008::update( Time const& origin, const long from, const long to 
       const int status = gsl_odeiv_evolve_apply( B_.e_,
         B_.c_,
         B_.s_,
-        &B_.sys_,             // system of ODE
-        &t,                   // from t
-        B_.step_,             // to t <= step
-        &B_.IntegrationStep_, // integration step size
-        S_.y );               // neuronal state
+        &B_.sys_,              // system of ODE
+        &t,                    // from t
+        B_.step_,              // to t <= step
+        &B_.IntegrationStep_,  // integration step size
+        S_.y );                // neuronal state
       if ( status != GSL_SUCCESS )
       {
         throw GSLSolverFailure( get_name(), status );
       }
     }
     // neuron should spike on threshold crossing only.
-    if ( vm_prev < P_.V_th && S_.y[ State_::V_M ] >= P_.V_th )
+    if ( vm_prev < P_.V_th and S_.y[ State_::V_M ] >= P_.V_th )
     {
-      // neuron is not absolute refractory
+      // Find precise spike time by linear interpolation.
+      // dt is time from spike to end of time step.
+      const double dt = B_.step_ * ( S_.y[ State_::V_M ] - P_.V_th ) / ( S_.y[ State_::V_M ] - vm_prev );
 
-      // Find precise spike time using linear interpolation
-      double sigma = ( S_.y[ State_::V_M ] - P_.V_th ) * B_.step_ / ( S_.y[ State_::V_M ] - vm_prev );
+      // Evolve AHP conductance from time of spike to end of step
+      const double delta_dg = V_.PSConInit_AHP * std::exp( -dt / P_.tau_ahp );
+      const double delta_g = delta_dg * dt;
 
-      double alpha = exp( -sigma / P_.tau_ahp );
-
-      double delta_g_ahp = V_.PSConInit_AHP * sigma * alpha;
-      double delta_dg_ahp = V_.PSConInit_AHP * alpha;
-
-      if ( P_.ahp_bug == true )
+      if ( P_.ahp_bug )
       {
-        // Bug in original code ignores AHP conductance from previous spikes
-        S_.y[ State_::G_AHP ] = delta_g_ahp;
-        S_.y[ State_::DG_AHP ] = delta_dg_ahp;
+        // Bug in original Fortran implementation by Casti et al. ignores
+        // AHP conductance from previous spikes: at any time, only the
+        // alpha function "kicked off" by the most recent spike is included
+        S_.y[ State_::G_AHP ] = delta_g;
+        S_.y[ State_::DG_AHP ] = delta_dg;
       }
       else
       {
-        S_.y[ State_::G_AHP ] += delta_g_ahp;
-        S_.y[ State_::DG_AHP ] += delta_dg_ahp;
+        // Correct implementation adds initial values for new AHP to AHP history
+        S_.y[ State_::G_AHP ] += delta_g;
+        S_.y[ State_::DG_AHP ] += delta_dg;
       }
 
-      // log spike with Archiving_Node
+      // log spike with ArchivingNode
       set_spiketime( Time::step( origin.get_steps() + lag + 1 ) );
 
       SpikeEvent se;
-      se.set_offset( sigma );
+      se.set_offset( dt );
       kernel().event_delivery_manager.send( *this, se, lag );
     }
 
@@ -468,7 +453,7 @@ nest::iaf_chxk_2008::handle( SpikeEvent& e )
   {
     B_.spike_inh_.add_value( e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ),
       -e.get_weight() * e.get_multiplicity() );
-  } // ensure conductance is positive
+  }
 }
 
 void
@@ -476,7 +461,6 @@ nest::iaf_chxk_2008::handle( CurrentEvent& e )
 {
   assert( e.get_delay_steps() > 0 );
 
-  // add weighted current; HEP 2002-10-04
   B_.currents_.add_value(
     e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), e.get_weight() * e.get_current() );
 }
@@ -486,4 +470,4 @@ nest::iaf_chxk_2008::handle( DataLoggingRequest& e )
 {
   B_.logger_.handle( e );
 }
-#endif // HAVE_GSL
+#endif  // HAVE_GSL

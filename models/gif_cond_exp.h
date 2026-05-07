@@ -33,10 +33,10 @@
 #include <gsl/gsl_odeiv.h>
 
 // Includes from nestkernel:
-#include "event.h"
 #include "archiving_node.h"
-#include "ring_buffer.h"
 #include "connection.h"
+#include "event.h"
+#include "ring_buffer.h"
 
 #include "universal_data_logger.h"
 
@@ -48,76 +48,98 @@ namespace nest
 
 extern "C" int gif_cond_exp_dynamics( double, const double*, double*, void* );
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup iaf
-@ingroup cond
+/* BeginUserDocs: neuron, integrate-and-fire, conductance-based, adaptation, stochastic
 
-Name: gif_cond_exp - Conductance-based generalized integrate-and-fire neuron
-model according to Mensi et al. (2012) and Pozzorini et al. (2015).
+Short description
++++++++++++++++++
 
-Description:
+Conductance-based generalized integrate-and-fire neuron (GIF) model (from the Gerstner lab)
 
-gif_psc_exp is the generalized integrate-and-fire neuron according to
-Mensi et al. (2012) and Pozzorini et al. (2015), with post-synaptic
+Description
++++++++++++
+
+``gif_psc_exp`` is the generalized integrate-and-fire neuron according to
+Mensi et al. (2012) [1]_ and Pozzorini et al. (2015) [2]_, with postsynaptic
 conductances in the form of truncated exponentials.
 
 This model features both an adaptation current and a dynamic threshold for
 spike-frequency adaptation. The membrane potential (V) is described by the
 differential equation:
-@f[ C*dV(t)/dt = -g_L*(V(t)-E_L) - \eta_1(t) - \eta_2(t) - \ldots
-    - \eta_n(t) + I(t) @f]
 
-where each \f$ \eta_i \f$ is a spike-triggered current (stc), and the neuron
+.. math::
+
+ C*dV(t)/dt = -g_L\cdot(V(t)-E_L) - \eta_1(t) - \eta_2(t) - \ldots
+    - \eta_n(t) + I(t)
+
+where each :math:`\eta_i` is a spike-triggered current (stc), and the neuron
 model can have arbitrary number of them.
-Dynamic of each \f$ \eta_i \f$ is described by:
-@f[ \tau_\eta{_i}*d{\eta_i}/dt = -\eta_i  @f]
+Dynamic of each :math:`\eta_i` is described by:
+
+.. math::
+
+ \tau_\eta{_i}\cdot d{\eta_i}/dt = -\eta_i
 
 and in case of spike emission, its value increased by a constant (which can be
 positive or negative):
 
-@f[ \eta_i = \eta_i + q_{\eta_i} \text{ (in case of spike emission).} @f]
+.. math::
 
-Neuron produces spikes STOCHASTICALLY according to a point process with the
+ \eta_i = \eta_i + q_{\eta_i} \text{ (in case of spike emission).}
+
+Neuron produces spikes stochastically according to a point process with the
 firing intensity:
 
-@f[ \lambda(t) = \lambda_0 * \exp (V(t)-V_T(t)) / \Delta_V  @f]
+.. math::
 
-where \f$ V_T(t) \f$ is a time-dependent firing threshold:
+ \lambda(t) = \lambda_0 \cdot \exp (V(t)-V_T(t)) / \Delta_V
 
-@f[ V_T(t) = V_{T_star} + \gamma_1(t) + \gamma_2(t) + \ldots + \gamma_m(t) @f]
+where :math:`V_T(t)` is a time-dependent firing threshold:
 
-where \f$ \gamma_i \f$ is a kernel of spike-frequency adaptation (sfa), and the
+.. math::
+
+   V_T(t) = V_{T_{star}} + \gamma_1(t) + \gamma_2(t) + \ldots + \gamma_m(t)
+
+where :math:`\gamma_i` is a kernel of spike-frequency adaptation (sfa), and the
 neuron model can have arbitrary number of them.
-Dynamic of each \f$ \gamma_i \f$ is described by:
-@f[
-\tau_{\gamma_i}*d\gamma_i/dt = -\gamma_i
-@f]
+Dynamic of each :math:`\gamma_i` is described by:
+
+.. math::
+
+   \tau_{\gamma_i} \cdot d\gamma_i/dt = -\gamma_i
+
 and in case of spike emission, its value increased by a constant (which can be
 positive or negative):
-@f[
-\gamma_i = \gamma_i + q_{\gamma_i}  \text{ (in case of spike emission).}
-@f]
+
+.. math::
+
+   \gamma_i = \gamma_i + q_{\gamma_i}  \text{ (in case of spike emission).}
+
 
 Note:
 
-In the current implementation of the model (as described in [1] and
-[2]), the values of \f$ \eta_i \f$ and \f$ \gamma_i \f$ are affected
-immediately after spike emission. However, GIF toolbox
-(http://wiki.epfl.ch/giftoolbox) which fits the model using experimental data,
-requires a different set of \f$ \eta_i \f$ and \f$ \gamma_i\f$ . It applies the
-jump of \f$ \eta_i \f$ and \f$ \gamma_i \f$ after the refractory period. One can
-easily convert between \f$ q_\eta/\gamma \f$ of these two approaches:
-\f$ q{_\eta}_{giftoolbox} = q_{\eta_{NEST}} * (1 - \exp( -\tau_{ref} /
- \tau_\eta )) \f$ The same formula applies for \f$ q_{\gamma} \f$.
+In the current implementation of the model, the values of
+:math:`\eta_i` and :math:`\gamma_i` are affected
+immediately after spike emission. However, `GIF toolbox <http://wiki.epfl.ch/giftoolbox>`_,
+which fits the model using experimental data, requires a different set of
+:math:`\eta_i` and :math:`\gamma_i`. It applies the jump of
+:math:`\eta_i` and :math:`\gamma_i` after the refractory period. One can
+easily convert between :math:`q_\eta/\gamma` of these two approaches:
+
+.. math::
+
+  q{_\eta}_{giftoolbox} = q_{\eta_{NEST}} \cdot (1 - \exp( -\tau_{ref} /
+   \tau_\eta ))
+
+The same formula applies for :math:`q_{\gamma}`.
 
 The shape of synaptic conductance is exponential.
 
-Parameters:
+Parameters
+++++++++++
 
-The following parameters can be set in the status dictionary.
+The following parameters can be set in the status Dictionary.
 
-\verbatim embed:rst
+
 ======== ======= =======================================
 **Membrane Parameters**
 --------------------------------------------------------
@@ -160,11 +182,11 @@ gsl_error_tol real    This parameter controls the admissible error of the
                       GSL integrator. Reduce it if NEST complains about
                       numerical instabilities.
 ============= ======= =========================================================
-\endverbatim
 
-References:
 
-\verbatim embed:rst
+References
+++++++++++
+
 .. [1] Mensi S, Naud R, Pozzorini C, Avermann M, Petersen CC, Gerstner W (2012)
        Parameter extraction and classification of three cortical neuron types
        reveals two distinct adaptation mechanisms. Journal of
@@ -174,25 +196,39 @@ References:
        Automated high-throughput characterization of single neurons by means of
        simplified spiking models. PLoS Computational Biology, 11(6), e1004275.
        DOI: https://doi.org/10.1371/journal.pcbi.1004275
-\endverbatim
 
-Sends: SpikeEvent
 
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+Sends
++++++
 
-Author: March 2016, Setareh
+SpikeEvent
 
-SeeAlso: pp_psc_delta, gif_cond_exp_multisynapse, gif_psc_exp,
-gif_psc_exp_multisynapse
+Receives
+++++++++
 
-*/
-class gif_cond_exp : public Archiving_Node
+SpikeEvent, CurrentEvent, DataLoggingRequest
+
+See also
+++++++++
+
+pp_psc_delta, gif_cond_exp_multisynapse, gif_psc_exp, gif_psc_exp_multisynapse
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: gif_cond_exp
+
+EndUserDocs  */
+
+void register_gif_cond_exp( const std::string& name );
+
+class gif_cond_exp : public ArchivingNode
 {
 
 public:
   gif_cond_exp();
   gif_cond_exp( const gif_cond_exp& );
-  ~gif_cond_exp();
+  ~gif_cond_exp() override;
 
   /**
    * Import sets of overloaded virtual functions.
@@ -202,26 +238,25 @@ public:
   using Node::handle;
   using Node::handles_test_event;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void handle( SpikeEvent& );
-  void handle( CurrentEvent& );
-  void handle( DataLoggingRequest& );
+  void handle( SpikeEvent& ) override;
+  void handle( CurrentEvent& ) override;
+  void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( SpikeEvent&, rport );
-  port handles_test_event( CurrentEvent&, rport );
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
-  void update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
 
   // make dynamics function quasi-member
   friend int gif_cond_exp_dynamics( double, const double*, double*, void* );
@@ -273,12 +308,12 @@ private:
     /** External DC current. */
     double I_e_;
 
-    double gsl_error_tol; //!< error bound for GSL integrator
+    double gsl_error_tol;  //!< error bound for GSL integrator
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum& ); //!< Set values from dictionary
+    void get( Dictionary& ) const;              //!< Store current values in Dictionary
+    void set( const Dictionary&, Node* node );  //!< Set values from Dictionary
   };
 
   // ----------------------------------------------------------------
@@ -300,22 +335,23 @@ private:
     //!< neuron state, must be C-array for GSL solver
     double neuron_state_[ STATE_VEC_SIZE ];
 
-    double I_stim_; //!< This is piecewise constant external current
-    double sfa_;    //!< This is the change of the 'threshold' due to adaptation.
-    double stc_;    //!< Spike-triggered current.
+    double I_stim_;  //!< This is piecewise constant external current
+    double sfa_;     //!< This is the change of the 'threshold' due to adaptation.
+    double stc_;     //!< Spike-triggered current.
 
-    std::vector< double > sfa_elems_; //!< Vector of adaptation parameters.
-    std::vector< double > stc_elems_; //!< Vector of spike-triggered parameters.
+    std::vector< double > sfa_elems_;  //!< Vector of adaptation parameters.
+    std::vector< double > stc_elems_;  //!< Vector of spike-triggered parameters.
 
     //!< absolute refractory counter (no membrane potential propagation)
     unsigned int r_ref_;
 
-    State_( const Parameters_& ); //!< Default initialization
+    State_( const Parameters_& );  //!< Default initialization
     State_( const State_& );
+
     State_& operator=( const State_& );
 
-    void get( DictionaryDatum&, const Parameters_& ) const;
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary&, const Parameters_& ) const;
+    void set( const Dictionary&, const Parameters_&, Node* );
   };
 
   // ----------------------------------------------------------------
@@ -337,17 +373,16 @@ private:
     UniversalDataLogger< gif_cond_exp > logger_;
 
     /** GSL ODE stuff */
-    gsl_odeiv_step* s_;    //!< stepping function
-    gsl_odeiv_control* c_; //!< adaptive stepsize control function
-    gsl_odeiv_evolve* e_;  //!< evolution function
-    gsl_odeiv_system sys_; //!< struct describing system
+    gsl_odeiv_step* s_;     //!< stepping function
+    gsl_odeiv_control* c_;  //!< adaptive stepsize control function
+    gsl_odeiv_evolve* e_;   //!< evolution function
+    gsl_odeiv_system sys_;  //!< struct describing system
 
-    // IntergrationStep_ should be reset with the neuron on ResetNetwork,
-    // but remain unchanged during calibration. Since it is initialized with
-    // step_, and the resolution cannot change after nodes have been created,
-    // it is safe to place both here.
-    double step_;            //!< step size in ms
-    double IntegrationStep_; //!< current integration time step, updated by GSL
+    // Since IntegrationStep_ is initialized with step_, and the resolution
+    // cannot change after nodes have been created, it is safe to place both
+    // here.
+    double step_;             //!< step size in ms
+    double IntegrationStep_;  //!< current integration time step, updated by GSL
   };
 
   // ----------------------------------------------------------------
@@ -357,10 +392,10 @@ private:
    */
   struct Variables_
   {
-    std::vector< double > P_sfa_; // decay terms of spike-triggered current elements
-    std::vector< double > P_stc_; // decay terms of adaptive threshold elements
+    std::vector< double > P_sfa_;  // decay terms of spike-triggered current elements
+    std::vector< double > P_stc_;  // decay terms of adaptive threshold elements
 
-    librandom::RngPtr rng_; // random number generator of my own thread
+    RngPtr rng_;  // random number generator of my own thread
 
     unsigned int RefractoryCounts_;
   };
@@ -407,8 +442,8 @@ private:
   static RecordablesMap< gif_cond_exp > recordablesMap_;
 };
 
-inline port
-gif_cond_exp::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+gif_cond_exp::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent e;
   e.set_sender( *this );
@@ -417,8 +452,8 @@ gif_cond_exp::send_test_event( Node& target, rport receptor_type, synindex, bool
 }
 
 
-inline port
-gif_cond_exp::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+gif_cond_exp::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -427,8 +462,8 @@ gif_cond_exp::handles_test_event( SpikeEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-gif_cond_exp::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+gif_cond_exp::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -437,8 +472,8 @@ gif_cond_exp::handles_test_event( CurrentEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-gif_cond_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+gif_cond_exp::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -448,34 +483,34 @@ gif_cond_exp::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 }
 
 inline void
-gif_cond_exp::get_status( DictionaryDatum& d ) const
+gif_cond_exp::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d, P_ );
-  Archiving_Node::get_status( d );
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  ArchivingNode::get_status( d );
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-gif_cond_exp::set_status( const DictionaryDatum& d )
+gif_cond_exp::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
-  State_ stmp = S_;      // temporary copy in case of errors
-  stmp.set( d, ptmp );   // throws if BadProperty
+  Parameters_ ptmp = P_;      // temporary copy in case of errors
+  ptmp.set( d, this );        // throws if BadProperty
+  State_ stmp = S_;           // temporary copy in case of errors
+  stmp.set( d, ptmp, this );  // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // HAVE_GSL
-#endif /* #ifndef GIF_COND_EXP_H */
+#endif  // HAVE_GSL
+#endif  /* #ifndef GIF_COND_EXP_H */

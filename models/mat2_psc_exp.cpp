@@ -22,22 +22,17 @@
 
 #include "mat2_psc_exp.h"
 
-// C++ includes:
-#include <limits>
 
 // Includes from libnestutil:
+#include "dict_util.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 /* ----------------------------------------------------------------
  * Recordables map
@@ -45,8 +40,14 @@
 
 nest::RecordablesMap< nest::mat2_psc_exp > nest::mat2_psc_exp::recordablesMap_;
 
-namespace nest // template specialization must be placed in namespace
+namespace nest  // template specialization must be placed in namespace
 {
+void
+register_mat2_psc_exp( const std::string& name )
+{
+  register_node_model< mat2_psc_exp >( name );
+}
+
 /*
  * Override the create() method with one call to RecordablesMap::insert_()
  * for each quantity to be recorded.
@@ -55,7 +56,7 @@ template <>
 void
 RecordablesMap< mat2_psc_exp >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::V_m, &mat2_psc_exp::get_V_m_ );
   insert_( names::V_th, &mat2_psc_exp::get_V_th_ );
 }
@@ -66,20 +67,20 @@ RecordablesMap< mat2_psc_exp >::create()
  * ---------------------------------------------------------------- */
 
 nest::mat2_psc_exp::Parameters_::Parameters_()
-  : Tau_( 5.0 )      // in ms
-  , C_( 100.0 )      // in pF
-  , tau_ref_( 2.0 )  // in ms
-  , E_L_( -70.0 )    // in mV
-  , I_e_( 0.0 )      // in pA
-  , tau_ex_( 1.0 )   // in ms
-  , tau_in_( 3.0 )   // in ms
-  , tau_1_( 10.0 )   // in ms
-  , tau_2_( 200.0 )  // in ms
-  , alpha_1_( 37.0 ) // in mV
-  , alpha_2_( 2.0 )  // in mV
-  , omega_( 19.0 )   // resting threshold relative to E_L_ in mV
-                     // state V_th_ is initialized with the
-                     // same value
+  : Tau_( 5.0 )       // in ms
+  , C_( 100.0 )       // in pF
+  , tau_ref_( 2.0 )   // in ms
+  , E_L_( -70.0 )     // in mV
+  , I_e_( 0.0 )       // in pA
+  , tau_ex_( 1.0 )    // in ms
+  , tau_in_( 3.0 )    // in ms
+  , tau_1_( 10.0 )    // in ms
+  , tau_2_( 200.0 )   // in ms
+  , alpha_1_( 37.0 )  // in mV
+  , alpha_2_( 2.0 )   // in mV
+  , omega_( 19.0 )    // resting threshold relative to E_L_ in mV
+                      // state V_th_ is initialized with the
+                      // same value
 {
 }
 
@@ -88,8 +89,8 @@ nest::mat2_psc_exp::State_::State_()
   , i_syn_ex_( 0.0 )
   , i_syn_in_( 0.0 )
   , V_m_( 0.0 )
-  , V_th_1_( 0.0 ) // relative to omega_
-  , V_th_2_( 0.0 ) // relative to omega_
+  , V_th_1_( 0.0 )  // relative to omega_
+  , V_th_2_( 0.0 )  // relative to omega_
   , r_( 0 )
 {
 }
@@ -99,43 +100,43 @@ nest::mat2_psc_exp::State_::State_()
  * ---------------------------------------------------------------- */
 
 void
-nest::mat2_psc_exp::Parameters_::get( DictionaryDatum& d ) const
+nest::mat2_psc_exp::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::E_L, E_L_ ); // Resting potential
-  def< double >( d, names::I_e, I_e_ );
-  def< double >( d, names::C_m, C_ );
-  def< double >( d, names::tau_m, Tau_ );
-  def< double >( d, names::tau_syn_ex, tau_ex_ );
-  def< double >( d, names::tau_syn_in, tau_in_ );
-  def< double >( d, names::t_ref, tau_ref_ );
-  def< double >( d, names::tau_1, tau_1_ );
-  def< double >( d, names::tau_2, tau_2_ );
-  def< double >( d, names::alpha_1, alpha_1_ );
-  def< double >( d, names::alpha_2, alpha_2_ );
-  def< double >( d, names::omega, omega_ + E_L_ );
+  d[ names::E_L ] = E_L_;  // Resting potential
+  d[ names::I_e ] = I_e_;
+  d[ names::C_m ] = C_;
+  d[ names::tau_m ] = Tau_;
+  d[ names::tau_syn_ex ] = tau_ex_;
+  d[ names::tau_syn_in ] = tau_in_;
+  d[ names::t_ref ] = tau_ref_;
+  d[ names::tau_1 ] = tau_1_;
+  d[ names::tau_2 ] = tau_2_;
+  d[ names::alpha_1 ] = alpha_1_;
+  d[ names::alpha_2 ] = alpha_2_;
+  d[ names::omega ] = omega_ + E_L_;
 }
 
 double
-nest::mat2_psc_exp::Parameters_::set( const DictionaryDatum& d )
+nest::mat2_psc_exp::Parameters_::set( const Dictionary& d, Node* node )
 {
   // if E_L_ is changed, we need to adjust all variables defined relative to
   // E_L_
   const double ELold = E_L_;
-  updateValue< double >( d, names::E_L, E_L_ );
+  update_value_param( d, names::E_L, E_L_, node );
   const double delta_EL = E_L_ - ELold;
 
-  updateValue< double >( d, names::I_e, I_e_ );
-  updateValue< double >( d, names::C_m, C_ );
-  updateValue< double >( d, names::tau_m, Tau_ );
-  updateValue< double >( d, names::tau_syn_ex, tau_ex_ );
-  updateValue< double >( d, names::tau_syn_in, tau_in_ );
-  updateValue< double >( d, names::t_ref, tau_ref_ );
-  updateValue< double >( d, names::tau_1, tau_1_ );
-  updateValue< double >( d, names::tau_2, tau_2_ );
-  updateValue< double >( d, names::alpha_1, alpha_1_ );
-  updateValue< double >( d, names::alpha_2, alpha_2_ );
+  update_value_param( d, names::I_e, I_e_, node );
+  update_value_param( d, names::C_m, C_, node );
+  update_value_param( d, names::tau_m, Tau_, node );
+  update_value_param( d, names::tau_syn_ex, tau_ex_, node );
+  update_value_param( d, names::tau_syn_in, tau_in_, node );
+  update_value_param( d, names::t_ref, tau_ref_, node );
+  update_value_param( d, names::tau_1, tau_1_, node );
+  update_value_param( d, names::tau_2, tau_2_, node );
+  update_value_param( d, names::alpha_1, alpha_1_, node );
+  update_value_param( d, names::alpha_2, alpha_2_, node );
 
-  if ( updateValue< double >( d, names::omega, omega_ ) )
+  if ( update_value_param( d, names::omega, omega_, node ) )
   {
     omega_ -= E_L_;
   }
@@ -147,11 +148,11 @@ nest::mat2_psc_exp::Parameters_::set( const DictionaryDatum& d )
   {
     throw BadProperty( "Capacitance must be strictly positive." );
   }
-  if ( Tau_ <= 0 || tau_ex_ <= 0 || tau_in_ <= 0 || tau_ref_ <= 0 || tau_1_ <= 0 || tau_2_ <= 0 )
+  if ( Tau_ <= 0 or tau_ex_ <= 0 or tau_in_ <= 0 or tau_ref_ <= 0 or tau_1_ <= 0 or tau_2_ <= 0 )
   {
     throw BadProperty( "All time constants must be strictly positive." );
   }
-  if ( Tau_ == tau_ex_ || Tau_ == tau_in_ )
+  if ( Tau_ == tau_ex_ or Tau_ == tau_in_ )
   {
     throw BadProperty(
       "Membrane and synapse time constant(s) must differ."
@@ -162,18 +163,18 @@ nest::mat2_psc_exp::Parameters_::set( const DictionaryDatum& d )
 }
 
 void
-nest::mat2_psc_exp::State_::get( DictionaryDatum& d, const Parameters_& p ) const
+nest::mat2_psc_exp::State_::get( Dictionary& d, const Parameters_& p ) const
 {
-  def< double >( d, names::V_m, V_m_ + p.E_L_ );                          // Membrane potential
-  def< double >( d, names::V_th, p.E_L_ + p.omega_ + V_th_1_ + V_th_2_ ); // Adaptive threshold
-  def< double >( d, names::V_th_alpha_1, V_th_1_ );
-  def< double >( d, names::V_th_alpha_2, V_th_2_ );
+  d[ names::V_m ] = V_m_ + p.E_L_;                           // Membrane potential
+  d[ names::V_th ] = p.E_L_ + p.omega_ + V_th_1_ + V_th_2_;  // Adaptive threshold
+  d[ names::V_th_alpha_1 ] = V_th_1_;
+  d[ names::V_th_alpha_2 ] = V_th_2_;
 }
 
 void
-nest::mat2_psc_exp::State_::set( const DictionaryDatum& d, const Parameters_& p, double delta_EL )
+nest::mat2_psc_exp::State_::set( const Dictionary& d, const Parameters_& p, double delta_EL, Node* node )
 {
-  if ( updateValue< double >( d, names::V_m, V_m_ ) )
+  if ( update_value_param( d, names::V_m, V_m_, node ) )
   {
     V_m_ -= p.E_L_;
   }
@@ -182,8 +183,8 @@ nest::mat2_psc_exp::State_::set( const DictionaryDatum& d, const Parameters_& p,
     V_m_ -= delta_EL;
   }
 
-  updateValue< double >( d, names::V_th_alpha_1, V_th_1_ );
-  updateValue< double >( d, names::V_th_alpha_2, V_th_2_ );
+  update_value_param( d, names::V_th_alpha_1, V_th_1_, node );
+  update_value_param( d, names::V_th_alpha_2, V_th_2_, node );
 }
 
 nest::mat2_psc_exp::Buffers_::Buffers_( mat2_psc_exp& n )
@@ -205,7 +206,7 @@ nest::mat2_psc_exp::Buffers_::Buffers_( const Buffers_&, mat2_psc_exp& n )
  * ---------------------------------------------------------------- */
 
 nest::mat2_psc_exp::mat2_psc_exp()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_()
   , B_( *this )
@@ -214,7 +215,7 @@ nest::mat2_psc_exp::mat2_psc_exp()
 }
 
 nest::mat2_psc_exp::mat2_psc_exp( const mat2_psc_exp& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -226,26 +227,19 @@ nest::mat2_psc_exp::mat2_psc_exp( const mat2_psc_exp& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::mat2_psc_exp::init_state_( const Node& proto )
-{
-  const mat2_psc_exp& pr = downcast< mat2_psc_exp >( proto );
-  S_ = pr.S_;
-}
-
-void
 nest::mat2_psc_exp::init_buffers_()
 {
-  Archiving_Node::clear_history();
+  ArchivingNode::clear_history();
 
-  B_.spikes_ex_.clear(); // includes resize
-  B_.spikes_in_.clear(); // includes resize
-  B_.currents_.clear();  // includes resize
+  B_.spikes_ex_.clear();  // includes resize
+  B_.spikes_in_.clear();  // includes resize
+  B_.currents_.clear();   // includes resize
 
   B_.logger_.reset();
 }
 
 void
-nest::mat2_psc_exp::calibrate()
+nest::mat2_psc_exp::pre_run_hook()
 {
   // ensures initialization in case mm connected after Simulate
   B_.logger_.init();
@@ -313,9 +307,6 @@ nest::mat2_psc_exp::calibrate()
 void
 nest::mat2_psc_exp::update( Time const& origin, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   // evolve from timestep 'from' to timestep 'to' with steps of h each
   for ( long lag = from; lag < to; ++lag )
   {
@@ -335,15 +326,15 @@ nest::mat2_psc_exp::update( Time const& origin, const long from, const long to )
     S_.i_syn_ex_ += B_.spikes_ex_.get_value( lag );
     S_.i_syn_in_ += B_.spikes_in_.get_value( lag );
 
-    if ( S_.r_ == 0 ) // neuron is allowed to fire
+    if ( S_.r_ == 0 )  // neuron is allowed to fire
     {
-      if ( S_.V_m_ >= P_.omega_ + S_.V_th_2_ + S_.V_th_1_ ) // threshold crossing
+      if ( S_.V_m_ >= P_.omega_ + S_.V_th_2_ + S_.V_th_1_ )  // threshold crossing
       {
         S_.r_ = V_.RefractoryCountsTot_;
 
         // procedure for adaptive potential
-        S_.V_th_1_ += P_.alpha_1_; // short time
-        S_.V_th_2_ += P_.alpha_2_; // long time
+        S_.V_th_1_ += P_.alpha_1_;  // short time
+        S_.V_th_2_ += P_.alpha_2_;  // long time
 
         set_spiketime( Time::step( origin.get_steps() + lag + 1 ) );
 
@@ -353,8 +344,9 @@ nest::mat2_psc_exp::update( Time const& origin, const long from, const long to )
     }
     else
     {
+      // neuron is totally refractory (cannot generate spikes)
       --S_.r_;
-    } // neuron is totally refractory (cannot generate spikes)
+    }
 
     // set new input current
     S_.i_0_ = B_.currents_.get_value( lag );

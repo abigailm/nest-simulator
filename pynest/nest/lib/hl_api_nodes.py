@@ -23,26 +23,38 @@
 Functions for node handling
 """
 
-import warnings
+import nest
+import numpy as np
 
-from ..ll_api import *
-from .. import pynestkernel as kernel
-from .hl_api_helper import *
-from .hl_api_info import SetStatus
+from .. import nestkernel_api as nestkernel
+from .hl_api_helper import deprecated, is_iterable, model_deprecation_warning
+from .hl_api_parallel_computing import NumProcesses, Rank
+from .hl_api_types import NodeCollection, Parameter
 
 __all__ = [
-    'Create',
-    'GetLID',
+    "Create",
+    "GetLocalNodeCollection",
+    "GetNodes",
+    "PrintNodes",
 ]
 
 
-@check_stack
-def Create(model, n=1, params=None):
+def Create(model, n=1, params=None, positions=None):
     """Create one or more nodes.
 
-   Generates `n` new network objects of the supplied model type. If `n` is not
-   given, a single node is created. Note that if setting parameters of the
-   nodes fail, the nodes will still have been created.
+    Generates `n` new network objects of the supplied model type. If `n` is not
+    given, a single node is created. Note that if setting parameters of the
+    nodes fail, the nodes will still have been created.
+
+    Note
+    ----
+    If `Create()` is called with two arguments and the second argument (`n`) is a dictionary,
+    this dictionary will be intepreted as `params` for backward compatibility.
+
+    During network construction, create all nodes representing model neurons first, then all nodes
+    representing devices (generators, recorders, or detectors), or all devices first and then all neurons.
+    Otherwise, network connection can be slow, especially in parallel simulations of networks
+    with many devices.
 
     Parameters
     ----------
@@ -51,81 +63,157 @@ def Create(model, n=1, params=None):
     n : int, optional
         Number of nodes to create
     params : dict or list, optional
-        Parameters for the new nodes. A single dictionary or a list of
-        dictionaries with size n. If omitted, the model's defaults are used.
+        Parameters for the new nodes. Can be any of the following:
+
+        - A dictionary with either single values or lists of size n.
+          The single values will be applied to all nodes, while the lists will be distributed across
+          the nodes. Both single values and lists can be given at the same time.
+        - A list with n dictionaries, one dictionary for each node.
+
+        Values may be :py:class:`.Parameter` objects. If omitted,
+        the model's defaults are used.
+    positions: :py:class:`.grid` or :py:class:`.free` object, optional
+        Object describing spatial positions of the nodes. If omitted, the nodes have no spatial attachment.
 
     Returns
     -------
-    list:
-        Global IDs of created nodes
+    NodeCollection:
+        Object representing the IDs of created nodes, see :py:class:`.NodeCollection` for more.
 
     Raises
     ------
     NESTError
         If setting node parameters fail. However, the nodes will still have
         been created.
-
-    KEYWORDS:
+    TypeError
+        If the positions object is of wrong type.
     """
 
     model_deprecation_warning(model)
 
-    if isinstance(params, dict):
-        cmd = "/%s 3 1 roll exch Create" % model
-        sps(params)
-    else:
-        cmd = "/%s exch Create" % model
+    if isinstance(n, dict):
+        if not (params is None and positions is None):
+            raise ValueError(
+                "A parameter dictionary can be passed as second argument only of Create() is called with two arguments."
+            )
+        params = n
+        n = 1
 
-    sps(n)
-    sr(cmd)
+    if int(n) != n:
+        raise TypeError("n must have an integer value")
+    n = int(n)
 
-    last_gid = spp()
-    gids = tuple(range(last_gid - n + 1, last_gid + 1))
+    if isinstance(params, (list, tuple)) and len(params) != n:
+        raise TypeError("list of params must have one dictionary per node")
 
-    if params is not None and not isinstance(params, dict):
-        try:
-            SetStatus(gids, params)
-        except:
-            warnings.warn(
-                "SetStatus() call failed, but nodes have already been " +
-                "created! The GIDs of the new nodes are: {0}.".format(gids))
-            raise
+    if params is not None and not (
+        isinstance(params, dict) or (isinstance(params, (list, tuple)) and all(isinstance(e, dict) for e in params))
+    ):
+        raise TypeError("params must be either a dict of parameters or a list or tuple of dicts")
 
-    return gids
+    if positions is not None:
+        # Explicitly retrieve lazy loaded spatial property from the module class.
+        # This is needed because the automatic lookup fails. See #2135.
+        spatial = getattr(nest.NestModule, "spatial")
+        # We only accept positions as either a free object or a grid object.
+        if not isinstance(positions, (spatial.free, spatial.grid)):
+            raise TypeError("`positions` must be either a nest.spatial.free or a nest.spatial.grid object")
+        layer_specs = {"elements": model}
+        layer_specs["edge_wrap"] = positions.edge_wrap
+        if isinstance(positions, spatial.free):
+            layer_specs["positions"] = positions.pos
+            # If the positions are based on a parameter object, the number of nodes must be specified.
+            if isinstance(positions.pos, Parameter):
+                layer_specs["n"] = n
+        else:
+            # If positions is not a free object, it must be a grid object.
+            if n > 1:
+                raise ValueError("Cannot specify number of nodes with grid positions")
+            layer_specs["shape"] = positions.shape
+            if positions.center is not None:
+                layer_specs["center"] = [float(v) for v in positions.center]
+        if positions.extent is not None:
+            layer_specs["extent"] = [float(v) for v in positions.extent]
+
+        layer = nestkernel.llapi_create_spatial(layer_specs)
+        layer.set(params if params else {})
+        return layer
+
+    node_ids = nestkernel.llapi_create(model, n)
+
+    if (isinstance(params, dict) and params) or isinstance(params, (list, tuple)):
+        # if params is a non-empty dict or a list of dicts
+        node_ids.set(params)
+
+    return node_ids
 
 
-@check_stack
-@deprecated('', 'GetLID is deprecated and will be removed in NEST 3.0. Use \
-index into GIDCollection instead.')
-def GetLID(gid):
-    """Return the local id of a node with the global ID gid.
+def PrintNodes():
+    """Print the `node ID` ranges and `model names` of all the nodes in the network."""
 
-    .. deprecated:: 2.14
-    `GetLID` is deprecated and will be removed in NEST 3.0. Use
-    index into `GIDCollection` instead.
+    print(nestkernel.llapi_print_nodes())
+
+
+def GetNodes(properties={}, local_only=False):
+    """Return all nodes with the given properties as `NodeCollection`.
 
     Parameters
     ----------
-    gid : int
-        Global id of node
+    properties : dict, optional
+        Only node IDs of nodes matching the properties given in the
+        dictionary exactly will be returned. Matching properties with float
+        values (e.g. the membrane potential) may fail due to tiny numerical
+        discrepancies and should be avoided. Note that when a params dict is
+        present, thread parallelization is not possible, the function will
+        be run thread serial.
+    local_only : bool, optional
+        If True, only node IDs of nodes simulated on the local MPI process will
+        be returned. By default, node IDs of nodes in the entire simulation
+        will be returned. This requires MPI communication and may slow down
+        the script.
 
     Returns
     -------
-    int:
-        Local id of node
-
-    Raises
-    ------
-    NESTError
-        If `gid` contains more than one GID
-
-    KEYWORDS:
+    NodeCollection:
+        `NodeCollection` of nodes
     """
 
-    if len(gid) > 1:
-        raise kernel.NESTError("GetLID() expects exactly one GID.")
+    return nestkernel.llapi_get_nodes(properties, local_only)
 
-    sps(gid[0])
-    sr("GetLID")
 
-    return spp()
+@deprecated("", "GetLocalNodeCollection() leads to inherently unsafe code; see documentation for details.")
+def GetLocalNodeCollection(nc):
+    """Get local nodes of a `NodeCollection` as a new `NodeCollection`.
+
+    This function returns the local nodes of a `NodeCollection`. If there are no
+    local elements, an empty `NodeCollection` is returned.
+
+    Note
+    ----
+    You should not use this function except in very special circumstances, e.g.,
+    in when writing tests. The main reason to avoid `GetLocalNodeCollection()` is
+    that it is very difficult to get code correct that does different things on
+    different MPI ranks. Remember that a NEST simulation should always return the
+    same results if run with the same number of virtual processes, independent of
+    how these VPs are distrbuted across MPI ranks.
+
+    Quite likely, you can do what you want using NEST's parallel features, e.g.,
+    initializing neurons or synapses. If you see a need for a feature that needs
+    to do rank-specific things, please consider to add it to NEST!
+
+    Since this function should not be used, it's implementation is not efficient.
+
+    Parameters
+    ----------
+    nc: NodeCollection
+        `NodeCollection` for which to get local nodes
+
+    Returns
+    -------
+    NodeCollection:
+        Object representing the local nodes of the given `NodeCollection`
+    """
+    if not isinstance(nc, NodeCollection):
+        raise TypeError("GetLocalNodeCollection requires a NodeCollection in order to run")
+
+    return nc[nc.local]

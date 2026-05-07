@@ -59,12 +59,12 @@ class GrowthCurveFactory : public GenericGrowthCurveFactory
 
 public:
   GrowthCurve*
-  create() const
+  create() const override
   {
     return new GrowthCurveType();
   }
 };
 
-} // namespace nest
+}  // namespace nest
 
 #endif

@@ -26,87 +26,100 @@
 // C++ includes:
 #include <vector>
 
-// Includes from librandom:
-#include "binomial_randomdev.h"
-#include "poisson_randomdev.h"
-
 // Includes from nestkernel:
 #include "connection.h"
 #include "device_node.h"
 #include "event.h"
 #include "nest_types.h"
-#include "stimulating_device.h"
+#include "random_generators.h"
+#include "stimulation_device.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup generator
+/* BeginUserDocs: device, generator
 
-Name: gamma_sup_generator - simulate the superimposed spike train of a
-                            population of gamma process.
-Description:
+Short description
++++++++++++++++++
 
-The gamma_sup_generator generator simulates the pooled spike train of a
+Simulate the superimposed spike train of a population of gamma processes
+
+Description
++++++++++++
+
+The ``gamma_sup_generator`` generator simulates the pooled spike train of a
 population of neurons firing independently with gamma process statistics.
 
-Parameters:
+.. include:: ../models/stimulation_device.rst
 
-The following parameters appear in the element's status dictionary:
-\verbatim embed:rst
-============  ======== =========================================================
- rate         spikes/s Mean firing rate of the component processes,
-                       default: 0 spikes/s
- gamma_shape  integer  Shape paramter of component gamma processes, default: 1
- n_proc       integer  Number of superimposed independent component processes,
-                       default: 1
-============  ======== =========================================================
-\endverbatim
+rate
+    Mean firing rate of the component processes, default: 0 spikes/s
 
-References:
+gamma_shape
+    Shape parameter of component gamma processes, default: 1
 
-\verbatim embed:rst
+n_proc
+    Number of superimposed independent component processes, default: 1
+
+
+See also [1]_.
+
+Set parameters from a stimulation backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The parameters in this stimulation device can be updated with input
+coming from a stimulation backend. The data structure used for the
+update holds one value for each of the parameters mentioned above.
+The indexing is as follows:
+
+ 0. rate
+ 1. gamma_shape
+ 2. n_proc
+
+References
+++++++++++
+
 .. [1] Deger, Helias, Boucsein, Rotter (2011). Statistical properties of
        superimposed stationary spike trains. Journal of Computational
        Neuroscience. DOI: https://doi.org/10.1007/s10827-011-0362-8
-\endverbatim
 
-Author:
-   Jan 2011, Moritz Deger
+See also
+++++++++
 
-SeeAlso: ppd_sup_generator, poisson_generator_ps, spike_generator, Device,
-StimulatingDevice
-*/
-class gamma_sup_generator : public DeviceNode
+ppd_sup_generator, poisson_generator_ps, spike_generator
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: gamma_sup_generator
+
+EndUserDocs */
+
+void register_gamma_sup_generator( const std::string& name );
+
+class gamma_sup_generator : public StimulationDevice
 {
 
 public:
   gamma_sup_generator();
   gamma_sup_generator( const gamma_sup_generator& );
 
-  bool
-  has_proxies() const
-  {
-    return false;
-  }
-  bool
-  is_off_grid() const
-  {
-    return false;
-  } // does not use off_grid events
+  bool is_off_grid() const override;
 
   using Node::event_hook;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
+
+  StimulationDevice::Type get_type() const override;
+  void set_data_from_stimulation_backend( std::vector< double >& input_param ) override;
 
 private:
-  void init_state_( const Node& );
-  void init_buffers_();
-  void calibrate();
+  void init_state_() override;
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
   /**
    * Update state.
@@ -117,14 +130,14 @@ private:
    * information.
    * @see event_hook, DSSpikeEvent
    */
-  void update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
 
   /**
    * Send out spikes.
    * Called once per target to dispatch actual output spikes.
    * @param contains target information.
    */
-  void event_hook( DSSpikeEvent& );
+  void event_hook( DSSpikeEvent& ) override;
 
   // ------------------------------------------------------------
 
@@ -133,9 +146,9 @@ private:
    */
   struct Parameters_
   {
-    double rate_;               //!< rate of component gamma process [Hz]
-    unsigned long gamma_shape_; //!< gamma shape parameter [1]
-    unsigned long n_proc_;      //!< number of component processes
+    double rate_;       //!< rate of component gamma process [Hz]
+    long gamma_shape_;  //!< gamma shape parameter [1]
+    long n_proc_;       //!< number of component processes
 
     /**
      * Number of targets.
@@ -145,26 +158,25 @@ private:
      */
     size_t num_targets_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;              //!< Store current values in dictionary
+    void set( const Dictionary&, Node* node );  //!< Set values from dictionary
   };
 
   // ------------------------------------------------------------
 
   class Internal_states_
   {
-
-    librandom::BinomialRandomDev bino_dev_;   //!< random deviate generator
-    librandom::PoissonRandomDev poisson_dev_; //!< random deviate generator
-    std::vector< unsigned long > occ_;        //!< occupation numbers of internal states
+    binomial_distribution bino_dist_;    //!< binomial distribution
+    poisson_distribution poisson_dist_;  //!< poisson distribution
+    std::vector< unsigned long > occ_;   //!< occupation numbers of internal states
 
   public:
     Internal_states_( size_t num_bins,
       unsigned long ini_occ_ref,
-      unsigned long ini_occ_act );                                         //!< initialize occupation numbers
-    unsigned long update( double transition_prob, librandom::RngPtr rng ); //!< update age dist and generate spikes
+      unsigned long ini_occ_act );                               //!< initialize occupation numbers
+    unsigned long update( double transition_prob, RngPtr rng );  //!< update age dist and generate spikes
   };
 
 
@@ -181,8 +193,8 @@ private:
 
   struct Variables_
   {
-    double transition_prob_; //!< transition probabililty to go to next
-                             //!< internal state
+    double transition_prob_;  //!< transition probabililty to go to next
+                              //!< internal state
 
     /**
      * @name update-hook communication.
@@ -194,23 +206,22 @@ private:
      *   t_min_active_ < t <= t_max_active_
      */
     //@{
-    double t_min_active_; //!< start of generator activity in slice
-    double t_max_active_; //!< end of generator activity in slice
+    double t_min_active_;  //!< start of generator activity in slice
+    double t_max_active_;  //!< end of generator activity in slice
     //@}
   };
 
   // ------------------------------------------------------------
 
-  StimulatingDevice< CurrentEvent > device_;
   Parameters_ P_;
   Variables_ V_;
   Buffers_ B_;
 };
 
-inline port
-gamma_sup_generator::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
+inline size_t
+gamma_sup_generator::send_test_event( Node& target, size_t receptor_type, synindex syn_id, bool dummy_target )
 {
-  device_.enforce_single_syn_type( syn_id );
+  StimulationDevice::enforce_single_syn_type( syn_id );
 
   if ( dummy_target )
   {
@@ -222,37 +233,50 @@ gamma_sup_generator::send_test_event( Node& target, rport receptor_type, syninde
   {
     SpikeEvent e;
     e.set_sender( *this );
-    const port p = target.handles_test_event( e, receptor_type );
-    if ( p != invalid_port_ )
+    const size_t p = target.handles_test_event( e, receptor_type );
+    if ( p != invalid_port )
     {
+      // count number of targets
       ++P_.num_targets_;
-    } // count number of targets
+    }
     return p;
   }
 }
 
 inline void
-gamma_sup_generator::get_status( DictionaryDatum& d ) const
+gamma_sup_generator::get_status( Dictionary& d ) const
 {
   P_.get( d );
-  device_.get_status( d );
+  StimulationDevice::get_status( d );
 }
 
 inline void
-gamma_sup_generator::set_status( const DictionaryDatum& d )
+gamma_sup_generator::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
+  ptmp.set( d, this );    // throws if BadProperty
 
   // We now know that ptmp is consistent. We do not write it back
   // to P_ before we are also sure that the properties to be set
   // in the parent class are internally consistent.
-  device_.set_status( d );
+  StimulationDevice::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
 }
 
-} // namespace
+inline bool
+gamma_sup_generator::is_off_grid() const
+{
+  return false;
+}
+
+inline StimulationDevice::Type
+gamma_sup_generator::get_type() const
+{
+  return StimulationDevice::Type::SPIKE_GENERATOR;
+}
+
+}  // namespace
 
 #endif

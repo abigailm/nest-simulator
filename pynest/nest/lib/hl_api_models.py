@@ -23,37 +23,41 @@
 Functions for model handling
 """
 
-from ..ll_api import *
-from .hl_api_helper import *
+from .. import nestkernel_api as nestkernel
+from .hl_api_helper import (
+    deprecated,
+    is_iterable,
+    is_iterable_not_str,
+    model_deprecation_warning,
+)
+from .hl_api_simulation import GetKernelStatus
+from .hl_api_types import Parameter, to_json
 
 __all__ = [
-    'ConnectionRules',
-    'CopyModel',
-    'GetDefaults',
-    'Models',
-    'SetDefaults',
+    "ConnectionRules",
+    "CopyModel",
+    "GetDefaults",
+    "Models",
+    "SetDefaults",
 ]
 
 
-@check_stack
+@deprecated("nest.node_models or nest.synapse_models")
 def Models(mtype="all", sel=None):
-    """Return a tuple of model names, sorted by name.
-
-    All available models are neurons, devices and synapses.
+    r"""Return a tuple of neuron, device, or synapse model names.
 
     Parameters
     ----------
     mtype : str, optional
-        Use ``'mtype='nodes'`` to only see neuron and device models,
-        or ``'type='synapses'`` to only see synapse models.
+        Use ``mtype='nodes'`` to only get neuron and device models,
+        or ``mtype='synapses'`` to only get synapse models.
     sel : str, optional
-        String used to filter the result list and only return models
-        containing it.
+        Filter results and only return models containing ``sel``.
 
     Returns
     -------
     tuple
-        Available model names
+        Available model names, sorted by name
 
     Raises
     ------
@@ -62,88 +66,98 @@ def Models(mtype="all", sel=None):
 
     Notes
     -----
-    - Synapse model names ending with ``'_hpc'`` provide minimal memory
-      requirements by using thread-local target neuron IDs and fixing
-      the ``'rport'`` to 0.
-    - Synapse model names ending with ``'_lbl'`` allow to assign an individual
-      integer label (``'synapse_label'``) to created synapses at the cost
-      of increased memory requirements.
+    - Synapse model names ending in ``_hpc`` require less memory because of
+      thread-local indices for target neuron IDs and fixed ``rport``\s of 0.
+    - Synapse model names ending in ``_lbl`` allow to assign an integer label
+      (``synapse_label``) to each individual synapse, at the cost of increased
+      memory requirements.
 
-    KEYWORDS: models
     """
 
     if mtype not in ("all", "nodes", "synapses"):
-        raise ValueError("type has to be one of 'all', 'nodes' or 'synapses'")
+        raise ValueError("mtype has to be one of 'all', 'nodes', or 'synapses'")
 
     models = []
 
     if mtype in ("all", "nodes"):
-        sr("modeldict")
-        models += spp().keys()
+        models += GetKernelStatus("node_models")
 
     if mtype in ("all", "synapses"):
-        sr("synapsedict")
-        models += spp().keys()
+        models += GetKernelStatus("synapse_models")
 
     if sel is not None:
-        models = [x for x in models if x.find(sel) >= 0]
+        models = [x for x in models if sel in x]
 
     models.sort()
 
     return tuple(models)
 
 
-@check_stack
+@deprecated("nest.connection_rules")
 def ConnectionRules():
-    """Return a typle of all available connection rules, sorted by name.
+    """Return a tuple of all available connection rules, sorted by name.
 
     Returns
     -------
     tuple
-        Available connection rules
+        Available connection rules, sorted by name
 
-    KEYWORDS: models
     """
 
-    sr('connruledict')
-    return tuple(sorted(spp().keys()))
+    return tuple(sorted(GetKernelStatus("connection_rules")))
 
 
-@check_stack
 def SetDefaults(model, params, val=None):
-    """Set the default parameter values of the given model.
+    """Set defaults for the given model or recording backend.
 
-    New default values are used for all subsequently created instances
-    of the model.
+    New default values are used for all subsequently created instances of the model.
+
+    Note
+    ----
+    For each default to be set, only a single explicit value can be given. Neither
+    arrays to apply to multiple nodes nor random or spatially dependent parameters
+    are permitted.
 
     Parameters
     ----------
     model : str
-        Name of the model
+        Name of the model or recording backend
     params : str or dict
         Dictionary of new default parameter values
     val : str, optional
-        If given, `params` has to be the name of a model property.
+        If given, ``params`` has to be the name of a parameter.
 
-    KEYWORDS: models
     """
 
-    if val is not None:
-        if is_literal(params):
+    if val is None:
+        if not isinstance(params, dict):
+            raise TypeError("params must be dictionary unless val is given.")
+        if not params:
+            return  # empty dict, nothing to do, avoids corner cases below
+    else:
+        if isinstance(params, str):
             params = {params: val}
+        else:
+            raise TypeError("If val is given, params must be string giving the parameter name.")
 
-    sps(params)
-    sr('/{0} exch SetDefaults'.format(model))
+    # Some models have parameters that are iterables in themselves, e.g., lists of spike times
+    # so we need to allow them.
+    defaults = nestkernel.llapi_get_defaults(model)
+    if any(
+        (is_iterable_not_str(v) and not is_iterable(defaults[k])) or isinstance(v, Parameter) for k, v in params.items()
+    ):
+        raise ValueError("SetDefaults() accepts only explicit, single parameter values.")
+
+    nestkernel.llapi_set_defaults(model, params)
 
 
-@check_stack
-def GetDefaults(model, keys=None, output=''):
-    """Return default parameters of the given model, specified by a string.
+def GetDefaults(model, keys=None, output=""):
+    """Return defaults of the given model or recording backend.
 
     Parameters
     ----------
     model : str
-        Name of the model
+        Name of the model or recording backend
     keys : str or list, optional
         String or a list of strings naming model properties. `GetDefaults` then
         returns a single value or a list of values belonging to the keys
@@ -162,48 +176,28 @@ def GetDefaults(model, keys=None, output=''):
         If keys is a list of strings, a list of corrsponding default parameters
         is returned.
     str :
-        If `output` is `json`, returns parameters in JSON format.
+        If `output` is ``json``, returns parameters in JSON format.
 
     Raises
     ------
     TypeError
 
-    Notes
-    -----
-    **Example**
-
-    .. code_block:: python
-
-        >>> nest.GetDefaults('iaf_psc_alpha', 'V_m')
-        -70.0
-
-        >>> nest.GetDefaults('iaf_psc_alpha', ['V_m', 'V_th'])
-        (-70.0, -55.0)
-
-    KEYWORDS: models
     """
 
-    if keys is None:
-        cmd = "/{0} GetDefaults".format(model)
-    elif is_literal(keys):
-        cmd = '/{0} GetDefaults /{1} get'.format(model, keys)
-    elif is_iterable(keys):
-        keys_str = " ".join("/{0}".format(x) for x in keys)
-        cmd = "/{0} GetDefaults  [ {1} ] {{ 1 index exch get }}"\
-              .format(model, keys_str) + " Map exch pop"
-    else:
-        raise TypeError("keys should be either a string or an iterable")
+    result = nestkernel.llapi_get_defaults(model)
 
-    sr(cmd)
-    result = spp()
+    if keys is not None:
+        if is_iterable(keys) and not isinstance(keys, str):
+            result = [result[key] for key in keys]
+        else:
+            result = result[keys]
 
-    if output == 'json':
+    if output == "json":
         result = to_json(result)
 
     return result
 
 
-@check_stack
 def CopyModel(existing, new, params=None):
     """Create a new model by copying an existing one.
 
@@ -217,13 +211,8 @@ def CopyModel(existing, new, params=None):
         Default parameters assigned to the copy. Not provided parameters are
         taken from the existing model.
 
-    KEYWORDS: models
     """
 
     model_deprecation_warning(existing)
 
-    if params is not None:
-        sps(params)
-        sr("/%s /%s 3 2 roll CopyModel" % (existing, new))
-    else:
-        sr("/%s /%s CopyModel" % (existing, new))
+    nestkernel.llapi_copy_model(existing, new, {} if params is None else params)

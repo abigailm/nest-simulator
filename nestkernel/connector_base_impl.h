@@ -25,6 +25,9 @@
 // Includes from nestkernel:
 #include "kernel_manager.h"
 
+// Includes from models:
+#include "weight_recorder.h"
+
 #ifndef CONNECTOR_BASE_IMPL_H
 #define CONNECTOR_BASE_IMPL_H
 
@@ -33,30 +36,32 @@ namespace nest
 
 template < typename ConnectionT >
 void
-Connector< ConnectionT >::send_weight_event( const thread tid,
+Connector< ConnectionT >::send_weight_event( const size_t tid,
   const unsigned int lcid,
   Event& e,
   const CommonSynapseProperties& cp )
 {
-  if ( cp.get_weight_recorder() )
+  // If the pointer to the receiver node in the event is invalid,
+  // the event was not sent, and a WeightRecorderEvent is therefore not created.
+  if ( cp.get_weight_recorder() and e.receiver_is_valid() )
   {
     // Create new event to record the weight and copy relevant content.
     WeightRecorderEvent wr_e;
     wr_e.set_port( e.get_port() );
     wr_e.set_rport( e.get_rport() );
     wr_e.set_stamp( e.get_stamp() );
-    wr_e.set_sender( e.get_sender() );
-    wr_e.set_sender_gid( kernel().connection_manager.get_source_gid( tid, syn_id_, lcid ) );
+    // Sender is not available for SecondaryEvents, and not needed, so we do not
+    // set it to avoid undefined behavior.
+    wr_e.set_sender_node_id( kernel().connection_manager.get_source_node_id( tid, syn_id_, lcid ) );
     wr_e.set_weight( e.get_weight() );
     wr_e.set_delay_steps( e.get_delay_steps() );
-    // Set weight_recorder as receiver
-    wr_e.set_receiver( *cp.get_weight_recorder()->get_thread_sibling( tid ) );
-    // Put the gid of the postsynaptic node as receiver gid
-    wr_e.set_receiver_gid( e.get_receiver().get_gid() );
+    wr_e.set_receiver( *static_cast< Node* >( cp.get_weight_recorder() ) );
+    // Set the node_id of the postsynaptic node as receiver node ID
+    wr_e.set_receiver_node_id( e.get_receiver_node_id() );
     wr_e();
   }
 }
 
-} // of namespace nest
+}  // of namespace nest
 
 #endif

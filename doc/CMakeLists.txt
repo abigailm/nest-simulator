@@ -17,81 +17,47 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
-# NOTE: Remember to update the help-generation section in 
-#       MyModule/CMakeLists.txt
+if( BUILD_DOCS )
+  # If we hit this, any part of the documentation was configured to be built.
+  # The top-level 'docs' target will contain all sub-documentations such as `sphinxdocs`
+  # and `doxygendocs`. Using `ALL` we make it run on `make install` as well.
+  add_custom_target( docs ALL )
+endif()
 
-
-if ( NOT CMAKE_CROSSCOMPILING )
-
-  # Python is needed to generate the help. If Python does not exist,
-  # there are problems with the following.
-  # See https://github.com/nest/nest-simulator/issues/678.
-  find_package( PythonInterp )
-  if ( PYTHONINTERP_FOUND )
-
-    # We skip help generation for Python versions < 2.7.8 due to
-    # problems with implementation of 're' in those.
-    if( ${PYTHON_VERSION_STRING} VERSION_GREATER "2.7.7" )
-
-        # Extract help from all source files in the source code, put
-        # them in doc/help and generate a local help index in the
-        # build directory containing links to the help files.
-        install( CODE
-          "execute_process(
-             COMMAND ${PYTHON_EXECUTABLE} -B generate_help.py \"${PROJECT_SOURCE_DIR}\" \"${PROJECT_BINARY_DIR}\"
-             WORKING_DIRECTORY \"${PROJECT_SOURCE_DIR}/extras/help_generator\"
-             )"
-          )
-
-        # Copy the local doc/help directory to the global installation
-        # directory for documentation.
-        install( DIRECTORY "${PROJECT_BINARY_DIR}/doc/help"
-          DESTINATION "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR}"
-          OPTIONAL
-          )
-
-        # Update the global help index to include all help files in
-        # the global installation directory for documentation.
-        install( CODE
-          "execute_process(
-             COMMAND ${PYTHON_EXECUTABLE} -B generate_helpindex.py \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR}\"
-             WORKING_DIRECTORY \"${PROJECT_SOURCE_DIR}/extras/help_generator\"
-             )"
-          )
-
-    endif ()
-
-  endif ()
-
+# Determine in or out of tree building
+if ( "${PROJECT_SOURCE_DIR}" STREQUAL "${PROJECT_BINARY_DIR}" )
+  set( OUT_OF_TREE_BUILD "False" )
+else ()
+  set( OUT_OF_TREE_BUILD "True" )
 endif ()
 
-install( DIRECTORY conngen model_details
-    DESTINATION ${CMAKE_INSTALL_DOCDIR} )
 
-install( FILES index.html quickref.html doc_header.txt
-    DESTINATION ${CMAKE_INSTALL_DOCDIR} )
+if ( BUILD_SPHINX_DOCS )
+  message( STATUS "Configuring Sphinx documentation" )
+  set( _SPHINX_SOURCE_DIR "${PROJECT_SOURCE_DIR}/doc/htmldoc" )
+  set( _SPHINX_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/_build/html" )
+  add_custom_target( sphinxdocs
+    WORKING_DIRECTORY ${_SPHINX_SOURCE_DIR}
+    COMMAND ${Python_EXECUTABLE} clean_source_dirs.py
+    COMMAND ${SPHINX_EXECUTABLE} -b html . ${_SPHINX_BUILD_DIR}
+    COMMAND ${Python_EXECUTABLE} resolve_includes.py ${SPHINX_BUILD_DIR}/models
+  )
 
-if ( DOXYGEN_FOUND )
-  add_custom_target( doc
-      COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_CURRENT_BINARY_DIR}/normaldoc.conf"
-      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-      )
+  add_dependencies( docs sphinxdocs )
 
-  if ( DOXYGEN_DOT_FOUND )
-    add_custom_target( fulldoc
-        COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_CURRENT_BINARY_DIR}/fulldoc.conf"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-        )
-  else ()
-    add_custom_target( fulldoc
-        COMMAND ${CMAKE_COMMAND} -E echo "dot command is not found on your system. Cannot build full documentation."
-        )
-  endif ()
-else ()
-  add_custom_target( doc
-      COMMAND ${CMAKE_COMMAND} -E echo "Doxygen is not found on your system. Cannot build documentation."
-      )
-  add_custom_target( fulldoc
-      COMMAND ${CMAKE_COMMAND} -E echo "Doxygen is not found on your system. Cannot build full documentation."
-      )
+  install( DIRECTORY ${_SPHINX_BUILD_DIR}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR}
+    OPTIONAL
+    )
+  install( DIRECTORY logos
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+  )
+endif ()
+
+if ( BUILD_DOXYGEN_DOCS )
+  add_custom_target( doxygendocs
+    COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_CURRENT_BINARY_DIR}/fulldoc.conf"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
+  add_dependencies( docs doxygendocs )
 endif ()

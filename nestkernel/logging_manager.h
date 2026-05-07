@@ -28,16 +28,13 @@
 #include <vector>
 
 // Includes from libnestutil:
+#include "dictionary.h"
 #include "logging.h"
 #include "manager_interface.h"
 
-// Includes from sli:
-#include "dictdatum.h"
 
 // Inclused from nestkernel:
 #include "nest_names.h"
-
-class Dictionary;
 
 namespace nest
 {
@@ -48,12 +45,12 @@ class LoggingManager : public ManagerInterface
 {
 public:
   LoggingManager();
+  ~LoggingManager() override;
 
-  virtual void initialize();
-  virtual void finalize();
-
-  virtual void set_status( const DictionaryDatum& );
-  virtual void get_status( DictionaryDatum& );
+  void initialize( const bool ) override;
+  void finalize( const bool ) override;
+  void set_status( const Dictionary& ) override;
+  void get_status( Dictionary& ) override;
 
   /**
    * Register a logging client.
@@ -64,45 +61,26 @@ public:
   void register_logging_client( const deliver_logging_event_ptr callback );
 
   /**
-   * Set the logging level.
-   *
-   * All logging messages with a lower severity will not be
-   * forwarded to the logging clients.
-   */
-  void set_logging_level( const severity_t level );
-
-  /**
-   * Get the current logging level.
-   */
-  severity_t get_logging_level() const;
-
-  /**
    * Create a LoggingEvent.
    *
-   * This function creates a LoggingEvent that will be delivered to all
-   * registered logging clients, if the severity is above the set logging
-   * level. Do not use this function to do actuall logging in the source code,
-   * insted use the LOG() function provided by the logging.h header.
+   * This function creates a LoggingEvent that will be delivered to
+   * all registered logging clients, if the severity is above the set
+   * logging level. Do not use this function to do actual logging in
+   * the source code, instead use the LOG() function provided by the
+   * logging.h header in libnestutil.
    *
    */
-  void publish_log( const severity_t, const std::string&, const std::string&, const std::string&, const size_t ) const;
+  void
+  publish_log( const VerbosityLevel, const std::string&, const std::string&, const std::string&, const size_t ) const;
 
   /**
-   * Implements standard behaviour for dictionary entry misses. Use with define
-   * ALL_ENTRIES_ACCESSED.
+   * Return true if missing access to dictionary should be considered an error.
+   *
+   * @note Located here for historic reasons.
    */
-  void all_entries_accessed( const Dictionary&,
-    const std::string&,
-    const std::string&,
-    const std::string&,
-    const size_t ) const;
+  bool dict_miss_is_error() const;
 
-  void all_entries_accessed( const Dictionary&,
-    const std::string&,
-    const std::string&,
-    const std::string&,
-    const std::string&,
-    const size_t ) const;
+  VerbosityLevel verbosity() const;
 
 private:
   /**
@@ -117,10 +95,22 @@ private:
 
 private:
   std::vector< deliver_logging_event_ptr > client_callbacks_;
-  nest::severity_t logging_level_;
-  bool dict_miss_is_error_; //!< whether to throw exception on missed dictionary
-                            //!< entries
+  VerbosityLevel logging_level_;
+  bool dict_miss_is_error_;  //!< whether to throw exception on missed dictionary entries
 };
-} // namespace nest
 
-#endif // ifndef LOGGING_MANAGER_H
+inline bool
+LoggingManager::dict_miss_is_error() const
+{
+  return dict_miss_is_error_;
+}
+
+inline VerbosityLevel
+LoggingManager::verbosity() const
+{
+  return logging_level_;
+}
+
+}  // namespace nest
+
+#endif /* ifndef LOGGING_MANAGER_H */

@@ -1,0 +1,32 @@
+name: Mark stale issues and pull requests
+
+on:
+  schedule:
+  - cron: '31 8 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+      with:
+        egress-policy: audit
+        disable-telemetry: true
+
+    - uses: actions/stale@5f858e3efba33a5ca4407a664cc011ad407f2008 # v10.1.0
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: 'Issue automatically marked stale!'
+        stale-pr-message: 'Pull request automatically marked stale!'
+        stale-issue-label: 'stale'
+        stale-pr-label: 'stale'
+        days-before-close: -1

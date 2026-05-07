@@ -38,7 +38,7 @@ PROJECT_NAME           = NEST
 # could be handy for archiving the generated documentation or if some version
 # control system is used.
 
-PROJECT_NUMBER         = @NEST_VERSION_STRING@
+PROJECT_NUMBER         = @NEST_VERSION@
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for a project that appears at the top of each page and should give viewer a
@@ -744,21 +744,14 @@ WARN_LOGFILE           = doxygen.log
 # Note: If this tag is empty the current directory is searched.
 
 INPUT		=	@PROJECT_SOURCE_DIR@/README.md \
-			@PROJECT_SOURCE_DIR@/conngen \
 			@PROJECT_SOURCE_DIR@/doc \
 			@PROJECT_SOURCE_DIR@/examples \
-			@PROJECT_SOURCE_DIR@/extras \
-			@PROJECT_SOURCE_DIR@/lib \
 			@PROJECT_SOURCE_DIR@/libnestutil \
-			@PROJECT_SOURCE_DIR@/librandom \
 			@PROJECT_SOURCE_DIR@/models \
 			@PROJECT_SOURCE_DIR@/nest \
 			@PROJECT_SOURCE_DIR@/nestkernel \
-			@PROJECT_SOURCE_DIR@/precise \
 			@PROJECT_SOURCE_DIR@/pynest \
-			@PROJECT_SOURCE_DIR@/sli \
-			@PROJECT_SOURCE_DIR@/testsuite \
-			@PROJECT_SOURCE_DIR@/topology
+			@PROJECT_SOURCE_DIR@/testsuite
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -849,7 +842,7 @@ EXAMPLE_RECURSIVE      = NO
 # that contain images that are to be included in the documentation (see the
 # \image command).
 
-IMAGE_PATH             =
+IMAGE_PATH             =  @PROJECT_SOURCE_DIR@/doc/devdoc/static/img/
 
 # The INPUT_FILTER tag can be used to specify a program that doxygen should
 # invoke to filter for each input file. Doxygen will invoke the filter program

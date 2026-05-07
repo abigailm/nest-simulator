@@ -33,79 +33,118 @@
 
 namespace nest
 {
+// Disable clang-formatting for documentation due to over-wide table.
+// clang-format off
+/* BeginUserDocs: neuron, integrate-and-fire, adaptation, soft threshold
 
-/** @BeginDocumentation
-@ingroup Neurons
-@ingroup iaf
+Short description
++++++++++++++++++
 
-Name: izhikevich - Izhikevich neuron model
+Izhikevich neuron model
 
-Description:
-Implementation of the simple spiking neuron model introduced by Izhikevich
-[1]. The dynamics are given by:
-  @f[
-  dv/dt = 0.04*v^2 + 5*v + 140 - u + I \\
-     du/dt = a*(b*v - u)] @f]
+Description
+++++++++++++
 
-    if  \f$ v >= V_{th} \f$:
-      v is set to c
-      u is incremented by d
+``izhikevich`` implements the simple spiking neuron model introduced by Izhikevich [1]_.
+This model reproduces spiking and bursting behavior of known types of cortical neurons.
 
-    v jumps on each spike arrival by the weight of the spike.
+Membrane potential evolution, spike emission, and refractoriness
+................................................................
 
-As published in [1], the numerics differs from the standard forward Euler
-technique in two ways:
-1) the new value of u is calculated based on the new value of v, rather than
-the previous value
-2) the variable v is updated using a time step half the size of that used to
-update variable u.
+The model is defined by the following differential equations:
 
-This model offers both forms of integration, they can be selected using the
-boolean parameter consistent_integration. To reproduce some results published
-on the basis of this model, it is necessary to use the published form of the
-dynamics. In this case, consistent_integration must be set to false. For all
-other purposes, it is recommended to use the standard technique for forward
-Euler integration. In this case, consistent_integration must be set to true
-(default).
+.. math::
 
+   \frac{dV_{\text{m}}}{dt} = 0.04 V_{\text{m}}^2 + 5 V_{\text{m}} + 140 - U_{\text{m}} + I_{\text{e}}
 
-Parameters:
+.. math::
+
+   \frac{dU_{\text{m}}}{dt} = a (b V_{\text{m}} - U_{\text{m}})
+
+where :math:`V_{\text{m}}` is the membrane potential, :math:`U_{\text{m}}` is the recovery variable, and
+:math:`I_{\text{e}}` is the input current.
+
+A spike is emitted when :math:`V_{\text{m}}` reaches a threshold :math:`V_{\text{th}}`.
+At this point, the membrane potential and recovery variable are updated according to:
+
+.. math::
+
+   &\text{if}\;\ V_m \geq V_{th}:\\
+   &\;\ V_m \text{ is set to } c\\
+   &\;\ U_m \text{ is incremented by } d\\
+
+In addition, each incoming spike increases :math:`V_{\text{m}}` by the synaptic weight associated with the spike.
+
+As published in [1]_, the numerics differs from the standard forward Euler technique in two ways:
+
+ * the recovery variable :math:`U_{\text{m}}` is updated based on the new value of :math:`V_{\text{m}}`, rather than the previous one.
+ * the membrane potential :math:`V_{\text{m}}` is updated with a time step half the size of that used for :math:`U_{\text{m}}`.
+
+This model offers both forms of integration, they can be selected using the boolean parameter ``consistent_integration``:
+
+ * ``consistent_integration = false``: use the published form of the dynamics (for replicating published results).
+ * ``consistent_integration = true`` *(default)*: use the standard Euler method (recommended for general use).
+
+.. note::
+
+   For a detailed analysis of the numerical differences between these integration schemes and their impact on simulation results, see [2]_.
+
+Parameters
+++++++++++
+
 The following parameters can be set in the status dictionary.
 
-\verbatim embed:rst
-======================= =======  ==============================================
- V_m                    mV       Membrane potential
- U_m                    mV       Membrane potential recovery variable
- V_th                   mV       Spike threshold
- I_e                    pA       Constant input current (R=1)
- V_min                  mV       Absolute lower value for the membrane potential
- a                      real     Describes time scale of recovery variable
- b                      real     Sensitivity of recovery variable
- c                      mV       After-spike reset value of V_m
- d                      mV       After-spike reset value of U_m
- consistent_integration boolean  Use standard integration technique
-======================= =======  ==============================================
-\endverbatim
+======================= ============ ====================== ===================================================
+**Parameter**           **Default**  **Math equivalent**    **Description**
+======================= ============ ====================== ===================================================
+ V_m                    -65 mV       :math:`V_{\text{m}}`   Membrane potential
+ U_m                    -13 mV       :math:`U_{\text{m}}`   Membrane potential recovery variable
+ V_th                   30 mV        :math:`V_{\text{th}}`  Spike threshold
+ I_e                    0 pA         :math:`I_{\text{e}}`   Constant input current (R=1)
+ V_min                  -1.79 mV     :math:`V_{\text{min}}` Absolute lower value for the membrane potential
+ a                      0.02 real    :math:`a`              Describes time scale of recovery variable
+ b                      0.2 real     :math:`b`              Sensitivity of recovery variable
+ c                      -65 mV       :math:`c`              After-spike reset value of V_m
+ d                      8 mV         :math:`d`              After-spike reset value of U_m
+ consistent_integration ``true``     None                   Use standard integration technique
+======================= ============ ====================== ===================================================
 
-References:
+References
+++++++++++
 
-\verbatim embed:rst
-.. [1] Izhikevich EM (2003). Simple model of spiking neurons. IEEE Transactions on
-       Neural Networks, 14:1569-1572.
-       DOI: https://doi.org/10.1109/TNN.2003.820440
-\endverbatim
+.. [1] Izhikevich EM. (2003). Simple model of spiking neurons. IEEE Transactions
+       on Neural Networks, 14:1569-1572. DOI: https://doi.org/10.1109/TNN.2003.820440
 
-Sends: SpikeEvent
+.. [2] Pauli R, Weidel P, Kunkel S, Morrison A (2018). Reproducing polychronization: A guide to maximizing
+       the reproducibility of spiking network models. Frontiers in Neuroinformatics, 12.
+       DOI: https://www.frontiersin.org/article/10.3389/fninf.2018.00046
 
-Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+Sends
++++++
 
-FirstVersion: 2009
+SpikeEvent
 
-Author: Hanuschkin, Morrison, Kunkel
+Receives
+++++++++
 
-SeeAlso: iaf_psc_delta, mat2_psc_exp
-*/
-class izhikevich : public Archiving_Node
+SpikeEvent, CurrentEvent, DataLoggingRequest
+
+See also
+++++++++
+
+iaf_psc_delta, mat2_psc_exp
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: izhikevich
+
+EndUserDocs */
+// clang-format on
+
+void register_izhikevich( const std::string& name );
+
+class izhikevich : public ArchivingNode
 {
 
 public:
@@ -120,28 +159,27 @@ public:
   using Node::handle;
   using Node::handles_test_event;
 
-  void handle( DataLoggingRequest& );
-  void handle( SpikeEvent& );
-  void handle( CurrentEvent& );
+  void handle( DataLoggingRequest& ) override;
+  void handle( SpikeEvent& ) override;
+  void handle( CurrentEvent& ) override;
 
-  port handles_test_event( DataLoggingRequest&, rport );
-  port handles_test_event( SpikeEvent&, rport );
-  port handles_test_event( CurrentEvent&, rport );
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
+  size_t handles_test_event( SpikeEvent&, size_t ) override;
+  size_t handles_test_event( CurrentEvent&, size_t ) override;
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
   friend class RecordablesMap< izhikevich >;
   friend class UniversalDataLogger< izhikevich >;
 
-  void init_state_( const Node& proto );
-  void init_buffers_();
-  void calibrate();
+  void init_buffers_() override;
+  void pre_run_hook() override;
 
-  void update( Time const&, const long, const long );
+  void update( Time const&, const long, const long ) override;
 
   // ----------------------------------------------------------------
 
@@ -167,10 +205,10 @@ private:
     /** Use standard integration numerics **/
     bool consistent_integration_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    void set( const DictionaryDatum& ); //!< Set values from dicitonary
+    void get( Dictionary& ) const;              //!< Store current values in dictionary
+    void set( const Dictionary&, Node* node );  //!< Set values from dictionary
   };
 
   // ----------------------------------------------------------------
@@ -180,19 +218,19 @@ private:
    */
   struct State_
   {
-    double v_; // membrane potential
-    double u_; // membrane recovery variable
-    double I_; // input current
+    double v_;  // membrane potential
+    double u_;  // membrane recovery variable
+    double I_;  // input current
 
 
     /** Accumulate spikes arriving during refractory period, discounted for
         decay until end of refractory period.
     */
 
-    State_(); //!< Default initialization
+    State_();  //!< Default initialization
 
-    void get( DictionaryDatum&, const Parameters_& ) const;
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary&, const Parameters_& ) const;
+    void set( const Dictionary&, const Parameters_&, Node* );
   };
 
   // ----------------------------------------------------------------
@@ -250,8 +288,8 @@ private:
   /** @} */
 };
 
-inline port
-izhikevich::send_test_event( Node& target, rport receptor_type, synindex, bool )
+inline size_t
+izhikevich::send_test_event( Node& target, size_t receptor_type, synindex, bool )
 {
   SpikeEvent e;
   e.set_sender( *this );
@@ -259,8 +297,8 @@ izhikevich::send_test_event( Node& target, rport receptor_type, synindex, bool )
   return target.handles_test_event( e, receptor_type );
 }
 
-inline port
-izhikevich::handles_test_event( SpikeEvent&, rport receptor_type )
+inline size_t
+izhikevich::handles_test_event( SpikeEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -269,8 +307,8 @@ izhikevich::handles_test_event( SpikeEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-izhikevich::handles_test_event( CurrentEvent&, rport receptor_type )
+inline size_t
+izhikevich::handles_test_event( CurrentEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -279,8 +317,8 @@ izhikevich::handles_test_event( CurrentEvent&, rport receptor_type )
   return 0;
 }
 
-inline port
-izhikevich::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+izhikevich::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -290,33 +328,33 @@ izhikevich::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
 }
 
 inline void
-izhikevich::get_status( DictionaryDatum& d ) const
+izhikevich::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d, P_ );
-  Archiving_Node::get_status( d );
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  ArchivingNode::get_status( d );
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-izhikevich::set_status( const DictionaryDatum& d )
+izhikevich::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
-  ptmp.set( d );         // throws if BadProperty
-  State_ stmp = S_;      // temporary copy in case of errors
-  stmp.set( d, ptmp );   // throws if BadProperty
+  Parameters_ ptmp = P_;      // temporary copy in case of errors
+  ptmp.set( d, this );        // throws if BadProperty
+  State_ stmp = S_;           // temporary copy in case of errors
+  stmp.set( d, ptmp, this );  // throws if BadProperty
 
   // We now know that (ptmp, stmp) are consistent. We do not
   // write them back to (P_, S_) before we are also sure that
   // the properties to be set in the parent class are internally
   // consistent.
-  Archiving_Node::set_status( d );
+  ArchivingNode::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
   S_ = stmp;
 }
 
-} // namespace nest
+}  // namespace nest
 
 #endif /* #ifndef IZHIKEVICH_H */

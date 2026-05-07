@@ -22,27 +22,50 @@
 
 #include "lin_rate.h"
 
+// Includes from nestkernel
+#include "kernel_manager.h"
+#include "model_manager_impl.h"
+#include "nest_impl.h"
+
 namespace nest
 {
-
 void
-nonlinearities_lin_rate::get( DictionaryDatum& d ) const
+register_lin_rate_ipn( const std::string& name )
 {
-  def< double >( d, names::g, g_ );
-  def< double >( d, names::g_ex, g_ex_ );
-  def< double >( d, names::g_in, g_in_ );
-  def< double >( d, names::theta_ex, theta_ex_ );
-  def< double >( d, names::theta_in, theta_in_ );
+  register_node_model< lin_rate_ipn >( name );
 }
 
 void
-nonlinearities_lin_rate::set( const DictionaryDatum& d )
+register_lin_rate_opn( const std::string& name )
 {
-  updateValue< double >( d, names::g, g_ );
-  updateValue< double >( d, names::g_ex, g_ex_ );
-  updateValue< double >( d, names::g_in, g_in_ );
-  updateValue< double >( d, names::theta_ex, theta_ex_ );
-  updateValue< double >( d, names::theta_in, theta_in_ );
+  register_node_model< lin_rate_opn >( name );
+}
+
+void
+register_rate_transformer_lin( const std::string& name )
+{
+  register_node_model< rate_transformer_lin >( name );
+}
+
+
+void
+nonlinearities_lin_rate::get( Dictionary& d ) const
+{
+  d[ names::g ] = g_;
+  d[ names::g_ex ] = g_ex_;
+  d[ names::g_in ] = g_in_;
+  d[ names::theta_ex ] = theta_ex_;
+  d[ names::theta_in ] = theta_in_;
+}
+
+void
+nonlinearities_lin_rate::set( const Dictionary& d, Node* node )
+{
+  update_value_param( d, names::g, g_, node );
+  update_value_param( d, names::g_ex, g_ex_, node );
+  update_value_param( d, names::g_in, g_in_, node );
+  update_value_param( d, names::theta_ex, theta_ex_, node );
+  update_value_param( d, names::theta_in, theta_in_, node );
 }
 
 /*
@@ -53,7 +76,7 @@ template <>
 void
 RecordablesMap< nest::lin_rate_ipn >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::rate, &nest::lin_rate_ipn::get_rate_ );
   insert_( names::noise, &nest::lin_rate_ipn::get_noise_ );
 }
@@ -62,7 +85,7 @@ template <>
 void
 RecordablesMap< nest::lin_rate_opn >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::rate, &nest::lin_rate_opn::get_rate_ );
   insert_( names::noise, &nest::lin_rate_opn::get_noise_ );
   insert_( names::noisy_rate, &nest::lin_rate_opn::get_noisy_rate_ );
@@ -72,8 +95,8 @@ template <>
 void
 RecordablesMap< nest::rate_transformer_lin >::create()
 {
-  // use standard names whereever you can for consistency!
+  // use standard names wherever you can for consistency!
   insert_( names::rate, &nest::rate_transformer_lin::get_rate_ );
 }
 
-} // namespace nest
+}  // namespace nest

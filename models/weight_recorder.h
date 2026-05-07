@@ -23,7 +23,6 @@
 #ifndef WEIGHT_RECORDER_H
 #define WEIGHT_RECORDER_H
 
-
 // C++ includes:
 #include <vector>
 
@@ -31,42 +30,66 @@
 #include "device_node.h"
 #include "event.h"
 #include "exceptions.h"
+#include "kernel_manager.h"
 #include "nest_types.h"
 #include "recording_device.h"
-#include "kernel_manager.h"
+
+/* BeginUserDocs: device, recorder
+
+Short description
++++++++++++++++++
+
+Recording weights from synapses
+
+Description
++++++++++++
+
+The change in synaptic weights over time is a key observable property in
+studies of plasticity in neuronal network models. To access this information, the
+``weight_recorder`` can be used. In contrast to other recording
+devices, which are connected to a specific set of neurons, the weight
+recorder is instead set as a parameter in the synapse model.
+
+After assigning an instance of a weight recorder to the synapse model
+by setting its ``weight_recorder`` property, the weight
+recorder collects the global IDs of source and target neurons together
+with the weight for each spike event that travels through the observed
+synapses.
+
+To only record from a subset of connected synapses, the
+weight recorder accepts NodeCollections in the parameters ``senders`` and
+``targets``. If set, they restrict the recording of data to only
+synapses that fulfill the given criteria.
+
+::
+
+   >>> wr = nest.Create("weight_recorder")
+   >>> nest.CopyModel("stdp_synapse", "stdp_synapse_rec", {"weight_recorder": wr})
+
+   >>> pre = nest.Create("iaf_psc_alpha", 10)
+   >>> post = nest.Create("iaf_psc_alpha", 10)
+
+   >>> nest.Connect(pre, post, syn_spec="stdp_synapse_rec")
+
+.. include:: ../models/recording_device.rst
+
+See also
+++++++++
+
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: weight_recorder
+
+EndUserDocs */
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup detector
+void register_weight_recorder( const std::string& name );
 
-Name: weight_recorder - Device for detecting single spikes.
-
-Description:
-
-The weight_recorder device is a recording device. It is used to record
-weights from synapses. Data is recorded in memory or to file as for all
-RecordingDevices.
-By default, source GID, target GID, time and weight of each spike is recorded.
-
-In order to record only from a subset of connected synapses, the
-weight_recorder accepts the parameters 'senders' and 'targets', with which the
-recorded data is limited to the synapses with the corresponding source or target
-gid.
-
-The weight recorder can also record weights with full precision
-from neurons emitting precisely timed spikes. Set /precise_times to
-achieve this.
-
-Data is not necessarily written to file in chronological order.
-
-Receives: WeightRecordingEvent
-
-SeeAlso: weight_recorder, spike_detector, Device, RecordingDevice
-*/
-class weight_recorder : public DeviceNode
+class weight_recorder : public RecordingDevice
 {
 
 public:
@@ -74,15 +97,21 @@ public:
   weight_recorder( const weight_recorder& );
 
   bool
-  has_proxies() const
+  has_proxies() const override
   {
     return false;
   }
 
   bool
-  local_receiver() const
+  local_receiver() const override
   {
     return true;
+  }
+
+  std::string
+  get_element_type() const override
+  {
+    return names::recorder;
   }
 
   /**
@@ -94,49 +123,37 @@ public:
   using Node::handles_test_event;
   using Node::receives_signal;
 
-  void handle( WeightRecorderEvent& );
+  void handle( WeightRecorderEvent& ) override;
 
-  port handles_test_event( WeightRecorderEvent&, rport );
+  size_t handles_test_event( WeightRecorderEvent&, size_t ) override;
 
-  SignalType receives_signal() const;
+  Type get_type() const override;
+  SignalType receives_signal() const override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
 private:
-  void init_state_( Node const& );
-  void init_buffers_();
-  void calibrate();
-  void post_run_cleanup();
-  void finalize();
-  void update( Time const&, const long, const long );
-
-  struct Buffers_
-  {
-    std::vector< WeightRecorderEvent > events_;
-  };
-
-  RecordingDevice device_;
-  Buffers_ B_;
-
-  bool user_set_precise_times_;
+  void pre_run_hook() override;
+  void update( Time const&, const long, const long ) override;
 
   struct Parameters_
   {
-    std::vector< long > senders_;
-    std::vector< long > targets_;
+    NodeCollectionPTR senders_;
+    NodeCollectionPTR targets_;
 
     Parameters_();
-    Parameters_( const Parameters_& );
-    void get( DictionaryDatum& ) const;
-    void set( const DictionaryDatum& );
+    Parameters_( const Parameters_& ) = default;
+    Parameters_& operator=( const Parameters_& ) = default;
+    void get( Dictionary& ) const;
+    void set( const Dictionary& );
   };
 
   Parameters_ P_;
 };
 
-inline port
-weight_recorder::handles_test_event( WeightRecorderEvent&, rport receptor_type )
+inline size_t
+weight_recorder::handles_test_event( WeightRecorderEvent&, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -145,24 +162,12 @@ weight_recorder::handles_test_event( WeightRecorderEvent&, rport receptor_type )
   return 0;
 }
 
-inline void
-weight_recorder::post_run_cleanup()
-{
-  device_.post_run_cleanup();
-}
-
-inline void
-weight_recorder::finalize()
-{
-  device_.finalize();
-}
-
 inline SignalType
 weight_recorder::receives_signal() const
 {
   return ALL;
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef WEIGHT_RECORDER_H */

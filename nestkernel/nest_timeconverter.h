@@ -20,13 +20,6 @@
  *
  */
 
-/*
- * first version
- * date: april 2008
- * author: Moritz Helias
- *
- */
-
 #ifndef NEST_TIME_CONVERTER_H
 #define NEST_TIME_CONVERTER_H
 
@@ -37,6 +30,7 @@ namespace nest
 class Time;
 /**
  * Class to convert times from one representation to another.
+ *
  * Creating an object of TimeConverter at a current time representation
  * saves the current values of TICS_PER_MS and TICS_PER_STEP.
  * After having changed the time representation,
@@ -76,6 +70,6 @@ public:
   Time from_old_tics( tic_t t_old ) const;
 };
 
-} // of namespace nest
+}  // of namespace nest
 
 #endif

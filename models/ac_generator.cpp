@@ -26,28 +26,30 @@
 #include <cmath>
 
 // Includes from libnestutil:
+#include "dict_util.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "event_delivery_manager_impl.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
-
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 namespace nest
 {
+void
+register_ac_generator( const std::string& name )
+{
+  register_node_model< ac_generator >( name );
+}
+
 RecordablesMap< ac_generator > ac_generator::recordablesMap_;
 
 template <>
 void
 RecordablesMap< ac_generator >::create()
 {
-  insert_( Name( names::I ), &ac_generator::get_I_ );
+  insert_( names::I, &ac_generator::get_I_ );
 }
 }
 
@@ -56,10 +58,10 @@ RecordablesMap< ac_generator >::create()
  * ---------------------------------------------------------------- */
 
 nest::ac_generator::Parameters_::Parameters_()
-  : amp_( 0.0 )     // pA
-  , offset_( 0.0 )  // pA
-  , freq_( 0.0 )    // Hz
-  , phi_deg_( 0.0 ) // degree
+  : amp_( 0.0 )      // pA
+  , offset_( 0.0 )   // pA
+  , freq_( 0.0 )     // Hz
+  , phi_deg_( 0.0 )  // degree
 {
 }
 
@@ -71,7 +73,8 @@ nest::ac_generator::Parameters_::Parameters_( const Parameters_& p )
 {
 }
 
-nest::ac_generator::Parameters_& nest::ac_generator::Parameters_::operator=( const Parameters_& p )
+nest::ac_generator::Parameters_&
+nest::ac_generator::Parameters_::operator=( const Parameters_& p )
 {
   if ( this == &p )
   {
@@ -88,8 +91,8 @@ nest::ac_generator::Parameters_& nest::ac_generator::Parameters_::operator=( con
 
 nest::ac_generator::State_::State_()
   : y_0_( 0.0 )
-  , y_1_( 0.0 ) // pA
-  , I_( 0.0 )   // pA
+  , y_1_( 0.0 )  // pA
+  , I_( 0.0 )    // pA
 {
 }
 
@@ -108,28 +111,28 @@ nest::ac_generator::Buffers_::Buffers_( const Buffers_&, ac_generator& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::ac_generator::Parameters_::get( DictionaryDatum& d ) const
+nest::ac_generator::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::amplitude ] = amp_;
-  ( *d )[ names::offset ] = offset_;
-  ( *d )[ names::phase ] = phi_deg_;
-  ( *d )[ names::frequency ] = freq_;
+  d[ names::amplitude ] = amp_;
+  d[ names::offset ] = offset_;
+  d[ names::phase ] = phi_deg_;
+  d[ names::frequency ] = freq_;
 }
 
 void
-nest::ac_generator::State_::get( DictionaryDatum& d ) const
+nest::ac_generator::State_::get( Dictionary& d ) const
 {
-  ( *d )[ names::y_0 ] = y_0_;
-  ( *d )[ names::y_1 ] = y_1_;
+  d[ names::y_0 ] = y_0_;
+  d[ names::y_1 ] = y_1_;
 }
 
 void
-nest::ac_generator::Parameters_::set( const DictionaryDatum& d )
+nest::ac_generator::Parameters_::set( const Dictionary& d, Node* node )
 {
-  updateValue< double >( d, names::amplitude, amp_ );
-  updateValue< double >( d, names::offset, offset_ );
-  updateValue< double >( d, names::frequency, freq_ );
-  updateValue< double >( d, names::phase, phi_deg_ );
+  update_value_param( d, names::amplitude, amp_, node );
+  update_value_param( d, names::offset, offset_, node );
+  update_value_param( d, names::frequency, freq_, node );
+  update_value_param( d, names::phase, phi_deg_, node );
 }
 
 
@@ -138,8 +141,7 @@ nest::ac_generator::Parameters_::set( const DictionaryDatum& d )
  * ---------------------------------------------------------------- */
 
 nest::ac_generator::ac_generator()
-  : DeviceNode()
-  , device_()
+  : StimulationDevice()
   , P_()
   , S_()
   , B_( *this )
@@ -148,8 +150,7 @@ nest::ac_generator::ac_generator()
 }
 
 nest::ac_generator::ac_generator( const ac_generator& n )
-  : DeviceNode( n )
-  , device_( n.device_ )
+  : StimulationDevice( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -162,27 +163,24 @@ nest::ac_generator::ac_generator( const ac_generator& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::ac_generator::init_state_( const Node& proto )
+nest::ac_generator::init_state_()
 {
-  const ac_generator& pr = downcast< ac_generator >( proto );
-
-  device_.init_state( pr.device_ );
-  S_ = pr.S_;
+  StimulationDevice::init_state();
 }
 
 void
 nest::ac_generator::init_buffers_()
 {
-  device_.init_buffers();
+  StimulationDevice::init_buffers();
   B_.logger_.reset();
 }
 
 void
-nest::ac_generator::calibrate()
+nest::ac_generator::pre_run_hook()
 {
   B_.logger_.init();
 
-  device_.calibrate();
+  StimulationDevice::pre_run_hook();
 
   const double h = Time::get_resolution().get_ms();
   const double t = kernel().simulation_manager.get_time().get_ms();
@@ -205,9 +203,6 @@ nest::ac_generator::calibrate()
 void
 nest::ac_generator::update( Time const& origin, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   long start = origin.get_steps();
 
   CurrentEvent ce;
@@ -220,7 +215,7 @@ nest::ac_generator::update( Time const& origin, const long from, const long to )
     S_.y_1_ = V_.A_10_ * y_0 + V_.A_11_ * S_.y_1_;
 
     S_.I_ = 0.0;
-    if ( device_.is_active( Time::step( start + lag ) ) )
+    if ( StimulationDevice::is_active( Time::step( start + lag ) ) )
     {
       S_.I_ = S_.y_1_ + P_.offset_;
       ce.set_current( S_.I_ );
@@ -234,4 +229,33 @@ void
 nest::ac_generator::handle( DataLoggingRequest& e )
 {
   B_.logger_.handle( e );
+}
+
+/* ----------------------------------------------------------------
+ * Other functions
+ * ---------------------------------------------------------------- */
+
+void
+nest::ac_generator::set_data_from_stimulation_backend( std::vector< double >& input_param )
+{
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
+
+  // For the input backend
+  if ( not input_param.empty() )
+  {
+    if ( input_param.size() != 4 )
+    {
+      throw BadParameterValue(
+        "The size of the data for the ac_generator needs to be 4 [amplitude, offset, frequency, phase]." );
+    }
+    Dictionary d;
+    d[ names::amplitude ] = input_param[ 0 ];
+    d[ names::offset ] = input_param[ 1 ];
+    d[ names::frequency ] = input_param[ 2 ];
+    d[ names::phase ] = input_param[ 3 ];
+    ptmp.set( d, this );
+  }
+
+  // if we get here, temporary contains consistent set of properties
+  P_ = ptmp;
 }

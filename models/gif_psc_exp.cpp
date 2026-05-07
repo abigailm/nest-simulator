@@ -22,26 +22,26 @@
 
 #include "gif_psc_exp.h"
 
-// C++ includes:
-#include <limits>
-
 // Includes from nestkernel:
 #include "exceptions.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "integerdatum.h"
-#include "doubledatum.h"
-#include "dictutils.h"
-
-#include "numerics.h"
+// Includes from libnestutil:
 #include "compose.hpp"
-#include "propagator_stability.h"
+#include "dict_util.h"
+#include "iaf_propagator.h"
+#include "numerics.h"
 
 namespace nest
 {
+void
+register_gif_psc_exp( const std::string& name )
+{
+  register_node_model< gif_psc_exp >( name );
+}
+
 /* ----------------------------------------------------------------
  * Recordables map
  * ---------------------------------------------------------------- */
@@ -67,21 +67,21 @@ RecordablesMap< gif_psc_exp >::create()
  * ---------------------------------------------------------------- */
 
 nest::gif_psc_exp::Parameters_::Parameters_()
-  : g_L_( 4.0 )        // nS
-  , E_L_( -70.0 )      // mV
-  , V_reset_( -55.0 )  // mV
-  , Delta_V_( 0.5 )    // mV
-  , V_T_star_( -35 )   // mV
-  , lambda_0_( 0.001 ) // 1/ms
-  , t_ref_( 4.0 )      // ms
-  , c_m_( 80.0 )       // pF
-  , tau_stc_()         // ms
-  , q_stc_()           // nA
-  , tau_sfa_()         // ms
-  , q_sfa_()           // mV
-  , tau_ex_( 2.0 )     // ms
-  , tau_in_( 2.0 )     // ms
-  , I_e_( 0.0 )        // pA
+  : g_L_( 4.0 )         // nS
+  , E_L_( -70.0 )       // mV
+  , V_reset_( -55.0 )   // mV
+  , Delta_V_( 0.5 )     // mV
+  , V_T_star_( -35 )    // mV
+  , lambda_0_( 0.001 )  // 1/ms
+  , t_ref_( 4.0 )       // ms
+  , c_m_( 80.0 )        // pF
+  , tau_stc_()          // ms
+  , q_stc_()            // nA
+  , tau_sfa_()          // ms
+  , q_sfa_()            // mV
+  , tau_ex_( 2.0 )      // ms
+  , tau_in_( 2.0 )      // ms
+  , I_e_( 0.0 )         // pA
 {
 }
 
@@ -104,75 +104,66 @@ nest::gif_psc_exp::State_::State_()
  * ---------------------------------------------------------------- */
 
 void
-nest::gif_psc_exp::Parameters_::get( DictionaryDatum& d ) const
+nest::gif_psc_exp::Parameters_::get( Dictionary& d ) const
 {
-  def< double >( d, names::I_e, I_e_ );
-  def< double >( d, names::E_L, E_L_ );
-  def< double >( d, names::g_L, g_L_ );
-  def< double >( d, names::C_m, c_m_ );
-  def< double >( d, names::V_reset, V_reset_ );
-  def< double >( d, names::Delta_V, Delta_V_ );
-  def< double >( d, names::V_T_star, V_T_star_ );
-  def< double >( d, names::lambda_0, lambda_0_ * 1000.0 ); // convert to 1/s
-  def< double >( d, names::t_ref, t_ref_ );
-  def< double >( d, names::tau_syn_ex, tau_ex_ );
-  def< double >( d, names::tau_syn_in, tau_in_ );
-
-  ArrayDatum tau_sfa_list_ad( tau_sfa_ );
-  def< ArrayDatum >( d, names::tau_sfa, tau_sfa_list_ad );
-
-  ArrayDatum q_sfa_list_ad( q_sfa_ );
-  def< ArrayDatum >( d, names::q_sfa, q_sfa_list_ad );
-
-  ArrayDatum tau_stc_list_ad( tau_stc_ );
-  def< ArrayDatum >( d, names::tau_stc, tau_stc_list_ad );
-
-  ArrayDatum q_stc_list_ad( q_stc_ );
-  def< ArrayDatum >( d, names::q_stc, q_stc_list_ad );
+  d[ names::I_e ] = I_e_;
+  d[ names::E_L ] = E_L_;
+  d[ names::g_L ] = g_L_;
+  d[ names::C_m ] = c_m_;
+  d[ names::V_reset ] = V_reset_;
+  d[ names::Delta_V ] = Delta_V_;
+  d[ names::V_T_star ] = V_T_star_;
+  d[ names::lambda_0 ] = lambda_0_ * 1000.0;  // convert to 1/s
+  d[ names::t_ref ] = t_ref_;
+  d[ names::tau_syn_ex ] = tau_ex_;
+  d[ names::tau_syn_in ] = tau_in_;
+  d[ names::tau_sfa ] = tau_sfa_;
+  d[ names::q_sfa ] = q_sfa_;
+  d[ names::tau_stc ] = tau_stc_;
+  d[ names::q_stc ] = q_stc_;
 }
 
 void
-nest::gif_psc_exp::Parameters_::set( const DictionaryDatum& d )
+nest::gif_psc_exp::Parameters_::set( const Dictionary& d, Node* node )
 {
+  update_value_param( d, names::I_e, I_e_, node );
+  update_value_param( d, names::E_L, E_L_, node );
+  update_value_param( d, names::g_L, g_L_, node );
+  update_value_param( d, names::C_m, c_m_, node );
+  update_value_param( d, names::V_reset, V_reset_, node );
+  update_value_param( d, names::Delta_V, Delta_V_, node );
+  update_value_param( d, names::V_T_star, V_T_star_, node );
 
-  updateValue< double >( d, names::I_e, I_e_ );
-  updateValue< double >( d, names::E_L, E_L_ );
-  updateValue< double >( d, names::g_L, g_L_ );
-  updateValue< double >( d, names::C_m, c_m_ );
-  updateValue< double >( d, names::V_reset, V_reset_ );
-  updateValue< double >( d, names::Delta_V, Delta_V_ );
-  updateValue< double >( d, names::V_T_star, V_T_star_ );
-
-  if ( updateValue< double >( d, names::lambda_0, lambda_0_ ) )
+  if ( update_value_param( d, names::lambda_0, lambda_0_, node ) )
   {
-    lambda_0_ /= 1000.0; // convert to 1/ms
+    lambda_0_ /= 1000.0;  // convert to 1/ms
   }
 
-  updateValue< double >( d, names::t_ref, t_ref_ );
-  updateValue< double >( d, names::tau_syn_ex, tau_ex_ );
-  updateValue< double >( d, names::tau_syn_in, tau_in_ );
+  update_value_param( d, names::t_ref, t_ref_, node );
+  update_value_param( d, names::tau_syn_ex, tau_ex_, node );
+  update_value_param( d, names::tau_syn_in, tau_in_, node );
 
-  updateValue< std::vector< double > >( d, names::tau_sfa, tau_sfa_ );
-  updateValue< std::vector< double > >( d, names::q_sfa, q_sfa_ );
-  updateValue< std::vector< double > >( d, names::tau_stc, tau_stc_ );
-  updateValue< std::vector< double > >( d, names::q_stc, q_stc_ );
+  d.update_value( names::tau_sfa, tau_sfa_ );
+  d.update_value( names::q_sfa, q_sfa_ );
+  d.update_value( names::tau_stc, tau_stc_ );
+  d.update_value( names::q_stc, q_stc_ );
 
   if ( tau_sfa_.size() != q_sfa_.size() )
   {
-    throw BadProperty( String::compose(
-      "'tau_sfa' and 'q_sfa' need to have the same dimensions.\nSize of "
-      "tau_sfa: %1\nSize of q_sfa: %2",
-      tau_sfa_.size(),
-      q_sfa_.size() ) );
+    throw BadProperty(
+      String::compose( "'tau_sfa' and 'q_sfa' need to have the same dimensions.\nSize of "
+                       "tau_sfa: %1\nSize of q_sfa: %2",
+        tau_sfa_.size(),
+        q_sfa_.size() ) );
   }
 
   if ( tau_stc_.size() != q_stc_.size() )
   {
-    throw BadProperty( String::compose(
-      "'tau_stc' and 'q_stc' need to have the same dimensions.\nSize of "
-      "tau_stc: %1\nSize of q_stc: %2",
-      tau_stc_.size(),
-      q_stc_.size() ) );
+    throw BadProperty(
+      String::compose( "'tau_stc' and 'q_stc' need to have the same dimensions.\nSize of "
+                       "tau_stc: %1\nSize of q_stc: %2",
+        tau_stc_.size(),
+        q_stc_.size() ) );
   }
   if ( g_L_ <= 0 )
   {
@@ -210,24 +201,24 @@ nest::gif_psc_exp::Parameters_::set( const DictionaryDatum& d )
       throw BadProperty( "All time constants must be strictly positive." );
     }
   }
-  if ( tau_ex_ <= 0 || tau_in_ <= 0 )
+  if ( tau_ex_ <= 0 or tau_in_ <= 0 )
   {
     throw BadProperty( "Synapse time constants must be strictly positive." );
   }
 }
 
 void
-nest::gif_psc_exp::State_::get( DictionaryDatum& d, const Parameters_& p ) const
+nest::gif_psc_exp::State_::get( Dictionary& d, const Parameters_& ) const
 {
-  def< double >( d, names::V_m, V_ );     // Membrane potential
-  def< double >( d, names::E_sfa, sfa_ ); // Adaptive threshold potential
-  def< double >( d, names::I_stc, stc_ ); // Spike-triggered current
+  d[ names::V_m ] = V_;      // Membrane potential
+  d[ names::E_sfa ] = sfa_;  // Adaptive threshold potential
+  d[ names::I_stc ] = stc_;  // Spike-triggered current
 }
 
 void
-nest::gif_psc_exp::State_::set( const DictionaryDatum& d, const Parameters_& p )
+nest::gif_psc_exp::State_::set( const Dictionary& d, const Parameters_&, Node* node )
 {
-  updateValue< double >( d, names::V_m, V_ );
+  update_value_param( d, names::V_m, V_, node );
 }
 
 nest::gif_psc_exp::Buffers_::Buffers_( gif_psc_exp& n )
@@ -245,7 +236,7 @@ nest::gif_psc_exp::Buffers_::Buffers_( const Buffers_&, gif_psc_exp& n )
  * ---------------------------------------------------------------- */
 
 nest::gif_psc_exp::gif_psc_exp()
-  : Archiving_Node()
+  : ArchivingNode()
   , P_()
   , S_()
   , B_( *this )
@@ -254,7 +245,7 @@ nest::gif_psc_exp::gif_psc_exp()
 }
 
 nest::gif_psc_exp::gif_psc_exp( const gif_psc_exp& n )
-  : Archiving_Node( n )
+  : ArchivingNode( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
@@ -266,30 +257,22 @@ nest::gif_psc_exp::gif_psc_exp( const gif_psc_exp& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::gif_psc_exp::init_state_( const Node& proto )
-{
-  const gif_psc_exp& pr = downcast< gif_psc_exp >( proto );
-  S_ = pr.S_;
-  // sfa_elems_ and stc_elems_ are initialized in calibrate()
-}
-
-void
 nest::gif_psc_exp::init_buffers_()
 {
-  B_.spikes_ex_.clear(); // includes resize
-  B_.spikes_in_.clear(); // includes resize
-  B_.currents_.clear();  //!< includes resize
-  B_.logger_.reset();    //!< includes resize
-  Archiving_Node::clear_history();
+  B_.spikes_ex_.clear();  // includes resize
+  B_.spikes_in_.clear();  // includes resize
+  B_.currents_.clear();   //!< includes resize
+  B_.logger_.reset();     //!< includes resize
+  ArchivingNode::clear_history();
 }
 
 void
-nest::gif_psc_exp::calibrate()
+nest::gif_psc_exp::pre_run_hook()
 {
   B_.logger_.init();
 
   const double h = Time::get_resolution().get_ms();
-  V_.rng_ = kernel().rng_manager.get_rng( get_thread() );
+  V_.rng_ = get_vp_specific_rng( get_thread() );
 
   V_.P11ex_ = std::exp( -h / P_.tau_ex_ );
   V_.P11in_ = std::exp( -h / P_.tau_in_ );
@@ -297,16 +280,14 @@ nest::gif_psc_exp::calibrate()
   const double tau_m = P_.c_m_ / P_.g_L_;
 
   // these are determined according to a numeric stability criterion
-  V_.P21ex_ = propagator_32( P_.tau_ex_, tau_m, P_.c_m_, h );
-  V_.P21in_ = propagator_32( P_.tau_in_, tau_m, P_.c_m_, h );
+  V_.P21ex_ = IAFPropagatorExp( P_.tau_ex_, tau_m, P_.c_m_ ).evaluate( h );
+  V_.P21in_ = IAFPropagatorExp( P_.tau_in_, tau_m, P_.c_m_ ).evaluate( h );
 
   V_.P33_ = std::exp( -h / tau_m );
   V_.P30_ = -1 / P_.c_m_ * numerics::expm1( -h / tau_m ) * tau_m;
   V_.P31_ = -numerics::expm1( -h / tau_m );
 
   V_.RefractoryCounts_ = Time( Time::ms( P_.t_ref_ ) ).get_steps();
-  // since t_ref_ >= 0, this can only fail in error
-  assert( V_.RefractoryCounts_ >= 0 );
 
   // initializing adaptation (stc/sfa) variables
   V_.P_sfa_.resize( P_.tau_sfa_.size(), 0.0 );
@@ -332,10 +313,6 @@ nest::gif_psc_exp::calibrate()
 void
 nest::gif_psc_exp::update( Time const& origin, const long from, const long to )
 {
-
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   for ( long lag = from; lag < to; ++lag )
   {
 
@@ -361,7 +338,7 @@ nest::gif_psc_exp::update( Time const& origin, const long from, const long to )
     S_.I_syn_ex_ += B_.spikes_ex_.get_value( lag );
     S_.I_syn_in_ += B_.spikes_in_.get_value( lag );
 
-    if ( S_.r_ref_ == 0 ) // neuron is not in refractory period
+    if ( S_.r_ref_ == 0 )  // neuron is not in refractory period
     {
 
       S_.V_ = V_.P30_ * ( S_.I_stim_ + P_.I_e_ - S_.stc_ ) + V_.P33_ * S_.V_ + V_.P31_ * P_.E_L_
@@ -397,8 +374,8 @@ nest::gif_psc_exp::update( Time const& origin, const long from, const long to )
     }
     else
     {
-      --S_.r_ref_;         // neuron is absolute refractory
-      S_.V_ = P_.V_reset_; // reset the membrane potential
+      --S_.r_ref_;          // neuron is absolute refractory
+      S_.V_ = P_.V_reset_;  // reset the membrane potential
     }
 
 
@@ -449,4 +426,4 @@ nest::gif_psc_exp::handle( DataLoggingRequest& e )
   B_.logger_.handle( e );
 }
 
-} // namespace
+}  // namespace

@@ -23,18 +23,20 @@
 #ifndef BLOCK_VECTOR_H_
 #define BLOCK_VECTOR_H_
 
+#include <cassert>
 #include <cmath>
-#include <vector>
 #include <iostream>
 #include <iterator>
-#include <cassert>
+#include <vector>
+
+#include "exceptions.h"
 
 template < typename value_type_ >
 class BlockVector;
 template < typename value_type_, typename ref_, typename ptr_ >
 class bv_iterator;
 
-constexpr int block_size_shift = 10; //!< max_block_size = 2^block_size_shift
+constexpr int block_size_shift = 10;  //!< max_block_size = 2^block_size_shift
 constexpr int max_block_size = 1L << block_size_shift;
 constexpr int max_block_size_sub_1 = max_block_size - 1;
 
@@ -60,8 +62,10 @@ private:
   template < typename cv_value_type_ >
   using iter_ = bv_iterator< value_type_, cv_value_type_&, cv_value_type_* >;
 
-  const BlockVector< value_type_ >* block_vector_; //!< BlockVector to which this iterator points
-  size_t block_index_;                             //!< Index of the current block in the blockmap
+  //! BlockVector to which this iterator points
+  const BlockVector< value_type_ >* block_vector_;
+  //! Iterator for the current block in the blockmap
+  typename std::vector< std::vector< value_type_ > >::const_iterator block_vector_it_;
   //! Iterator pointing to the current element in the current block.
   typename std::vector< value_type_ >::const_iterator block_it_;
   //! Iterator pointing to the end of the current block.
@@ -75,9 +79,12 @@ public:
   using value_type = value_type_;
   using pointer = ptr_;
   using reference = ref_;
-  using difference_type = long int;
+  using difference_type = typename BlockVector< value_type >::difference_type;
 
-  bv_iterator() = default;
+  bv_iterator()
+    : block_vector_( nullptr )
+  {
+  }
 
   /**
    * @brief Creates an iterator pointing to the first element in a BlockVector.
@@ -99,7 +106,7 @@ public:
    * @param current_block_end Iterator pointing to the end of the current block.
    */
   bv_iterator( const BlockVector< value_type_ >*,
-    const size_t,
+    const typename std::vector< std::vector< value_type_ > >::const_iterator,
     const typename std::vector< value_type_ >::const_iterator,
     const typename std::vector< value_type_ >::const_iterator );
 
@@ -107,17 +114,25 @@ public:
   bv_iterator& operator--();
   bv_iterator& operator+=( difference_type );
   bv_iterator& operator-=( difference_type );
-  bv_iterator operator+( difference_type );
-  bv_iterator operator-( difference_type );
+  bv_iterator operator+( difference_type ) const;
+  bv_iterator operator-( difference_type ) const;
   bv_iterator operator++( int );
+  bv_iterator operator--( int );
   reference operator*() const;
   pointer operator->() const;
   difference_type operator-( const iterator& ) const;
   difference_type operator-( const const_iterator& ) const;
 
+  iterator& operator=( const iterator& );
+
+  reference operator[]( difference_type n ) const;
+
   bool operator==( const bv_iterator& ) const;
   bool operator!=( const bv_iterator& ) const;
   bool operator<( const bv_iterator& ) const;
+  bool operator>( const bv_iterator& ) const;
+  bool operator<=( const bv_iterator& ) const;
+  bool operator>=( const bv_iterator& ) const;
 
 private:
   /**
@@ -143,8 +158,15 @@ class BlockVector
   friend class bv_iterator;
 
 public:
+  using value_type = value_type_;
+  using difference_type = typename std::vector< value_type >::difference_type;
+  using const_reference = const value_type&;
+  using const_pointer = const value_type*;
   using iterator = bv_iterator< value_type_, value_type_&, value_type_* >;
   using const_iterator = bv_iterator< value_type_, const value_type_&, const value_type_* >;
+  using reverse_iterator = std::reverse_iterator< iterator >;
+  using const_reverse_iterator = std::reverse_iterator< const_iterator >;
+  using size_type = size_t;
 
   /**
    * @brief Creates an empty BlockVector.
@@ -215,6 +237,14 @@ public:
   void push_back( const value_type_& value );
 
   /**
+   * @brief Move data to the end of the BlockVector.
+   * @param value Data to be moved to end of BlockVector.
+   *
+   * Moves given data to the element at the end of the BlockVector.
+   */
+  void push_back( value_type_&& value );
+
+  /**
    * Erases all the elements.
    */
   void clear();
@@ -247,10 +277,43 @@ public:
    */
   int get_max_block_size() const;
 
+  /**
+   * @brief Returns the size() of the largest possible BlockVector.
+   */
+  size_type max_size() const;
+
+  /**
+   * @brief Returns a read/write reverse iterator that points to the last
+   * element in the BlockVector. Iteration is done in reverse element
+   * order.
+   */
+  reverse_iterator rbegin();
+
+  /**
+   * @brief Returns a read-only (constant) reverse iterator that points to
+   * the last element in the BlockVector. Iteration is done in reverse
+   * element order.
+   */
+  reverse_iterator rbegin() const;
+
+  /**
+   * @brief Returns a read/write reverse iterator that points to one
+   * before the first element in the BlockVector. Iteration is done in
+   * reverse element order.
+   */
+  reverse_iterator rend();
+
+  /**
+   * @brief Returns a read-only (constant) reverse iterator that points to
+   * one before the first element in the BlockVector. Iteration is done in
+   * reverse element order.
+   */
+  reverse_iterator rend() const;
+
 private:
   //! Vector holding blocks containing data.
   std::vector< std::vector< value_type_ > > blockmap_;
-  iterator finish_; //!< Iterator pointing to one past the last element.
+  iterator finish_;  //!< Iterator pointing to one past the last element.
 };
 
 /////////////////////////////////////////////////////////////
@@ -258,22 +321,25 @@ private:
 /////////////////////////////////////////////////////////////
 
 template < typename value_type_ >
-inline BlockVector< value_type_ >::BlockVector()
-  : blockmap_( std::vector< std::vector< value_type_ > >( 1, std::vector< value_type_ >( max_block_size ) ) )
+BlockVector< value_type_ >::BlockVector()
+  : blockmap_(
+      std::vector< std::vector< value_type_ > >( 1, std::move( std::vector< value_type_ >( max_block_size ) ) ) )
   , finish_( begin() )
 {
 }
 
 template < typename value_type_ >
-inline BlockVector< value_type_ >::BlockVector( size_t n )
-  : blockmap_( std::vector< std::vector< value_type_ > >( 1, std::vector< value_type_ >( max_block_size ) ) )
+BlockVector< value_type_ >::BlockVector( size_t n )
+  : blockmap_(
+      std::vector< std::vector< value_type_ > >( 1, std::move( std::vector< value_type_ >( max_block_size ) ) ) )
   , finish_( begin() )
 {
-  size_t num_blocks_needed = std::ceil( ( float ) n / max_block_size );
+  size_t num_blocks_needed = std::ceil( static_cast< double >( n ) / max_block_size );
   for ( size_t i = 0; i < num_blocks_needed - 1; ++i )
   {
     blockmap_.emplace_back( max_block_size );
   }
+  finish_ = begin();  // Because the blockmap has changed we need to recreate the iterator
   finish_ += n;
 }
 
@@ -288,7 +354,8 @@ template < typename value_type_ >
 inline BlockVector< value_type_ >::~BlockVector() = default;
 
 template < typename value_type_ >
-inline value_type_& BlockVector< value_type_ >::operator[]( const size_t pos )
+inline value_type_&
+BlockVector< value_type_ >::operator[]( const size_t pos )
 {
   // Using bitwise operations to efficiently map the index to the
   // right block and element.
@@ -298,7 +365,8 @@ inline value_type_& BlockVector< value_type_ >::operator[]( const size_t pos )
 }
 
 template < typename value_type_ >
-inline const value_type_& BlockVector< value_type_ >::operator[]( const size_t pos ) const
+inline const value_type_&
+BlockVector< value_type_ >::operator[]( const size_t pos ) const
 {
   // Using bitwise operations to efficiently map the index to the
   // right block and element.
@@ -336,20 +404,41 @@ BlockVector< value_type_ >::end() const
 }
 
 template < typename value_type_ >
-inline void
+void
 BlockVector< value_type_ >::push_back( const value_type_& value )
 {
   // If this is the last element in the current block, add another block
   if ( finish_.block_it_ == finish_.current_block_end_ - 1 )
   {
+    // Need to get the current position here, then recreate the iterator after we extend the blockmap,
+    // because after the blockmap is changed the iterator becomes invalid.
+    const auto current_block = finish_.block_vector_it_ - finish_.block_vector_->blockmap_.begin();
     blockmap_.emplace_back( max_block_size );
+    finish_.block_vector_it_ = finish_.block_vector_->blockmap_.begin() + current_block;
   }
   *finish_ = value;
   ++finish_;
 }
 
 template < typename value_type_ >
-inline void
+void
+BlockVector< value_type_ >::push_back( value_type_&& value )
+{
+  // If this is the last element in the current block, add another block
+  if ( finish_.block_it_ == finish_.current_block_end_ - 1 )
+  {
+    // Need to get the current position here, then recreate the iterator after we extend the blockmap,
+    // because after the blockmap is changed the iterator becomes invalid.
+    const auto current_block = finish_.block_vector_it_ - finish_.block_vector_->blockmap_.begin();
+    blockmap_.emplace_back( max_block_size );
+    finish_.block_vector_it_ = finish_.block_vector_->blockmap_.begin() + current_block;
+  }
+  *finish_ = std::move( value );
+  ++finish_;
+}
+
+template < typename value_type_ >
+void
 BlockVector< value_type_ >::clear()
 {
   for ( auto it = blockmap_.begin(); it != blockmap_.end(); ++it )
@@ -366,20 +455,21 @@ template < typename value_type_ >
 inline size_t
 BlockVector< value_type_ >::size() const
 {
-  size_t element_index;
-  if ( finish_.block_index_ >= blockmap_.size() )
+  size_t element_index;  // Where we are in the current block
+  if ( finish_.block_vector_it_ >= blockmap_.end() )
   {
+    // If the current block is completely filled
     element_index = 0;
   }
   else
   {
-    element_index = finish_.block_it_ - blockmap_[ finish_.block_index_ ].begin();
+    element_index = finish_.block_it_ - finish_.block_vector_it_->begin();
   }
-  return finish_.block_index_ * max_block_size + element_index;
+  return ( finish_.block_vector_it_ - finish_.block_vector_->blockmap_.begin() ) * max_block_size + element_index;
 }
 
 template < typename value_type_ >
-inline typename BlockVector< value_type_ >::iterator
+typename BlockVector< value_type_ >::iterator
 BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
 {
   assert( first.block_vector_ == this );
@@ -396,14 +486,15 @@ BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
   }
   else
   {
-    auto repl_it = first.const_cast_(); // Iterator for elements to be replaced.
+    auto repl_it = first.const_cast_();  // Iterator for elements to be replaced.
     for ( auto element = last; element != end(); ++element )
     {
       *repl_it = std::move( *element );
       ++repl_it;
     }
-    // The block that repl_it ends up in is the new final block.
-    auto& new_final_block = blockmap_[ repl_it.block_index_ ];
+    // The block that repl_it ends up in is the new final block. Using iterator arithmetics to avoid issues with the
+    // const iterator.
+    auto& new_final_block = blockmap_[ repl_it.block_vector_it_ - blockmap_.begin() ];
     // Here, the arithmetic says that we first subtract
     // new_final_block.begin(), then add it again (which seems unnecessary).
     // But what we really do is extracting the element index of repl_it, then
@@ -420,7 +511,7 @@ BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
     }
     assert( new_final_block.size() == max_block_size );
     // Erase all subsequent blocks.
-    blockmap_.erase( blockmap_.begin() + repl_it.block_index_ + 1, blockmap_.end() );
+    blockmap_.erase( repl_it.block_vector_it_ + 1, blockmap_.end() );
     // Construct new finish_ iterator
     finish_ = repl_it;
     // The iterator which is to be returned is located where the first element
@@ -431,13 +522,12 @@ BlockVector< value_type_ >::erase( const_iterator first, const_iterator last )
 }
 
 template < typename value_type_ >
-inline void
+void
 BlockVector< value_type_ >::print_blocks() const
 {
   std::cerr << "this: \t\t" << this << "\n";
   std::cerr << "finish block_vector: \t" << finish_.block_vector_ << "\n";
   std::cerr << "Blockmap size: " << blockmap_.size() << "\n";
-  std::cerr << "Finish block: " << finish_.block_index_ << "\n";
   std::cerr << "==============================================\n";
   auto seq_iter = begin();
   for ( size_t block_index = 0; block_index != blockmap_.size() and seq_iter != end(); ++block_index )
@@ -462,6 +552,41 @@ BlockVector< value_type_ >::get_max_block_size() const
   return max_block_size;
 }
 
+template < typename value_type_ >
+inline typename BlockVector< value_type_ >::size_type
+BlockVector< value_type_ >::max_size() const
+{
+  throw nest::NotImplemented( "BlockVector max_size() is not implemented." );
+}
+
+template < typename value_type_ >
+inline typename BlockVector< value_type_ >::reverse_iterator
+BlockVector< value_type_ >::rbegin()
+{
+  throw nest::NotImplemented( "BlockVector rbegin() is not implemented." );
+}
+
+template < typename value_type_ >
+inline typename BlockVector< value_type_ >::reverse_iterator
+BlockVector< value_type_ >::rbegin() const
+{
+  throw nest::NotImplemented( "BlockVector rbegin() is not implemented." );
+}
+
+template < typename value_type_ >
+inline typename BlockVector< value_type_ >::reverse_iterator
+BlockVector< value_type_ >::rend()
+{
+  throw nest::NotImplemented( "BlockVector rend() is not implemented." );
+}
+
+template < typename value_type_ >
+inline typename BlockVector< value_type_ >::reverse_iterator
+BlockVector< value_type_ >::rend() const
+{
+  throw nest::NotImplemented( "BlockVector rend() is not implemented." );
+}
+
 /////////////////////////////////////////////////////////////
 //        BlockVector iterator method implementation       //
 /////////////////////////////////////////////////////////////
@@ -469,16 +594,16 @@ BlockVector< value_type_ >::get_max_block_size() const
 template < typename value_type_, typename ref_, typename ptr_ >
 inline bv_iterator< value_type_, ref_, ptr_ >::bv_iterator( const BlockVector< value_type_ >& block_vector )
   : block_vector_( &block_vector )
-  , block_index_( 0 )
-  , block_it_( block_vector_->blockmap_[ block_index_ ].begin() )
-  , current_block_end_( block_vector_->blockmap_[ block_index_ ].end() )
+  , block_vector_it_( block_vector_->blockmap_.begin() )
+  , block_it_( block_vector_it_->begin() )
+  , current_block_end_( block_vector_it_->end() )
 {
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
 inline bv_iterator< value_type_, ref_, ptr_ >::bv_iterator( const iterator& other )
   : block_vector_( other.block_vector_ )
-  , block_index_( other.block_index_ )
+  , block_vector_it_( other.block_vector_it_ )
   , block_it_( other.block_it_ )
   , current_block_end_( other.current_block_end_ )
 {
@@ -486,50 +611,72 @@ inline bv_iterator< value_type_, ref_, ptr_ >::bv_iterator( const iterator& othe
 
 template < typename value_type_, typename ref_, typename ptr_ >
 inline bv_iterator< value_type_, ref_, ptr_ >::bv_iterator( const BlockVector< value_type_ >* block_vector,
-  const size_t block_index,
+  const typename std::vector< std::vector< value_type_ > >::const_iterator block_vector_it,
   const typename std::vector< value_type_ >::const_iterator block_it,
   const typename std::vector< value_type_ >::const_iterator current_block_end )
   : block_vector_( block_vector )
-  , block_index_( block_index )
+  , block_vector_it_( block_vector_it )
   , block_it_( block_it )
   , current_block_end_( current_block_end )
 {
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ >& bv_iterator< value_type_, ref_, ptr_ >::operator++()
+inline bv_iterator< value_type_, ref_, ptr_ >&
+bv_iterator< value_type_, ref_, ptr_ >::operator++()
 {
   ++block_it_;
   if ( block_it_ == current_block_end_ )
   {
-    ++block_index_;
-    block_it_ = block_vector_->blockmap_[ block_index_ ].begin();
-    current_block_end_ = block_vector_->blockmap_[ block_index_ ].end();
+    ++block_vector_it_;
+    // If we are at end() now, we are outside of the blockmap, which is
+    // undefined. The outer iterator can be in an undefined position that
+    // will compare as safely larger or equal to end(), but we don't set
+    // the inner iterators.
+    if ( block_vector_it_ != block_vector_->blockmap_.end() )
+    {
+      block_it_ = block_vector_it_->begin();
+      current_block_end_ = block_vector_it_->end();
+    }
   }
   return *this;
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ >& bv_iterator< value_type_, ref_, ptr_ >::operator--()
+inline bv_iterator< value_type_, ref_, ptr_ >&
+bv_iterator< value_type_, ref_, ptr_ >::operator--()
 {
   // If we are still within the block, we can just decrement the block iterator.
   // If not, we need to switch to the previous block.
-  if ( block_it_ != block_vector_->blockmap_[ block_index_ ].begin() )
+  if ( block_it_ != block_vector_it_->begin() )
   {
     --block_it_;
   }
+  else if ( block_vector_it_ != block_vector_->blockmap_.begin() )
+  {
+    --block_vector_it_;
+    current_block_end_ = block_vector_it_->end();
+    block_it_ = current_block_end_ - 1;
+  }
   else
   {
-    --block_index_;
-    current_block_end_ = block_vector_->blockmap_[ block_index_ ].end();
-    block_it_ = current_block_end_ - 1;
+    // We are before begin(), which is undefined. We mark this by moving the
+    // outer iterator to an undefined position that will compare as safely smaller
+    // than begin(). According to C++17 Standard, §27.2.6, decrementing an
+    // iterator that is equal to begin() yields undefined behavior.
+    --block_vector_it_;
   }
   return *this;
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ >& bv_iterator< value_type_, ref_, ptr_ >::operator+=( difference_type val )
+inline bv_iterator< value_type_, ref_, ptr_ >&
+bv_iterator< value_type_, ref_, ptr_ >::operator+=( difference_type val )
 {
+  if ( val < 0 )
+  {
+    return operator-=( -val );
+  }
   for ( difference_type i = 0; i < val; ++i )
   {
     operator++();
@@ -538,8 +685,13 @@ inline bv_iterator< value_type_, ref_, ptr_ >& bv_iterator< value_type_, ref_, p
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ >& bv_iterator< value_type_, ref_, ptr_ >::operator-=( difference_type val )
+inline bv_iterator< value_type_, ref_, ptr_ >&
+bv_iterator< value_type_, ref_, ptr_ >::operator-=( difference_type val )
 {
+  if ( val < 0 )
+  {
+    return operator+=( -val );
+  }
   for ( difference_type i = 0; i < val; ++i )
   {
     operator--();
@@ -548,21 +700,24 @@ inline bv_iterator< value_type_, ref_, ptr_ >& bv_iterator< value_type_, ref_, p
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ > bv_iterator< value_type_, ref_, ptr_ >::operator+( difference_type val )
+inline bv_iterator< value_type_, ref_, ptr_ >
+bv_iterator< value_type_, ref_, ptr_ >::operator+( difference_type val ) const
 {
   bv_iterator tmp = *this;
   return tmp += val;
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ > bv_iterator< value_type_, ref_, ptr_ >::operator-( difference_type val )
+inline bv_iterator< value_type_, ref_, ptr_ >
+bv_iterator< value_type_, ref_, ptr_ >::operator-( difference_type val ) const
 {
   bv_iterator tmp = *this;
   return tmp -= val;
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bv_iterator< value_type_, ref_, ptr_ > bv_iterator< value_type_, ref_, ptr_ >::operator++( int )
+inline bv_iterator< value_type_, ref_, ptr_ >
+bv_iterator< value_type_, ref_, ptr_ >::operator++( int )
 {
   bv_iterator< value_type_, ref_, ptr_ > old( *this );
   ++( *this );
@@ -570,8 +725,17 @@ inline bv_iterator< value_type_, ref_, ptr_ > bv_iterator< value_type_, ref_, pt
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline typename bv_iterator< value_type_, ref_, ptr_ >::reference bv_iterator< value_type_, ref_, ptr_ >::
-operator*() const
+inline bv_iterator< value_type_, ref_, ptr_ >
+bv_iterator< value_type_, ref_, ptr_ >::operator--( int )
+{
+  bv_iterator< value_type_, ref_, ptr_ > old( *this );
+  --( *this );
+  return old;
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline typename bv_iterator< value_type_, ref_, ptr_ >::reference
+bv_iterator< value_type_, ref_, ptr_ >::operator*() const
 {
   // TODO: Using const_cast  to remove the constness isn't the most elegant
   // solution. There is probably a better way to do this.
@@ -579,8 +743,8 @@ operator*() const
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline typename bv_iterator< value_type_, ref_, ptr_ >::pointer bv_iterator< value_type_, ref_, ptr_ >::
-operator->() const
+inline typename bv_iterator< value_type_, ref_, ptr_ >::pointer
+bv_iterator< value_type_, ref_, ptr_ >::operator->() const
 {
   // TODO: Again, using const_cast  to remove the constness isn't the most
   // elegant solution. There is probably a better way to do this.
@@ -588,48 +752,98 @@ operator->() const
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline typename bv_iterator< value_type_, ref_, ptr_ >::difference_type bv_iterator< value_type_, ref_, ptr_ >::
-operator-( const iterator& other ) const
+inline typename bv_iterator< value_type_, ref_, ptr_ >::difference_type
+bv_iterator< value_type_, ref_, ptr_ >::operator-( const iterator& other ) const
 {
-  auto this_element_index = block_it_ - block_vector_->blockmap_[ block_index_ ].begin();
-  auto other_element_index = other.block_it_ - other.block_vector_->blockmap_[ other.block_index_ ].begin();
-  return ( block_index_ - other.block_index_ ) * max_block_size + ( this_element_index - other_element_index );
+  const auto this_element_index = block_it_ - block_vector_it_->begin();
+  const auto other_element_index = other.block_it_ - other.block_vector_it_->begin();
+  return ( block_vector_it_ - other.block_vector_it_ ) * max_block_size + ( this_element_index - other_element_index );
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline typename bv_iterator< value_type_, ref_, ptr_ >::difference_type bv_iterator< value_type_, ref_, ptr_ >::
-operator-( const const_iterator& other ) const
+inline typename bv_iterator< value_type_, ref_, ptr_ >::difference_type
+bv_iterator< value_type_, ref_, ptr_ >::operator-( const const_iterator& other ) const
 {
-  auto this_element_index = block_it_ - block_vector_->blockmap_[ block_index_ ].begin();
-  auto other_element_index = other.block_it_ - other.block_vector_->blockmap_[ other.block_index_ ].begin();
-  return ( block_index_ - other.block_index_ ) * max_block_size + ( this_element_index - other_element_index );
+  const auto this_element_index = block_it_ - block_vector_it_->begin();
+  const auto other_element_index = other.block_it_ - other.block_vector_it_->begin();
+  return ( block_vector_it_ - other.block_vector_it_ ) * max_block_size + ( this_element_index - other_element_index );
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bool bv_iterator< value_type_, ref_, ptr_ >::operator==(
-  const bv_iterator< value_type_, ref_, ptr_ >& rhs ) const
+inline typename bv_iterator< value_type_, ref_, ptr_ >::iterator&
+bv_iterator< value_type_, ref_, ptr_ >::operator=( const iterator& other )
 {
-  return ( block_index_ == rhs.block_index_ and block_it_ == rhs.block_it_ );
+  block_vector_ = other.block_vector_;
+  block_vector_it_ = other.block_vector_it_;
+  block_it_ = other.block_it_;
+  current_block_end_ = other.current_block_end_;
+  return *this;
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bool bv_iterator< value_type_, ref_, ptr_ >::operator!=(
-  const bv_iterator< value_type_, ref_, ptr_ >& rhs ) const
+inline typename bv_iterator< value_type_, ref_, ptr_ >::reference
+bv_iterator< value_type_, ref_, ptr_ >::operator[]( difference_type n ) const
 {
-  return ( block_index_ != rhs.block_index_ or block_it_ != rhs.block_it_ );
+  return *( *this + n );
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
-inline bool bv_iterator< value_type_, ref_, ptr_ >::operator<( const bv_iterator& rhs ) const
+inline bool
+bv_iterator< value_type_, ref_, ptr_ >::operator==( const bv_iterator< value_type_, ref_, ptr_ >& rhs ) const
 {
-  return ( block_index_ < rhs.block_index_ or ( block_index_ == rhs.block_index_ and block_it_ < rhs.block_it_ ) );
+  return ( block_vector_it_ == rhs.block_vector_it_ and block_it_ == rhs.block_it_ );
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline bool
+bv_iterator< value_type_, ref_, ptr_ >::operator!=( const bv_iterator< value_type_, ref_, ptr_ >& rhs ) const
+{
+  return ( block_vector_it_ != rhs.block_vector_it_ or block_it_ != rhs.block_it_ );
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline bool
+bv_iterator< value_type_, ref_, ptr_ >::operator<( const bv_iterator& rhs ) const
+{
+  return ( block_vector_it_ < rhs.block_vector_it_
+    or ( block_vector_it_ == rhs.block_vector_it_ and block_it_ < rhs.block_it_ ) );
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline bool
+bv_iterator< value_type_, ref_, ptr_ >::operator>( const bv_iterator& rhs ) const
+{
+  return ( block_vector_it_ > rhs.block_vector_it_
+    or ( block_vector_it_ == rhs.block_vector_it_ and block_it_ > rhs.block_it_ ) );
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline bool
+bv_iterator< value_type_, ref_, ptr_ >::operator<=( const bv_iterator& rhs ) const
+{
+  return operator<( rhs ) or operator==( rhs );
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline bool
+bv_iterator< value_type_, ref_, ptr_ >::operator>=( const bv_iterator& rhs ) const
+{
+  return operator>( rhs ) or operator==( rhs );
 }
 
 template < typename value_type_, typename ref_, typename ptr_ >
 inline typename bv_iterator< value_type_, ref_, ptr_ >::iterator
 bv_iterator< value_type_, ref_, ptr_ >::const_cast_() const
 {
-  return iterator( block_vector_, block_index_, block_it_, current_block_end_ );
+  return iterator( block_vector_, block_vector_it_, block_it_, current_block_end_ );
+}
+
+template < typename value_type_, typename ref_, typename ptr_ >
+inline bv_iterator< value_type_, ref_, ptr_ >
+operator+( typename bv_iterator< value_type_, ref_, ptr_ >::difference_type n,
+  bv_iterator< value_type_, ref_, ptr_ >& x )
+{
+  return x + n;
 }
 
 #endif /* BLOCK_VECTOR_H_ */

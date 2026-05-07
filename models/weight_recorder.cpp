@@ -22,151 +22,121 @@
 
 #include "weight_recorder.h"
 
-// C++ includes:
-#include <numeric>
 
 // Includes from libnestutil:
 #include "compose.hpp"
-#include "logging.h"
 
 // Includes from nestkernel:
 #include "event_delivery_manager_impl.h"
 #include "kernel_manager.h"
-#include "sibling_container.h"
+#include "model_manager_impl.h"
+#include "nest_impl.h"
+#include "node_collection.h"
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
+void
+nest::register_weight_recorder( const std::string& name )
+{
+  register_node_model< weight_recorder >( name );
+}
 
-// record time, gid, weight and receiver gid
+// record time, node ID, weight and receiver node ID
 nest::weight_recorder::weight_recorder()
-  : DeviceNode()
-  , device_( *this, RecordingDevice::WEIGHT_RECORDER, "csv", true, true, true, true )
-  , user_set_precise_times_( false )
+  : RecordingDevice()
   , P_()
 {
 }
 
 nest::weight_recorder::weight_recorder( const weight_recorder& n )
-  : DeviceNode( n )
-  , device_( *this, n.device_ )
-  , user_set_precise_times_( n.user_set_precise_times_ )
+  : RecordingDevice( n )
   , P_( n.P_ )
 {
 }
 
+// We must initialize senders and targets here with empty NCs because
+// they will be returned by get_status()
 nest::weight_recorder::Parameters_::Parameters_()
-  : senders_()
-  , targets_()
-{
-}
-
-nest::weight_recorder::Parameters_::Parameters_( const Parameters_& p )
-  : senders_( p.senders_ )
-  , targets_( p.targets_ )
+  : senders_( new NodeCollectionPrimitive() )
+  , targets_( new NodeCollectionPrimitive() )
 {
 }
 
 void
-nest::weight_recorder::Parameters_::get( DictionaryDatum& d ) const
+nest::weight_recorder::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::senders ] = senders_;
-  ( *d )[ names::targets ] = targets_;
+  d[ names::senders ] = senders_;
+  d[ names::targets ] = targets_;
 }
 
 void
-nest::weight_recorder::Parameters_::set( const DictionaryDatum& d )
+nest::weight_recorder::Parameters_::set( const Dictionary& d )
 {
-  if ( d->known( names::senders ) )
+  auto update_nc = [ &d ]( NodeCollectionPTR& nc, const std::string& key )
   {
-    senders_ = getValue< std::vector< long > >( d->lookup( names::senders ) );
-    std::sort( senders_.begin(), senders_.end() );
-  }
-
-  if ( d->known( names::targets ) )
-  {
-    targets_ = getValue< std::vector< long > >( d->lookup( names::targets ) );
-    std::sort( targets_.begin(), targets_.end() );
-  }
-}
-
-void
-nest::weight_recorder::init_state_( const Node& np )
-{
-  const weight_recorder& wr = static_cast< const weight_recorder& >( np );
-  device_.init_state( wr.device_ );
-  init_buffers_();
-}
-
-void
-nest::weight_recorder::init_buffers_()
-{
-  device_.init_buffers();
-  B_.events_ = std::vector< WeightRecorderEvent >();
-}
-
-void
-nest::weight_recorder::calibrate()
-{
-  if ( kernel().event_delivery_manager.get_off_grid_communication() and not device_.is_precise_times_user_set() )
-  {
-    device_.set_precise_times( true );
-    std::string msg = String::compose(
-      "Precise neuron models exist: the property precise_times "
-      "of the %1 with gid %2 has been set to true",
-      get_name(),
-      get_gid() );
-
-    if ( device_.is_precision_user_set() )
+    if ( d.known( key ) )
     {
-      // if user explicitly set the precision, there is no need to do anything.
-      msg += ".";
-    }
-    else
-    {
-      // it makes sense to increase the precision if precise models are used.
-      device_.set_precision( 15 );
-      msg += ", precision has been set to 15.";
-    }
+      const auto value = d.at( key );
+      if ( std::holds_alternative< NodeCollectionPTR >( value ) )
+      {
+        nc = d.get< NodeCollectionPTR >( key );
+      }
+      else if ( std::holds_alternative< std::vector< long > >( value ) )
+      {
+        const std::vector< long >& nodes_long = d.get< std::vector< long > >( key );
+        std::vector< size_t > nodes_size_t;
+        nodes_size_t.reserve( nodes_long.size() );
+        std::copy( nodes_long.begin(), nodes_long.end(), std::back_inserter( nodes_size_t ) );
 
-    LOG( M_INFO, "weight_recoder::calibrate", msg );
-  }
+        nc = NodeCollection::create( nodes_size_t );
+      }
+      else
+      {
+        throw TypeMismatch( "NodeCollection", get_typename( d.at( key ) ) );
+      }
+    }
+  };
 
-  device_.calibrate();
+  update_nc( senders_, names::senders );
+  update_nc( targets_, names::targets );
 }
 
 void
-nest::weight_recorder::update( Time const&, const long from, const long to )
+nest::weight_recorder::pre_run_hook()
 {
-
-  for ( std::vector< WeightRecorderEvent >::iterator e = B_.events_.begin(); e != B_.events_.end(); ++e )
-  {
-    device_.record_event( *e );
-  }
-
-  // do not use swap here to clear, since we want to keep the reserved()
-  // memory for the next round
-  B_.events_.clear();
+  RecordingDevice::pre_run_hook(
+    { nest::names::weights }, { nest::names::targets, nest::names::receptors, nest::names::ports } );
 }
 
 void
-nest::weight_recorder::get_status( DictionaryDatum& d ) const
+nest::weight_recorder::update( Time const&, const long, const long )
+{
+}
+
+nest::RecordingDevice::Type
+nest::weight_recorder::get_type() const
+{
+  return RecordingDevice::WEIGHT_RECORDER;
+}
+
+void
+nest::weight_recorder::get_status( Dictionary& d ) const
 {
   // get the data from the device
-  device_.get_status( d );
+  RecordingDevice::get_status( d );
+
+  if ( is_model_prototype() )
+  {
+    return;  // no data to collect
+  }
 
   // if we are the device on thread 0, also get the data from the
   // siblings on other threads
   if ( get_thread() == 0 )
   {
-    const SiblingContainer* siblings = kernel().node_manager.get_thread_siblings( get_gid() );
-    std::vector< Node* >::const_iterator sibling;
-    for ( sibling = siblings->begin() + 1; sibling != siblings->end(); ++sibling )
+    const std::vector< Node* > siblings = kernel().node_manager.get_thread_siblings( get_node_id() );
+    std::vector< Node* >::const_iterator s;
+    for ( s = siblings.begin() + 1; s != siblings.end(); ++s )
     {
-      ( *sibling )->get_status( d );
+      ( *s )->get_status( d );
     }
   }
 
@@ -174,37 +144,34 @@ nest::weight_recorder::get_status( DictionaryDatum& d ) const
 }
 
 void
-nest::weight_recorder::set_status( const DictionaryDatum& d )
+nest::weight_recorder::set_status( const Dictionary& d )
 {
-  if ( d->known( names::precise_times ) )
-  {
-    user_set_precise_times_ = true;
-  }
+  Parameters_ ptmp = P_;
+  ptmp.set( d );
 
-  device_.set_status( d );
-
-  P_.set( d );
+  RecordingDevice::set_status( d );
+  P_ = ptmp;
 }
 
 
 void
 nest::weight_recorder::handle( WeightRecorderEvent& e )
 {
-  // accept spikes only if detector was active when spike was
-  // emitted
-  if ( device_.is_active( e.get_stamp() ) )
+  // accept spikes only if recorder was active when spike was emitted
+  if ( is_active( e.get_stamp() ) )
   {
     // P_senders_ is defined and sender is not in it
     // or P_targets_ is defined and receiver is not in it
-    if ( ( not P_.senders_.empty()
-           and not std::binary_search( P_.senders_.begin(), P_.senders_.end(), e.get_sender_gid() ) )
-      or ( not P_.targets_.empty()
-           and not std::binary_search( P_.targets_.begin(), P_.targets_.end(), e.get_receiver_gid() ) ) )
+    if ( ( P_.senders_->size() != 0 and not P_.senders_->contains( e.get_sender_node_id() ) )
+      or ( P_.targets_->size() != 0 and not P_.targets_->contains( e.get_receiver_node_id() ) ) )
     {
       return;
     }
 
-    WeightRecorderEvent* event = e.clone();
-    B_.events_.push_back( *event );
+    write( e,
+      { e.get_weight() },
+      { static_cast< long >( e.get_receiver_node_id() ),
+        static_cast< long >( e.get_rport() ),
+        static_cast< long >( e.get_port() ) } );
   }
 }

@@ -27,17 +27,19 @@
 // External includes:
 #include <music.hh>
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
-
 // Includes from libnestutil:
 #include "compose.hpp"
 #include "logging.h"
 
 // Includes from nestkernel:
 #include "kernel_manager.h"
+#include "nest_impl.h"
+
+void
+nest::register_music_message_in_proxy( const std::string& name )
+{
+  register_node_model< music_message_in_proxy >( name );
+}
 
 /* ----------------------------------------------------------------
  * Default constructors defining default parameters and state
@@ -46,13 +48,6 @@
 nest::music_message_in_proxy::Parameters_::Parameters_()
   : port_name_( "message_in" )
   , acceptable_latency_( 0.0 )
-{
-}
-
-nest::music_message_in_proxy::Parameters_::Parameters_( const Parameters_& op )
-  : port_name_( op.port_name_ )
-  , acceptable_latency_( op.acceptable_latency_ )
-
 {
 }
 
@@ -68,31 +63,31 @@ nest::music_message_in_proxy::State_::State_()
  * ---------------------------------------------------------------- */
 
 void
-nest::music_message_in_proxy::Parameters_::get( DictionaryDatum& d ) const
+nest::music_message_in_proxy::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::port_name ] = port_name_;
-  ( *d )[ names::acceptable_latency ] = acceptable_latency_;
+  d[ names::port_name ] = port_name_;
+  d[ names::acceptable_latency ] = acceptable_latency_;
 }
 
 void
-nest::music_message_in_proxy::Parameters_::set( const DictionaryDatum& d, State_& s )
+nest::music_message_in_proxy::Parameters_::set( const Dictionary& d, State_& s, Node* node )
 {
   if ( not s.published_ )
   {
-    updateValue< string >( d, names::port_name, port_name_ );
-    updateValue< double >( d, names::acceptable_latency, acceptable_latency_ );
+    d.update_value( names::port_name, port_name_ );
+    update_value_param( d, names::acceptable_latency, acceptable_latency_, node );
   }
 }
 
 void
-nest::music_message_in_proxy::State_::get( DictionaryDatum& d ) const
+nest::music_message_in_proxy::State_::get( Dictionary& d ) const
 {
-  ( *d )[ names::published ] = published_;
-  ( *d )[ names::port_width ] = port_width_;
+  d[ names::published ] = published_;
+  d[ names::port_width ] = port_width_;
 }
 
 void
-nest::music_message_in_proxy::State_::set( const DictionaryDatum&, const Parameters_& )
+nest::music_message_in_proxy::State_::set( const Dictionary&, const Parameters_&, Node* )
 {
 }
 
@@ -121,20 +116,12 @@ nest::music_message_in_proxy::music_message_in_proxy( const music_message_in_pro
  * ---------------------------------------------------------------- */
 
 void
-nest::music_message_in_proxy::init_state_( const Node& proto )
-{
-  const music_message_in_proxy& pr = downcast< music_message_in_proxy >( proto );
-
-  S_ = pr.S_;
-}
-
-void
 nest::music_message_in_proxy::init_buffers_()
 {
 }
 
 void
-nest::music_message_in_proxy::calibrate()
+nest::music_message_in_proxy::pre_run_hook()
 {
   // only publish the port once,
   if ( not S_.published_ )
@@ -171,7 +158,7 @@ nest::music_message_in_proxy::calibrate()
       P_.port_name_,
       S_.port_width_,
       P_.acceptable_latency_ );
-    LOG( M_INFO, "music_message_in_proxy::calibrate()", msg.c_str() );
+    LOG( VerbosityLevel::INFO, "music_message_in_proxy::pre_run_hook()", msg.c_str() );
   }
 }
 

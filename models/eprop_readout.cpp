@@ -1,0 +1,369 @@
+/*
+ *  eprop_readout.cpp
+ *
+ *  This file is part of NEST.
+ *
+ *  Copyright (C) 2004 The NEST Initiative
+ *
+ *  NEST is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  NEST is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with NEST.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+// nest models
+#include "eprop_readout.h"
+
+// C++
+#include <limits>
+
+// libnestutil
+#include "dict_util.h"
+#include "numerics.h"
+
+// nestkernel
+#include "exceptions.h"
+#include "kernel_manager.h"
+#include "nest_impl.h"
+#include "universal_data_logger_impl.h"
+
+namespace nest
+{
+
+void
+register_eprop_readout( const std::string& name )
+{
+  register_node_model< eprop_readout >( name );
+}
+
+/* ----------------------------------------------------------------
+ * Recordables map
+ * ---------------------------------------------------------------- */
+
+RecordablesMap< eprop_readout > eprop_readout::recordablesMap_;
+
+template <>
+void
+RecordablesMap< eprop_readout >::create()
+{
+  insert_( names::eprop_history_duration, &eprop_readout::get_eprop_history_duration );
+  insert_( names::error_signal, &eprop_readout::get_error_signal_ );
+  insert_( names::readout_signal, &eprop_readout::get_readout_signal_ );
+  insert_( names::target_signal, &eprop_readout::get_target_signal_ );
+  insert_( names::V_m, &eprop_readout::get_v_m_ );
+}
+
+/* ----------------------------------------------------------------
+ * Default constructors for parameters, state, and buffers
+ * ---------------------------------------------------------------- */
+
+eprop_readout::Parameters_::Parameters_()
+  : C_m_( 250.0 )
+  , E_L_( 0.0 )
+  , I_e_( 0.0 )
+  , tau_m_( 10.0 )
+  , V_min_( -std::numeric_limits< double >::max() )
+{
+}
+
+eprop_readout::State_::State_()
+  : error_signal_( 0.0 )
+  , readout_signal_( 0.0 )
+  , target_signal_( 0.0 )
+  , learning_window_signal_( 0.0 )
+  , i_in_( 0.0 )
+  , v_m_( 0.0 )
+  , z_in_( 0.0 )
+{
+}
+
+eprop_readout::Buffers_::Buffers_( eprop_readout& n )
+  : logger_( n )
+{
+}
+
+eprop_readout::Buffers_::Buffers_( const Buffers_&, eprop_readout& n )
+  : logger_( n )
+{
+}
+
+/* ----------------------------------------------------------------
+ * Getter and setter functions for parameters and state
+ * ---------------------------------------------------------------- */
+
+void
+eprop_readout::Parameters_::get( Dictionary& d ) const
+{
+  d[ names::C_m ] = C_m_;
+  d[ names::E_L ] = E_L_;
+  d[ names::I_e ] = I_e_;
+  d[ names::tau_m ] = tau_m_;
+  d[ names::V_min ] = V_min_ + E_L_;
+}
+
+double
+eprop_readout::Parameters_::set( const Dictionary& d, Node* node )
+{
+  // if leak potential is changed, adjust all variables defined relative to it
+  const double ELold = E_L_;
+  update_value_param( d, names::E_L, E_L_, node );
+  const double delta_EL = E_L_ - ELold;
+
+  V_min_ -= update_value_param( d, names::V_min, V_min_, node ) ? E_L_ : delta_EL;
+
+  update_value_param( d, names::C_m, C_m_, node );
+  update_value_param( d, names::I_e, I_e_, node );
+  update_value_param( d, names::tau_m, tau_m_, node );
+
+  if ( C_m_ <= 0 )
+  {
+    throw BadProperty( "Membrane capacitance C_m > 0 required." );
+  }
+
+  if ( tau_m_ <= 0 )
+  {
+    throw BadProperty( "Membrane time constant tau_m > 0 required." );
+  }
+  return delta_EL;
+}
+
+void
+eprop_readout::State_::get( Dictionary& d, const Parameters_& p ) const
+{
+  d[ names::V_m ] = v_m_ + p.E_L_;
+  d[ names::error_signal ] = error_signal_;
+  d[ names::readout_signal ] = readout_signal_;
+  d[ names::target_signal ] = target_signal_;
+}
+
+void
+eprop_readout::State_::set( const Dictionary& d, const Parameters_& p, double delta_EL, Node* node )
+{
+  v_m_ -= update_value_param( d, names::V_m, v_m_, node ) ? p.E_L_ : delta_EL;
+}
+
+/* ----------------------------------------------------------------
+ * Default and copy constructor for node
+ * ---------------------------------------------------------------- */
+
+eprop_readout::eprop_readout()
+  : EpropArchivingNodeReadout()
+  , P_()
+  , S_()
+  , B_( *this )
+{
+  recordablesMap_.create();
+}
+
+eprop_readout::eprop_readout( const eprop_readout& n )
+  : EpropArchivingNodeReadout( n )
+  , P_( n.P_ )
+  , S_( n.S_ )
+  , B_( n.B_, *this )
+{
+}
+
+/* ----------------------------------------------------------------
+ * Node initialization functions
+ * ---------------------------------------------------------------- */
+
+void
+eprop_readout::init_buffers_()
+{
+  B_.spikes_.clear();    // includes resize
+  B_.currents_.clear();  // includes resize
+  B_.logger_.reset();    // includes resize
+}
+
+void
+eprop_readout::pre_run_hook()
+{
+  B_.logger_.init();  // ensures initialization in case multimeter connected after Simulate
+
+  const double dt = Time::get_resolution().get_ms();
+
+  V_.P_v_m_ = std::exp( -dt / P_.tau_m_ );
+  V_.P_i_in_ = P_.tau_m_ / P_.C_m_ * ( 1.0 - V_.P_v_m_ );
+}
+
+/* ----------------------------------------------------------------
+ * Update function
+ * ---------------------------------------------------------------- */
+
+void
+eprop_readout::update( Time const& origin, const long from, const long to )
+{
+  const size_t buffer_size = kernel().connection_manager.get_min_delay();
+
+  std::vector< double > error_signal_buffer( buffer_size, 0.0 );
+
+  for ( long lag = from; lag < to; ++lag )
+  {
+    const long t = origin.get_steps() + lag;
+
+    S_.z_in_ = B_.spikes_.get_value( lag );
+
+    S_.v_m_ = V_.P_i_in_ * S_.i_in_ + S_.z_in_ + V_.P_v_m_ * S_.v_m_;
+    S_.v_m_ = std::max( S_.v_m_, P_.V_min_ );
+
+    S_.readout_signal_ = S_.v_m_ + P_.E_L_;
+    S_.error_signal_ = S_.readout_signal_ - S_.target_signal_;
+
+    S_.target_signal_ *= S_.learning_window_signal_;
+    S_.readout_signal_ *= S_.learning_window_signal_;
+    S_.error_signal_ *= S_.learning_window_signal_;
+
+    error_signal_buffer[ lag ] = S_.error_signal_;
+
+    append_new_eprop_history_entry( t );
+    write_error_signal_to_history( t, S_.error_signal_ );
+
+    S_.i_in_ = B_.currents_.get_value( lag ) + P_.I_e_;
+
+    B_.logger_.record_data( t );
+  }
+
+  LearningSignalConnectionEvent error_signal_event;
+  error_signal_event.set_coeffarray( error_signal_buffer );
+  kernel().event_delivery_manager.send_secondary( *this, error_signal_event );
+
+  return;
+}
+
+/* ----------------------------------------------------------------
+ * Event handling functions
+ * ---------------------------------------------------------------- */
+
+void
+eprop_readout::handle( DelayedRateConnectionEvent& e )
+{
+  const size_t rport = e.get_rport();
+  assert( rport < SUP_RATE_RECEPTOR );
+
+  auto it = e.begin();
+  assert( it != e.end() );
+
+  const double signal = e.get_weight() * e.get_coeffvalue( it );
+  if ( rport == LEARNING_WINDOW_SIG )
+  {
+    S_.learning_window_signal_ = signal;
+  }
+  else if ( rport == TARGET_SIG )
+  {
+    S_.target_signal_ = signal;
+  }
+
+  assert( it == e.end() );
+}
+
+void
+eprop_readout::handle( SpikeEvent& e )
+{
+  assert( e.get_delay_steps() > 0 );
+
+  B_.spikes_.add_value(
+    e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), e.get_weight() * e.get_multiplicity() );
+}
+
+void
+eprop_readout::handle( CurrentEvent& e )
+{
+  assert( e.get_delay_steps() > 0 );
+
+  B_.currents_.add_value(
+    e.get_rel_delivery_steps( kernel().simulation_manager.get_slice_origin() ), e.get_weight() * e.get_current() );
+}
+
+void
+eprop_readout::handle( DataLoggingRequest& e )
+{
+  B_.logger_.handle( e );
+}
+
+void
+eprop_readout::compute_gradient( const long t_spike,
+  const long t_spike_previous,
+  double& z_previous_buffer,
+  double& z_bar,
+  double& e_bar,
+  double& e_bar_reg,
+  double& epsilon,
+  double& weight,
+  const CommonSynapseProperties& cp,
+  WeightOptimizer* optimizer,
+  const bool is_flush_event,
+  const bool previous_was_flush_event,
+  double& gradient,
+  long& remaining_steps_until_cutoff,
+  long& decay_steps )
+{
+  const auto& ecp = static_cast< const EpropSynapseCommonProperties& >( cp );
+  const auto& opt_cp = *ecp.optimizer_cp_;
+  const bool optimize_each_step = opt_cp.optimize_each_step_;
+
+  const long isi_steps = t_spike - t_spike_previous;
+  remaining_steps_until_cutoff = previous_was_flush_event ? remaining_steps_until_cutoff : get_eprop_isi_trace_cutoff();
+
+  double z_current_buffer = 0.0;  // spike that triggered current computation
+  if ( not previous_was_flush_event )
+  {
+    gradient = 0.0;  // gradient used for the weight update (to be calculated)
+    z_current_buffer = 1.0;
+  }
+
+  const long t_begin = t_spike_previous - 1;
+  auto eprop_hist_it = get_eprop_history( t_begin );
+  const long t_steps = std::min( remaining_steps_until_cutoff, isi_steps );
+  const long t_end = t_begin + t_steps;
+
+  for ( long t = t_begin; t < t_end; ++t, ++eprop_hist_it )
+  {
+    require_eprop_history_entry( eprop_hist_it, t );
+
+    const double z = z_previous_buffer;  // spiking variable
+    z_previous_buffer = z_current_buffer;
+    z_current_buffer = 0.0;
+
+    const double E = eprop_hist_it->error_signal_;  // error signal
+
+    z_bar = V_.P_v_m_ * z_bar + z;
+    const double gradient_increment = E * z_bar;
+
+    if ( optimize_each_step )
+    {
+      gradient = gradient_increment;
+      weight = optimizer->optimized_weight( opt_cp, t + 1, gradient, weight );
+    }
+    else
+    {
+      gradient += gradient_increment;
+    }
+  }
+
+  remaining_steps_until_cutoff -= t_steps;
+  const long remaining_steps_until_event = isi_steps - t_steps;
+
+  decay_steps += remaining_steps_until_event;
+
+  if ( not is_flush_event and decay_steps > 0 )
+  {
+    z_bar *= std::pow( V_.P_v_m_, decay_steps );
+    decay_steps = 0;
+  }
+
+  if ( not is_flush_event and not optimize_each_step )
+  {
+    weight = optimizer->optimized_weight( opt_cp, t_end + remaining_steps_until_event, gradient, weight );
+  }
+}
+
+}  // namespace nest

@@ -23,9 +23,8 @@
 #ifndef CONNECTION_ID_H
 #define CONNECTION_ID_H
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "dictutils.h"
+#include "dictionary.h"
+
 
 namespace nest
 {
@@ -33,50 +32,47 @@ namespace nest
 class ConnectionID
 {
 public:
-  ConnectionID()
-  {
-  }
-  ConnectionID( long source_gid, long target_gid, long target_thread, long synapse_modelid, long port );
-  ConnectionID( long source_gid, long target_thread, long synapse_modelid, long port );
-  ConnectionID( const ConnectionID& );
+  ConnectionID();
+  ConnectionID( long source_node_id, long target_node_id, long target_thread, long synapse_modelid, long port );
+  ConnectionID( long source_node_id, long target_thread, long synapse_modelid, long port );
+  ConnectionID( const ConnectionID& ) = default;
 
-  DictionaryDatum get_dict() const;
-  ArrayDatum to_ArrayDatum() const;
+  Dictionary get_dict() const;
   bool operator==( const ConnectionID& c ) const;
   void print_me( std::ostream& out ) const;
-  long get_source_gid() const;
-  long get_target_gid() const;
+  long get_source_node_id() const;
+  long get_target_node_id() const;
   long get_target_thread() const;
   long get_synapse_model_id() const;
   long get_port() const;
 
 protected:
-  long source_gid_;
-  long target_gid_;
+  long source_node_id_;
+  long target_node_id_;
   long target_thread_;
   long synapse_modelid_;
   long port_;
 };
 
-inline ConnectionID::ConnectionID( const ConnectionID& cid )
-  : source_gid_( cid.source_gid_ )
-  , target_gid_( cid.target_gid_ )
-  , target_thread_( cid.target_thread_ )
-  , synapse_modelid_( cid.synapse_modelid_ )
-  , port_( cid.port_ )
+inline ConnectionID::ConnectionID()
+  : source_node_id_( -1 )
+  , target_node_id_( -1 )
+  , target_thread_( -1 )
+  , synapse_modelid_( -1 )
+  , port_( -1 )
 {
 }
 
 inline long
-ConnectionID::get_source_gid() const
+ConnectionID::get_source_node_id() const
 {
-  return source_gid_;
+  return source_node_id_;
 }
 
 inline long
-ConnectionID::get_target_gid() const
+ConnectionID::get_target_node_id() const
 {
-  return target_gid_;
+  return target_node_id_;
 }
 
 inline long
@@ -97,6 +93,6 @@ ConnectionID::get_port() const
   return port_;
 }
 
-} // namespace
+}  // namespace
 
 #endif /* #ifndef CONNECTION_ID_H */

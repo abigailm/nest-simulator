@@ -23,29 +23,33 @@
 #include "noise_generator.h"
 
 // Includes from libnestutil:
+#include "compose.hpp"
+#include "dict_util.h"
 #include "logging.h"
 #include "numerics.h"
 
 // Includes from nestkernel:
 #include "event_delivery_manager_impl.h"
 #include "kernel_manager.h"
+#include "nest_impl.h"
 #include "universal_data_logger_impl.h"
 
-// Includes from sli:
-#include "dict.h"
-#include "dictutils.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
 
 namespace nest
 {
+void
+register_noise_generator( const std::string& name )
+{
+  register_node_model< noise_generator >( name );
+}
+
 RecordablesMap< noise_generator > noise_generator::recordablesMap_;
 
 template <>
 void
 RecordablesMap< noise_generator >::create()
 {
-  insert_( Name( names::I ), &noise_generator::get_I_avg_ );
+  insert_( names::I, &noise_generator::get_I_avg_ );
 }
 }
 
@@ -54,12 +58,12 @@ RecordablesMap< noise_generator >::create()
  * ---------------------------------------------------------------- */
 
 nest::noise_generator::Parameters_::Parameters_()
-  : mean_( 0.0 )    // pA
-  , std_( 0.0 )     // pA / sqrt(s)
-  , std_mod_( 0.0 ) // pA / sqrt(s)
-  , freq_( 0.0 )    // Hz
-  , phi_deg_( 0.0 ) // degree
-  , dt_( Time::ms( 1.0 ) )
+  : mean_( 0.0 )     // pA
+  , std_( 0.0 )      // pA / sqrt(s)
+  , std_mod_( 0.0 )  // pA / sqrt(s)
+  , freq_( 0.0 )     // Hz
+  , phi_deg_( 0.0 )  // degree
+  , dt_( get_default_dt() )
   , num_targets_( 0 )
 {
 }
@@ -71,14 +75,20 @@ nest::noise_generator::Parameters_::Parameters_( const Parameters_& p )
   , freq_( p.freq_ )
   , phi_deg_( p.phi_deg_ )
   , dt_( p.dt_ )
-  , num_targets_( 0 ) // we do not copy connections
+  , num_targets_( 0 )  // we do not copy connections
 {
-  // do not check validity of dt_ here, otherwise we cannot copy
-  // to temporary in set(); see node copy c'tor
-  dt_.calibrate();
+  if ( dt_.is_step() )
+  {
+    dt_.calibrate();
+  }
+  else
+  {
+    dt_ = get_default_dt();
+  }
 }
 
-nest::noise_generator::Parameters_& nest::noise_generator::Parameters_::operator=( const Parameters_& p )
+nest::noise_generator::Parameters_&
+nest::noise_generator::Parameters_::operator=( const Parameters_& p )
 {
   if ( this == &p )
   {
@@ -97,18 +107,20 @@ nest::noise_generator::Parameters_& nest::noise_generator::Parameters_::operator
 
 nest::noise_generator::State_::State_()
   : y_0_( 0.0 )
-  , y_1_( 0.0 )   // pA
-  , I_avg_( 0.0 ) // pA
+  , y_1_( 0.0 )    // pA
+  , I_avg_( 0.0 )  // pA
 {
 }
 
 nest::noise_generator::Buffers_::Buffers_( noise_generator& n )
-  : logger_( n )
+  : next_step_( 0 )
+  , logger_( n )
 {
 }
 
-nest::noise_generator::Buffers_::Buffers_( const Buffers_&, noise_generator& n )
-  : logger_( n )
+nest::noise_generator::Buffers_::Buffers_( const Buffers_& b, noise_generator& n )
+  : next_step_( b.next_step_ )
+  , logger_( n )
 {
 }
 
@@ -117,33 +129,33 @@ nest::noise_generator::Buffers_::Buffers_( const Buffers_&, noise_generator& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::noise_generator::Parameters_::get( DictionaryDatum& d ) const
+nest::noise_generator::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::mean ] = mean_;
-  ( *d )[ names::std ] = std_;
-  ( *d )[ names::std_mod ] = std_mod_;
-  ( *d )[ names::dt ] = dt_.get_ms();
-  ( *d )[ names::phase ] = phi_deg_;
-  ( *d )[ names::frequency ] = freq_;
+  d[ names::mean ] = mean_;
+  d[ names::std ] = std_;
+  d[ names::std_mod ] = std_mod_;
+  d[ names::dt ] = dt_.get_ms();
+  d[ names::phase ] = phi_deg_;
+  d[ names::frequency ] = freq_;
 }
 
 void
-nest::noise_generator::State_::get( DictionaryDatum& d ) const
+nest::noise_generator::State_::get( Dictionary& d ) const
 {
-  ( *d )[ names::y_0 ] = y_0_;
-  ( *d )[ names::y_1 ] = y_1_;
+  d[ names::y_0 ] = y_0_;
+  d[ names::y_1 ] = y_1_;
 }
 
 void
-nest::noise_generator::Parameters_::set( const DictionaryDatum& d, const noise_generator& n )
+nest::noise_generator::Parameters_::set( const Dictionary& d, const noise_generator& n, Node* node )
 {
-  updateValue< double >( d, names::mean, mean_ );
-  updateValue< double >( d, names::std, std_ );
-  updateValue< double >( d, names::std_mod, std_mod_ );
-  updateValue< double >( d, names::frequency, freq_ );
-  updateValue< double >( d, names::phase, phi_deg_ );
+  update_value_param( d, names::mean, mean_, node );
+  update_value_param( d, names::std, std_, node );
+  update_value_param( d, names::std_mod, std_mod_, node );
+  update_value_param( d, names::frequency, freq_, node );
+  update_value_param( d, names::phase, phi_deg_, node );
   double dt;
-  if ( updateValue< double >( d, names::dt, dt ) )
+  if ( update_value_param( d, names::dt, dt, node ) )
   {
     dt_ = Time::ms( dt );
   }
@@ -174,30 +186,20 @@ nest::noise_generator::Parameters_::set( const DictionaryDatum& d, const noise_g
  * ---------------------------------------------------------------- */
 
 nest::noise_generator::noise_generator()
-  : DeviceNode()
-  , device_()
+  : StimulationDevice()
   , P_()
   , S_()
   , B_( *this )
 {
   recordablesMap_.create();
-  if ( not P_.dt_.is_step() )
-  {
-    throw InvalidDefaultResolution( get_name(), names::dt, P_.dt_ );
-  }
 }
 
 nest::noise_generator::noise_generator( const noise_generator& n )
-  : DeviceNode( n )
-  , device_( n.device_ )
+  : StimulationDevice( n )
   , P_( n.P_ )
   , S_( n.S_ )
   , B_( n.B_, *this )
 {
-  if ( not P_.dt_.is_step() )
-  {
-    throw InvalidTimeInModel( get_name(), names::dt, P_.dt_ );
-  }
 }
 
 
@@ -206,17 +208,15 @@ nest::noise_generator::noise_generator( const noise_generator& n )
  * ---------------------------------------------------------------- */
 
 void
-nest::noise_generator::init_state_( const Node& proto )
+nest::noise_generator::init_state_()
 {
-  const noise_generator& pr = downcast< noise_generator >( proto );
-
-  device_.init_state( pr.device_ );
+  StimulationDevice::init_state();
 }
 
 void
 nest::noise_generator::init_buffers_()
 {
-  device_.init_buffers();
+  StimulationDevice::init_buffers();
   B_.logger_.reset();
 
   B_.next_step_ = 0;
@@ -225,14 +225,16 @@ nest::noise_generator::init_buffers_()
 }
 
 void
-nest::noise_generator::calibrate()
+nest::noise_generator::pre_run_hook()
 {
   B_.logger_.init();
 
-  device_.calibrate();
+  StimulationDevice::pre_run_hook();
   if ( P_.num_targets_ != B_.amps_.size() )
   {
-    LOG( M_INFO, "noise_generator::calibrate()", "The number of targets has changed, drawing new amplitudes." );
+    LOG( VerbosityLevel::INFO,
+      "noise_generator::pre_run_hook()",
+      "The number of targets has changed, drawing new amplitudes." );
     init_buffers_();
   }
 
@@ -261,10 +263,10 @@ nest::noise_generator::calibrate()
  * Update function and event hook
  * ---------------------------------------------------------------- */
 
-nest::port
-nest::noise_generator::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
+size_t
+nest::noise_generator::send_test_event( Node& target, size_t receptor_type, synindex syn_id, bool dummy_target )
 {
-  device_.enforce_single_syn_type( syn_id );
+  StimulationDevice::enforce_single_syn_type( syn_id );
 
   if ( dummy_target )
   {
@@ -276,8 +278,8 @@ nest::noise_generator::send_test_event( Node& target, rport receptor_type, synin
   {
     CurrentEvent e;
     e.set_sender( *this );
-    const port p = target.handles_test_event( e, receptor_type );
-    if ( p != invalid_port_ and not is_model_prototype() )
+    const size_t p = target.handles_test_event( e, receptor_type );
+    if ( p != invalid_port and not is_model_prototype() )
     {
       ++P_.num_targets_;
     }
@@ -291,9 +293,6 @@ nest::noise_generator::send_test_event( Node& target, rport receptor_type, synin
 void
 nest::noise_generator::update( Time const& origin, const long from, const long to )
 {
-  assert( to >= 0 && ( delay ) from < kernel().connection_manager.get_min_delay() );
-  assert( from < to );
-
   const long start = origin.get_steps();
 
   for ( long offs = from; offs < to; ++offs )
@@ -302,7 +301,7 @@ nest::noise_generator::update( Time const& origin, const long from, const long t
 
     const long now = start + offs;
 
-    if ( not device_.is_active( Time::step( now ) ) )
+    if ( not StimulationDevice::is_active( Time::step( now ) ) )
     {
       B_.logger_.record_data( origin.get_steps() + offs );
       continue;
@@ -319,20 +318,20 @@ nest::noise_generator::update( Time const& origin, const long from, const long t
     if ( now >= B_.next_step_ )
     {
       // compute new currents
-      for ( AmpVec_::iterator it = B_.amps_.begin(); it != B_.amps_.end(); ++it )
+      for ( double& amp : B_.amps_ )
       {
-        *it = P_.mean_
+        amp = P_.mean_
           + std::sqrt( P_.std_ * P_.std_ + S_.y_1_ * P_.std_mod_ * P_.std_mod_ )
-            * V_.normal_dev_( kernel().rng_manager.get_rng( get_thread() ) );
+            * V_.normal_dist_( get_vp_specific_rng( get_thread() ) );
       }
       // use now as reference, in case we woke up from inactive period
       B_.next_step_ = now + V_.dt_steps_;
     }
 
     // record values
-    for ( AmpVec_::iterator it = B_.amps_.begin(); it != B_.amps_.end(); ++it )
+    for ( double& amp : B_.amps_ )
     {
-      S_.I_avg_ += *it;
+      S_.I_avg_ += amp;
     }
     S_.I_avg_ /= std::max( 1, int( B_.amps_.size() ) );
     B_.logger_.record_data( origin.get_steps() + offs );
@@ -346,10 +345,10 @@ void
 nest::noise_generator::event_hook( DSCurrentEvent& e )
 {
   // get port number
-  const port prt = e.get_port();
+  const size_t prt = e.get_port();
 
   // we handle only one port here, get reference to vector elem
-  assert( 0 <= prt && static_cast< size_t >( prt ) < B_.amps_.size() );
+  assert( prt < B_.amps_.size() );
 
   e.set_current( B_.amps_[ prt ] );
   e.get_receiver().handle( e );
@@ -359,4 +358,52 @@ void
 nest::noise_generator::handle( DataLoggingRequest& e )
 {
   B_.logger_.handle( e );
+}
+
+/* ----------------------------------------------------------------
+ * Other functions
+ * ---------------------------------------------------------------- */
+
+void
+nest::noise_generator::set_data_from_stimulation_backend( std::vector< double >& input_param )
+{
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
+  ptmp.num_targets_ = P_.num_targets_;
+
+  // For the input backend
+  if ( not input_param.empty() )
+  {
+    if ( input_param.size() != 5 )
+    {
+      throw BadParameterValue(
+        "The size of the data for the noise_generator needs to be 5 [mean, std, std_mod, frequency, phase]." );
+    }
+    Dictionary d;
+    d[ names::mean ] = input_param[ 0 ];
+    d[ names::std ] = input_param[ 1 ];
+    d[ names::std_mod ] = input_param[ 2 ];
+    d[ names::frequency ] = input_param[ 3 ];
+    d[ names::phase ] = input_param[ 4 ];
+    ptmp.set( d, *this, this );
+  }
+
+  // if we get here, temporary contains consistent set of properties
+  P_ = ptmp;
+  P_.num_targets_ = ptmp.num_targets_;
+}
+
+void
+nest::noise_generator::calibrate_time( const TimeConverter& tc )
+{
+  if ( P_.dt_.is_step() )
+  {
+    P_.dt_ = tc.from_old_tics( P_.dt_.get_tics() );
+  }
+  else
+  {
+    const double old = P_.dt_.get_ms();
+    P_.dt_ = P_.get_default_dt();
+    std::string msg = String::compose( "Default for dt changed from %1 to %2 ms", old, P_.dt_.get_ms() );
+    LOG( VerbosityLevel::INFO, get_name(), msg );
+  }
 }

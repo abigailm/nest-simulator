@@ -23,125 +23,172 @@
 #ifndef SINUSOIDAL_POISSON_GENERATOR_H
 #define SINUSOIDAL_POISSON_GENERATOR_H
 
-// Includes from librandom:
-#include "poisson_randomdev.h"
-
 // Includes from nestkernel:
 #include "connection.h"
 #include "device_node.h"
 #include "event.h"
 #include "nest_types.h"
-#include "stimulating_device.h"
+#include "random_generators.h"
+#include "stimulation_device.h"
 #include "universal_data_logger.h"
 
 namespace nest
 {
 
-/** @BeginDocumentation
-@ingroup Devices
-@ingroup generator
+/* BeginUserDocs: device, generator
 
-Name: sinusoidal_poisson_generator - Generates sinusoidally modulated Poisson
-                                     spike trains.
+Short description
++++++++++++++++++
 
-Description:
+Generate sinusoidally modulated Poisson spike trains
 
-sinusoidal_poisson_generator generates sinusoidally modulated Poisson spike
+Description
++++++++++++
+
+``sinusoidal_poisson_generator`` generates sinusoidally modulated Poisson spike
 trains. By default, each target of the generator will receive a different
 spike train.
 
 The instantaneous rate of the process is given by
 
-@f[  f(t) = max(0, rate + amplitude \sin ( 2 \pi frequency t + phase
-     * \pi/180 )) >= 0
-@f]
-Parameters:
+.. math::
 
-The following parameters can be set in the status dictionary:
+  f(t) = \mathrm{max} \left(0, \mathrm{rate} + \mathrm{amplitude} \cdot \sin
+     \left( 2 \pi \cdot \mathrm{frequency} \cdot t + \mathrm{phase}
+     \cdot \frac{\pi}{180} \right) \right) >= 0
 
-\verbatim embed:rst
-======================== ======= ==============================================
- rate                    real    Mean firing rate in spikes/second,
-                                 default: 0 s^-1
- amplitude               real    Firing rate modulation amplitude in
-                                 spikes/second, default: 0 s^-1
- frequency               Hz      Modulation frequency, default: 0 Hz
- phase                   real    Modulation phase in degree [0-360], default: 0
- individual_spike_trains boolean See note below, default: true
-======================== ======= ==============================================
-\endverbatim
+.. note::
 
-Remarks:
-- If amplitude > rate, firing rate is cut off at zero. In this case, the mean
-  firing rate will be less than rate.
-- The state of the generator is reset on calibration.
-- The generator does not support precise spike timing.
-- You can use the multimeter to sample the rate of the generator.
-- The generator will create different trains if run at different
-  temporal resolutions.
+   - If :math:`\mathrm{amplitude} > \mathrm{rate}`, firing rate is cut off
+     at zero. In this case, the mean firing rate will be less than rate.
+   - The state of the generator is reset on calibration.
+   - The generator does not support precise spike timing.
+   - You can use the multimeter to sample the rate of the generator.
+   - The generator will create different trains if run at different
+     temporal resolutions.
 
-- Individual spike trains vs single spike train:
-  By default, the generator sends a different spike train to each of its
-  targets. If /individual_spike_trains is set to false using either
-  SetDefaults or CopyModel before a generator node is created, the generator
-  will send the same spike train to all of its targets.
+By default, the generator sends a different spike train to each of its
+targets. If ``individual_spike_trains`` is set to ``False`` using either
+:py:func:`.SetDefaults` or :py:func:`.CopyModel` before a generator node
+is created, the generator will send the same spike train to all of its targets.
 
-Receives: DataLoggingRequest
+.. include:: ../models/stimulation_device.rst
 
-Sends: SpikeEvent
+rate
+    Mean firing rate in spikes/second. Default: ``0.0``.
 
-FirstVersion: July 2006, Oct 2009, May 2013
+amplitude
+    Firing rate modulation amplitude in spikes/second. Default: ``0.0``.
 
-Author: Hans Ekkehard Plesser
+frequency
+    Modulation frequency in Hz. Default: ``0.0``.
 
-SeeAlso: poisson_generator, sinusoidal_gamma_generator
-*/
-class sinusoidal_poisson_generator : public DeviceNode
+phase
+    Modulation phase in degree [0-360]. Default: ``0.0``.
+
+individual_spike_trains
+    See note above. Default: ``True``.
+
+
+Setting parameters from a stimulation backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The parameters in this stimulation device can be updated with input
+coming from a stimulation backend. The data structure used for the
+update holds one value for each of the parameters mentioned above.
+The indexing is as follows:
+
+ 0. rate
+ 1. frequency
+ 2. phase
+ 3. amplitude
+ 4. individual_spike_trains
+
+Receives
+++++++++
+
+DataLoggingRequest
+
+Sends
++++++
+
+SpikeEvent
+
+See also
+++++++++
+
+poisson_generator, sinusoidal_gamma_generator
+
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: sinusoidal_poisson_generator
+
+EndUserDocs */
+
+void register_sinusoidal_poisson_generator( const std::string& name );
+
+class sinusoidal_poisson_generator : public StimulationDevice
 {
 
 public:
   sinusoidal_poisson_generator();
   sinusoidal_poisson_generator( const sinusoidal_poisson_generator& );
 
-  port send_test_event( Node&, rport, synindex, bool );
+  size_t send_test_event( Node&, size_t, synindex, bool ) override;
 
   /**
    * Import sets of overloaded virtual functions.
    * @see Technical Issues / Virtual Functions: Overriding, Overloading, and
    * Hiding
    */
+  using Node::event_hook;
   using Node::handle;
   using Node::handles_test_event;
-  using Node::event_hook;
 
-  void handle( DataLoggingRequest& );
+  void handle( DataLoggingRequest& ) override;
 
-  port handles_test_event( DataLoggingRequest&, rport );
+  size_t handles_test_event( DataLoggingRequest&, size_t ) override;
 
-  void get_status( DictionaryDatum& ) const;
-  void set_status( const DictionaryDatum& );
+  void get_status( Dictionary& ) const override;
+  void set_status( const Dictionary& ) override;
 
   //! Model can be switched between proxies (single spike train) and not
   bool
-  has_proxies() const
+  has_proxies() const override
   {
     return not P_.individual_spike_trains_;
   }
 
   //! Allow multimeter to connect to local instances
   bool
-  local_receiver() const
+  local_receiver() const override
   {
     return true;
   }
 
-private:
-  void init_state_( const Node& );
-  void init_buffers_();
-  void calibrate();
-  void event_hook( DSSpikeEvent& );
+  std::string
+  get_element_type() const override
+  {
+    return names::stimulator;
+  }
 
-  void update( Time const&, const long, const long );
+  StimulationDevice::Type
+  get_type() const override
+  {
+    return StimulationDevice::Type::CURRENT_GENERATOR;
+  };
+
+  void set_data_from_stimulation_backend( std::vector< double >& input_param ) override;
+
+private:
+  void init_state_() override;
+  void init_buffers_() override;
+  void pre_run_hook() override;
+  void event_hook( DSSpikeEvent& ) override;
+
+  void update( Time const&, const long, const long ) override;
 
   struct Parameters_
   {
@@ -160,18 +207,18 @@ private:
     /** Emit individual spike trains for each target, or same for all? */
     bool individual_spike_trains_;
 
-    Parameters_(); //!< Sets default parameter values
+    Parameters_();  //!< Sets default parameter values
     Parameters_( const Parameters_& );
     Parameters_& operator=( const Parameters_& p );
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
 
     /**
      * Set values from dictionary.
      * @note State is passed so that the position can be reset if the
      *       spike_times_ vector has been filled with new data.
      */
-    void set( const DictionaryDatum&, const sinusoidal_poisson_generator& );
+    void set( const Dictionary&, const sinusoidal_poisson_generator&, Node* );
   };
 
   struct State_
@@ -180,13 +227,11 @@ private:
     double y_0_;
     double y_1_;
 
-    double rate_; //!< current rate, kept for recording
+    double rate_;  //!< current rate, kept for recording
 
-    State_(); //!< Sets default state value
+    State_();  //!< Sets default state value
 
-    void get( DictionaryDatum& ) const; //!< Store current values in dictionary
-    //! Set values from dictionary
-    void set( const DictionaryDatum&, const Parameters_& );
+    void get( Dictionary& ) const;  //!< Store current values in dictionary
   };
 
   // ------------------------------------------------------------
@@ -202,7 +247,7 @@ private:
    */
   struct Buffers_
   {
-    Buffers_( sinusoidal_poisson_generator& );
+    explicit Buffers_( sinusoidal_poisson_generator& );
     Buffers_( const Buffers_&, sinusoidal_poisson_generator& );
     UniversalDataLogger< sinusoidal_poisson_generator > logger_;
   };
@@ -211,11 +256,11 @@ private:
 
   struct Variables_
   {
-    librandom::PoissonRandomDev poisson_dev_; //!< random deviate generator
+    poisson_distribution poisson_dist_;  //!< poisson distribution
 
-    double h_;   //! time resolution (ms)
-    double sin_; //!< sin(h om) in propagator
-    double cos_; //!< cos(h om) in propagator
+    double h_;    //! time resolution (ms)
+    double sin_;  //!< sin(h om) in propagator
+    double cos_;  //!< cos(h om) in propagator
   };
 
   double
@@ -226,7 +271,6 @@ private:
 
   // ------------------------------------------------------------
 
-  StimulatingDevice< SpikeEvent > device_;
   static RecordablesMap< sinusoidal_poisson_generator > recordablesMap_;
 
   Parameters_ P_;
@@ -235,10 +279,10 @@ private:
   Buffers_ B_;
 };
 
-inline port
-sinusoidal_poisson_generator::send_test_event( Node& target, rport receptor_type, synindex syn_id, bool dummy_target )
+inline size_t
+sinusoidal_poisson_generator::send_test_event( Node& target, size_t receptor_type, synindex syn_id, bool dummy_target )
 {
-  device_.enforce_single_syn_type( syn_id );
+  StimulationDevice::enforce_single_syn_type( syn_id );
 
   // to ensure correct overloading resolution, we need explicit event types
   // therefore, we need to duplicate the code here
@@ -256,8 +300,8 @@ sinusoidal_poisson_generator::send_test_event( Node& target, rport receptor_type
   }
 }
 
-inline port
-sinusoidal_poisson_generator::handles_test_event( DataLoggingRequest& dlr, rport receptor_type )
+inline size_t
+sinusoidal_poisson_generator::handles_test_event( DataLoggingRequest& dlr, size_t receptor_type )
 {
   if ( receptor_type != 0 )
   {
@@ -267,29 +311,29 @@ sinusoidal_poisson_generator::handles_test_event( DataLoggingRequest& dlr, rport
 }
 
 inline void
-sinusoidal_poisson_generator::get_status( DictionaryDatum& d ) const
+sinusoidal_poisson_generator::get_status( Dictionary& d ) const
 {
   P_.get( d );
   S_.get( d );
-  device_.get_status( d );
-  ( *d )[ names::recordables ] = recordablesMap_.get_list();
+  StimulationDevice::get_status( d );
+  d[ names::recordables ] = recordablesMap_.get_list();
 }
 
 inline void
-sinusoidal_poisson_generator::set_status( const DictionaryDatum& d )
+sinusoidal_poisson_generator::set_status( const Dictionary& d )
 {
-  Parameters_ ptmp = P_; // temporary copy in case of errors
+  Parameters_ ptmp = P_;  // temporary copy in case of errors
 
-  ptmp.set( d, *this ); // throws if BadProperty
+  ptmp.set( d, *this, this );  // throws if BadProperty
   // We now know that ptmp is consistent. We do not write it back
   // to P_ before we are also sure that the properties to be set
   // in the parent class are internally consistent.
-  device_.set_status( d );
+  StimulationDevice::set_status( d );
 
   // if we get here, temporaries contain consistent set of properties
   P_ = ptmp;
 }
 
-} // namespace
+}  // namespace
 
-#endif // SINUSOIDAL_POISSON_GENERATOR_H
+#endif  // SINUSOIDAL_POISSON_GENERATOR_H

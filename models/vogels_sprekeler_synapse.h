@@ -1,0 +1,325 @@
+/*
+ *  vogels_sprekeler_synapse.h
+ *
+ *  This file is part of NEST.
+ *
+ *  Copyright (C) 2004 The NEST Initiative
+ *
+ *  NEST is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  NEST is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with NEST.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef VOGELS_SPREKELER_SYNAPSE_H
+#define VOGELS_SPREKELER_SYNAPSE_H
+
+// C-header for math.h since copysign() is in C99 but not C++98
+#include "connection.h"
+#include <math.h>
+
+namespace nest
+{
+
+/* BeginUserDocs: synapse, spike-timing-dependent plasticity
+
+Short description
++++++++++++++++++
+
+Synapse type for symmetric spike-timing dependent plasticity with constant depression
+
+Description
++++++++++++
+
+``vogels_sprekeler_synapse`` is a connector to create synapses with symmetric
+spike time dependent plasticity and constant depression (as defined in [1]_).
+The learning rule is symmetric, that is, the synapse is strengthened
+irrespective of the order of the pre- and postsynaptic spikes. Each
+pre-synaptic spike also causes a constant depression of the synaptic weight
+which differentiates this rule from other classical STDP rules.
+
+.. warning::
+
+   This synaptic plasticity rule does not take
+   :ref:`precise spike timing <sim_precise_spike_times>` into
+   account. When calculating the weight update, the precise spike time part
+   of the timestamp is ignored.
+
+Parameters
+++++++++++
+
+======  ======  =========================================================
+ tau    ms      Time constant of STDP window, potentiation
+ Wmax   real    Maximum allowed weight
+ eta    real    Learning rate
+ alpha  real    Constant depression (= 2 * tau * target firing rate in
+                [1]_)
+======  ======  =========================================================
+
+Transmits
++++++++++
+
+SpikeEvent
+
+References
+++++++++++
+
+.. [1] Vogels et al. (2011). Inhibitory plasticity balances excitation and
+       inhibition in sensory pathways and memory networks. Science,
+       334(6062):1569-1573. DOI: https://doi.org/10.1126/science.1211095
+
+
+Examples using this model
++++++++++++++++++++++++++
+
+.. listexamples:: vogels_sprekeler_synapse
+
+EndUserDocs */
+
+// connections are templates of target identifier type (used for pointer /
+// target index addressing)
+// derived from generic connection template
+
+void register_vogels_sprekeler_synapse( const std::string& name );
+
+template < typename targetidentifierT >
+class vogels_sprekeler_synapse : public Connection< targetidentifierT >
+{
+
+public:
+  typedef CommonSynapseProperties CommonPropertiesType;
+  typedef Connection< targetidentifierT > ConnectionBase;
+
+  static constexpr ConnectionModelProperties properties = ConnectionModelProperties::HAS_DELAY
+    | ConnectionModelProperties::IS_PRIMARY | ConnectionModelProperties::SUPPORTS_HPC
+    | ConnectionModelProperties::SUPPORTS_LBL | ConnectionModelProperties::SUPPORTS_WFR;
+
+  /**
+   * Default Constructor.
+   * Sets default values for all parameters. Needed by GenericConnectorModel.
+   */
+  vogels_sprekeler_synapse();
+
+
+  /**
+   * Copy constructor.
+   * Needs to be defined properly in order for GenericConnector to work.
+   */
+  vogels_sprekeler_synapse( const vogels_sprekeler_synapse& ) = default;
+  vogels_sprekeler_synapse& operator=( const vogels_sprekeler_synapse& ) = default;
+
+  // Explicitly declare all methods inherited from the dependent base
+  // ConnectionBase.
+  // This avoids explicit name prefixes in all places these functions are used.
+  // Since ConnectionBase depends on the template parameter, they are not
+  // automatically
+  // found in the base class.
+  using ConnectionBase::get_delay;
+  using ConnectionBase::get_delay_steps;
+  using ConnectionBase::get_rport;
+  using ConnectionBase::get_target;
+
+  /**
+   * Get all properties of this connection and put them into a dictionary.
+   */
+  void get_status( Dictionary& d ) const;
+
+  /**
+   * Set properties of this connection from the values given in dictionary.
+   */
+  void set_status( const Dictionary& d, ConnectorModel& cm );
+
+  /**
+   * Send an event to the receiver of this connection.
+   * \param e The event to send
+   * \param t_lastspike Point in time of last spike sent.
+   * \param cp common properties of all synapses (empty).
+   */
+  bool send( Event& e, size_t t, const CommonSynapseProperties& cp );
+
+
+  class ConnTestDummyNode : public ConnTestDummyNodeBase
+  {
+  public:
+    // Ensure proper overriding of overloaded virtual functions.
+    // Return values from functions are ignored.
+    using ConnTestDummyNodeBase::handles_test_event;
+    size_t
+    handles_test_event( SpikeEvent&, size_t ) override
+    {
+      return invalid_port;
+    }
+  };
+
+  void
+  check_connection( Node& s, Node& t, size_t receptor_type, const CommonPropertiesType& )
+  {
+    ConnTestDummyNode dummy_target;
+
+    ConnectionBase::check_connection_( dummy_target, s, t, receptor_type );
+
+    t.register_stdp_connection( t_lastspike_ - get_delay(), get_delay() );
+  }
+
+  void
+  set_weight( double w )
+  {
+    weight_ = w;
+  }
+
+private:
+  double
+  facilitate_( double w, double kplus )
+  {
+    double new_w = std::abs( w ) + ( eta_ * kplus );
+    return copysign( new_w < std::abs( Wmax_ ) ? new_w : Wmax_, Wmax_ );
+  }
+
+  double
+  depress_( double w )
+  {
+    double new_w = std::abs( w ) - ( alpha_ * eta_ );
+    return copysign( new_w > 0.0 ? new_w : 0.0, Wmax_ );
+  }
+
+  // data members of each connection
+  double weight_;
+  double tau_;
+  double alpha_;
+  double eta_;
+  double Wmax_;
+  double Kplus_;
+
+  double t_lastspike_;
+};
+
+template < typename targetidentifierT >
+constexpr ConnectionModelProperties vogels_sprekeler_synapse< targetidentifierT >::properties;
+
+/**
+ * Send an event to the receiver of this connection.
+ * \param e The event to send
+ * \param t The thread on which this connection is stored.
+ * \param t_lastspike Time point of last spike emitted
+ * \param cp Common properties object, containing the stdp parameters.
+ */
+template < typename targetidentifierT >
+inline bool
+vogels_sprekeler_synapse< targetidentifierT >::send( Event& e, size_t t, const CommonSynapseProperties& )
+{
+  // synapse STDP depressing/facilitation dynamics
+  double t_spike = e.get_stamp().get_ms();
+  // t_lastspike_ = 0 initially
+
+  // use accessor functions (inherited from Connection< >) to obtain delay and
+  // target
+  Node* target = get_target( t );
+  double dendritic_delay = get_delay();
+
+  // get spike history in relevant range (t1, t2] from postsynaptic neuron
+  std::deque< histentry >::iterator start;
+  std::deque< histentry >::iterator finish;
+  target->get_history( t_lastspike_ - dendritic_delay, t_spike - dendritic_delay, &start, &finish );
+
+  // presynaptic neuron j, postsynaptic neuron i
+  // Facilitation for each postsynaptic spike
+  // Wij = Wij + eta*xj
+  double minus_dt;
+  while ( start != finish )
+  {
+    minus_dt = t_lastspike_ - ( start->t_ + dendritic_delay );
+    ++start;
+    // get_history() should make sure that
+    // start->t_ > t_lastspike - dendritic_delay, i.e. minus_dt < 0
+    assert( minus_dt < -1.0 * kernel().connection_manager.get_stdp_eps() );
+    weight_ = facilitate_( weight_, Kplus_ * std::exp( minus_dt / tau_ ) );
+  }
+
+  // For pre-synaptic spikes
+  // Wij = Wij + eta(xi - alpha)
+  // Facilitation and constant depression
+  // Getting kvalue at required time already for deferred processing, so no
+  // need to transform it to the current time, and so, no exponential required
+  weight_ = facilitate_( weight_, target->get_K_value( t_spike - dendritic_delay ) );
+  weight_ = depress_( weight_ );
+
+  e.set_receiver( *target );
+  e.set_weight( weight_ );
+  // use accessor functions (inherited from Connection< >) to obtain delay in
+  // steps and rport
+  e.set_delay_steps( get_delay_steps() );
+  e.set_rport( get_rport() );
+  e();
+
+  // exponential part for the decay, addition of one for each spike
+  Kplus_ = Kplus_ * std::exp( ( t_lastspike_ - t_spike ) / tau_ ) + 1.0;
+
+  t_lastspike_ = t_spike;
+
+  return true;
+}
+
+
+template < typename targetidentifierT >
+vogels_sprekeler_synapse< targetidentifierT >::vogels_sprekeler_synapse()
+  : ConnectionBase()
+  , weight_( 0.5 )
+  , tau_( 20.0 )
+  , alpha_( 0.12 )
+  , eta_( 0.001 )
+  , Wmax_( 1.0 )
+  , Kplus_( 0.0 )
+  , t_lastspike_( 0.0 )
+{
+}
+
+template < typename targetidentifierT >
+void
+vogels_sprekeler_synapse< targetidentifierT >::get_status( Dictionary& d ) const
+{
+  ConnectionBase::get_status( d );
+  d[ names::weight ] = weight_;
+  d[ names::tau ] = tau_;
+  d[ names::alpha ] = alpha_;
+  d[ names::eta ] = eta_;
+  d[ names::Wmax ] = Wmax_;
+  d[ names::Kplus ] = Kplus_;
+  d[ names::size_of ] = static_cast< long >( sizeof( *this ) );
+}
+
+template < typename targetidentifierT >
+void
+vogels_sprekeler_synapse< targetidentifierT >::set_status( const Dictionary& d, ConnectorModel& cm )
+{
+  ConnectionBase::set_status( d, cm );
+  d.update_value( names::weight, weight_ );
+  d.update_value( names::tau, tau_ );
+  d.update_value( names::alpha, alpha_ );
+  d.update_value( names::eta, eta_ );
+  d.update_value( names::Wmax, Wmax_ );
+  d.update_value( names::Kplus, Kplus_ );
+
+  // if the weight_ is not 0, we check to ensure that weight_ and Wmax_ are of
+  // the same sign
+  if ( weight_ != 0 and ( std::signbit( weight_ ) != std::signbit( Wmax_ ) ) )
+  {
+    throw BadProperty( "Weight and Wmax must have same sign." );
+  }
+
+  if ( not( Kplus_ >= 0 ) )
+  {
+    throw BadProperty( "State Kplus must be positive." );
+  }
+}
+}  // of namespace nest
+
+#endif  // of #ifndef VOGELS_SPREKELER_SYNAPSE_H

@@ -24,126 +24,152 @@
 
 // Includes from nestkernel:
 #include "exceptions.h"
+#include "kernel_manager.h"
 #include "node.h"
+#include "vp_manager_impl.h"
 
-nest::SparseNodeArray::NodeEntry::NodeEntry( Node& node, index gid )
+
+nest::SparseNodeArray::NodeEntry::NodeEntry( Node& node, size_t node_id )
   : node_( &node )
-  , gid_( gid )
+  , node_id_( node_id )
 {
-  assert( gid == node.get_gid() );
 }
 
 nest::SparseNodeArray::SparseNodeArray()
   : nodes_()
-  , max_gid_( 0 )
-  , local_min_gid_( 0 )
-  , local_max_gid_( 0 )
-  , gid_idx_scale_( 1.0 )
+  , global_max_node_id_( 0 )
+  , local_min_node_id_( 0 )
+  , local_max_node_id_( 0 )
+  , left_scale_( 1.0 )
+  , right_scale_( 1.0 )
+  , split_node_id_( 0 )
+  , split_idx_( 0 )
+  , have_split_( false )
+  , left_side_has_proxies_( false )  // meaningless initial value
 {
-  step_ctr_[ 0 ] = 0;
 }
 
+
 void
-nest::SparseNodeArray::reserve( size_t new_size )
+nest::SparseNodeArray::clear()
 {
-  nodes_.reserve( new_size );
+  nodes_.clear();
+
+  global_max_node_id_ = 0;
+  local_min_node_id_ = 0;
+  local_max_node_id_ = 0;
+  left_scale_ = 1.0;
+  right_scale_ = 1.0;
+  split_node_id_ = 0;
+  split_idx_ = 0;
+  have_split_ = false;
+  left_side_has_proxies_ = false;
 }
 
 void
 nest::SparseNodeArray::add_local_node( Node& node )
 {
-  const index gid = node.get_gid();
+  const size_t node_id = node.get_node_id();
 
-  // first node registered must always be root node
-  assert( nodes_.size() > 0 or gid == 0 );
+  // ensure increasing order
+  assert( node_id > local_max_node_id_ );
 
-  // local_min_gid_ can only be 0 if at most root has been stored
-  assert( local_min_gid_ > 0 or nodes_.size() < 2 );
+  nodes_.push_back( NodeEntry( node, node_id ) );
+  local_max_node_id_ = node_id;
 
-  // local_min_gid_ cannot be larger than local_max_gid_
-  assert( local_min_gid_ <= local_max_gid_ );
+  // mark array inconsistent until set_max_node_id() called
+  global_max_node_id_ = 0;
 
-  // local_max_gid_ cannot be larger than max_gid_
-  assert( local_max_gid_ <= max_gid_ );
-
-  // gid must exceed max_gid_, except if gid is root
-  assert( gid > max_gid_ or ( gid == 0 and max_gid_ == 0 ) );
-
-  // all is consistent, register node and update auxiliary variables
-  nodes_.push_back( NodeEntry( node, gid ) );
-  if ( local_min_gid_ == 0 ) // only first non-zero
+  // set up when first node is added
+  if ( local_min_node_id_ == 0 )
   {
-    local_min_gid_ = gid;
-  }
-  local_max_gid_ = gid;
-  max_gid_ = gid;
+    local_min_node_id_ = node_id;
+    left_side_has_proxies_ = node.has_proxies();
 
-  // implies nodes_.size() > 1
-  if ( local_max_gid_ > local_min_gid_ )
-  {
-    gid_idx_scale_ = static_cast< double >( nodes_.size() - 2 ) // -1 for root
-      / ( local_max_gid_ - local_min_gid_ );
+    // we now know which scale applies on which side of the split
+    const double proxy_scale = 1.0 / static_cast< double >( kernel().vp_manager.get_num_virtual_processes() );
+    if ( left_side_has_proxies_ )
+    {
+      left_scale_ = proxy_scale;
+    }
+    else
+    {
+      right_scale_ = proxy_scale;
+    }
   }
-  assert( gid_idx_scale_ > 0. );
-  assert( gid_idx_scale_ <= 1. );
+
+  if ( not have_split_ )
+  {
+    if ( left_side_has_proxies_ != node.has_proxies() )
+    {
+      // node is first past splitting point
+      have_split_ = true;
+    }
+    else
+    {
+      ++split_idx_;  // index one beyond the node
+    }
+  }
 }
 
 void
-nest::SparseNodeArray::add_remote_node( index gid )
+nest::SparseNodeArray::set_max_node_id( size_t node_id )
 {
-  assert( gid > max_gid_ ); // root is never remote
-  max_gid_ = gid;
+  assert( node_id > 0 );  // minimum node ID is 1
+  assert( node_id >= local_max_node_id_ );
+  global_max_node_id_ = node_id;
+  if ( not have_split_ )
+  {
+    split_node_id_ = global_max_node_id_ + 1;
+  }
 }
 
 nest::Node*
-nest::SparseNodeArray::get_node_by_gid( index gid ) const
+nest::SparseNodeArray::get_node_by_node_id( size_t node_id ) const
 {
-  // local_min_gid_ can only be 0 if at most root has been stored
-  assert( local_min_gid_ > 0 or nodes_.size() < 2 );
+  assert( is_consistent_() );
 
-  // local_min_gid_ cannot be larger than local_max_gid_
-  assert( local_min_gid_ <= local_max_gid_ );
-
-  // local_max_gid_ cannot be larger than max_gid_
-  assert( local_max_gid_ <= max_gid_ );
-  if ( gid > max_gid_ )
+  if ( node_id < 1 or global_max_node_id_ < node_id )
   {
     throw UnknownNode();
   }
 
-  // handle root node requests first
-  if ( gid == 0 )
+  // handle node_ids below or above range
+  if ( node_id < local_min_node_id_ or local_max_node_id_ < node_id )
   {
-    assert( nodes_.at( 0 ).gid_ == 0 );
-    return nodes_[ 0 ].node_;
+    return nullptr;
   }
 
-  // handle gids below or above range
-  if ( gid < local_min_gid_ or local_max_gid_ < gid )
-  {
-    return 0;
-  }
+  // Find base index and node ID for estimating location of desired node in array.
+  // In the expression for base_id, split_node_id_ will only be used if we are on the
+  // right side, when the value is well-defined.
+  const bool left_side = node_id < split_node_id_;
+  const double scale = left_side ? left_scale_ : right_scale_;
+  const size_t base_idx = left_side ? 0 : split_idx_;
+  const size_t base_id = left_side ? local_min_node_id_ : split_node_id_;
 
-  // now estimate index
-  size_t idx = std::floor( 1 + gid_idx_scale_ * ( gid - local_min_gid_ ) );
-  assert( idx < nodes_.size() );
+  // estimate index, limit to array size for safety size
+  auto idx =
+    std::min( static_cast< size_t >( base_idx + std::floor( scale * ( node_id - base_id ) ) ), nodes_.size() - 1 );
 
   // search left if necessary
-  while ( 0 < idx and gid < nodes_[ idx ].gid_ )
+  while ( 0 < idx and node_id < nodes_[ idx ].node_id_ )
   {
     --idx;
   }
+
   // search right if necessary
-  while ( idx < nodes_.size() and nodes_[ idx ].gid_ < gid )
+  while ( idx < nodes_.size() and nodes_[ idx ].node_id_ < node_id )
   {
     ++idx;
   }
-  if ( idx < nodes_.size() and nodes_[ idx ].gid_ == gid )
+
+  if ( idx < nodes_.size() and nodes_[ idx ].node_id_ == node_id )
   {
     return nodes_[ idx ].node_;
   }
   else
   {
-    return 0;
+    return nullptr;
   }
 }

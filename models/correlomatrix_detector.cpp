@@ -23,24 +23,33 @@
 #include "correlomatrix_detector.h"
 
 // C++ includes:
-#include <cmath>      // for less
-#include <functional> // for bind2nd
-#include <numeric>
+#include <cmath>       // for less
+#include <functional>  // for bind2nd
+
+// Includes from libnestutil:
+#include "compose.hpp"
+#include "dict_util.h"
+#include "logging.h"
 
 // Includes from nestkernel:
 #include "kernel_manager.h"
+#include "model_manager_impl.h"
+#include "nest_impl.h"
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "dict.h"
-#include "dictutils.h"
+
+void
+nest::register_correlomatrix_detector( const std::string& name )
+{
+  register_node_model< correlomatrix_detector >( name );
+}
+
 
 /* ----------------------------------------------------------------
  * Default constructors defining default parameters and state
  * ---------------------------------------------------------------- */
 
 nest::correlomatrix_detector::Parameters_::Parameters_()
-  : delta_tau_( 5 * Time::get_resolution() )
+  : delta_tau_( get_default_delta_tau() )
   , tau_max_( 10 * delta_tau_ )
   , Tstart_( Time::ms( 0.0 ) )
   , Tstop_( Time::pos_inf() )
@@ -55,16 +64,35 @@ nest::correlomatrix_detector::Parameters_::Parameters_( const Parameters_& p )
   , Tstop_( p.Tstop_ )
   , N_channels_( p.N_channels_ )
 {
-  // Check for proper properties is not done here but in the
-  // correlomatrix_detector() copy c'tor. The check cannot be
-  // placed here, since this c'tor is also used to copy to
-  // temporaries in correlomatrix_detector::set_status().
-  // If we checked for errors here, we could never change values
-  // that have become invalid after a resolution change.
+  if ( delta_tau_.is_step() )
+  {
+    delta_tau_.calibrate();
+  }
+  else
+  {
+    delta_tau_ = get_default_delta_tau();
+  }
+
+  tau_max_.calibrate();
+  Tstart_.calibrate();
+  Tstop_.calibrate();
+}
+
+nest::correlomatrix_detector::Parameters_&
+nest::correlomatrix_detector::Parameters_::operator=( const Parameters_& p )
+{
+  delta_tau_ = p.delta_tau_;
+  tau_max_ = p.tau_max_;
+  Tstart_ = p.Tstart_;
+  Tstop_ = p.Tstop_;
+  N_channels_ = p.N_channels_;
+
   delta_tau_.calibrate();
   tau_max_.calibrate();
   Tstart_.calibrate();
   Tstop_.calibrate();
+
+  return *this;
 }
 
 nest::correlomatrix_detector::State_::State_()
@@ -81,46 +109,31 @@ nest::correlomatrix_detector::State_::State_()
  * ---------------------------------------------------------------- */
 
 void
-nest::correlomatrix_detector::Parameters_::get( DictionaryDatum& d ) const
+nest::correlomatrix_detector::Parameters_::get( Dictionary& d ) const
 {
-  ( *d )[ names::delta_tau ] = delta_tau_.get_ms();
-  ( *d )[ names::tau_max ] = tau_max_.get_ms();
-  ( *d )[ names::Tstart ] = Tstart_.get_ms();
-  ( *d )[ names::Tstop ] = Tstop_.get_ms();
-  ( *d )[ names::N_channels ] = N_channels_;
+  d[ names::delta_tau ] = delta_tau_.get_ms();
+  d[ names::tau_max ] = tau_max_.get_ms();
+  d[ names::Tstart ] = Tstart_.get_ms();
+  d[ names::Tstop ] = Tstop_.get_ms();
+  d[ names::N_channels ] = static_cast< long >( N_channels_ );
 }
 
 void
-nest::correlomatrix_detector::State_::get( DictionaryDatum& d ) const
+nest::correlomatrix_detector::State_::get( Dictionary& d ) const
 {
-  ( *d )[ names::n_events ] = IntVectorDatum( new std::vector< long >( n_events_ ) );
-
-  ArrayDatum* C = new ArrayDatum;
-  ArrayDatum* CountC = new ArrayDatum;
-  for ( size_t i = 0; i < covariance_.size(); ++i )
-  {
-    ArrayDatum* C_i = new ArrayDatum;
-    ArrayDatum* CountC_i = new ArrayDatum;
-    for ( size_t j = 0; j < covariance_[ i ].size(); ++j )
-    {
-      C_i->push_back( new DoubleVectorDatum( new std::vector< double >( covariance_[ i ][ j ] ) ) );
-      CountC_i->push_back( new IntVectorDatum( new std::vector< long >( count_covariance_[ i ][ j ] ) ) );
-    }
-    C->push_back( *C_i );
-    CountC->push_back( *CountC_i );
-  }
-  ( *d )[ names::covariance ] = C;
-  ( *d )[ names::count_covariance ] = CountC;
+  d[ names::n_events ] = n_events_;
+  d[ names::covariance ] = covariance_;
+  d[ names::count_covariance ] = count_covariance_;
 }
 
 bool
-nest::correlomatrix_detector::Parameters_::set( const DictionaryDatum& d, const correlomatrix_detector& n )
+nest::correlomatrix_detector::Parameters_::set( const Dictionary& d, const correlomatrix_detector& n, Node* node )
 {
   bool reset = false;
   double t;
   long N;
 
-  if ( updateValue< long >( d, names::N_channels, N ) )
+  if ( update_value_param( d, names::N_channels, N, node ) )
   {
     if ( N < 1 )
     {
@@ -133,25 +146,25 @@ nest::correlomatrix_detector::Parameters_::set( const DictionaryDatum& d, const 
     }
   }
 
-  if ( updateValue< double >( d, names::delta_tau, t ) )
+  if ( update_value_param( d, names::delta_tau, t, node ) )
   {
     delta_tau_ = Time::ms( t );
     reset = true;
   }
 
-  if ( updateValue< double >( d, names::tau_max, t ) )
+  if ( update_value_param( d, names::tau_max, t, node ) )
   {
     tau_max_ = Time::ms( t );
     reset = true;
   }
 
-  if ( updateValue< double >( d, names::Tstart, t ) )
+  if ( update_value_param( d, names::Tstart, t, node ) )
   {
     Tstart_ = Time::ms( t );
     reset = true;
   }
 
-  if ( updateValue< double >( d, names::Tstop, t ) )
+  if ( update_value_param( d, names::Tstop, t, node ) )
   {
     Tstop_ = Time::ms( t );
     reset = true;
@@ -176,7 +189,7 @@ nest::correlomatrix_detector::Parameters_::set( const DictionaryDatum& d, const 
 }
 
 void
-nest::correlomatrix_detector::State_::set( const DictionaryDatum&, const Parameters_&, bool )
+nest::correlomatrix_detector::State_::set( const Dictionary&, const Parameters_&, bool, Node* )
 {
 }
 
@@ -196,11 +209,11 @@ nest::correlomatrix_detector::State_::reset( const Parameters_& p )
   count_covariance_.clear();
   count_covariance_.resize( p.N_channels_ );
 
-  for ( long i = 0; i < p.N_channels_; ++i )
+  for ( size_t i = 0; i < p.N_channels_; ++i )
   {
     covariance_[ i ].resize( p.N_channels_ );
     count_covariance_[ i ].resize( p.N_channels_ );
-    for ( long j = 0; j < p.N_channels_; ++j )
+    for ( size_t j = 0; j < p.N_channels_; ++j )
     {
       covariance_[ i ][ j ].resize( 1 + p.tau_max_.get_steps() / p.delta_tau_.get_steps(), 0 );
       count_covariance_[ i ][ j ].resize( 1 + p.tau_max_.get_steps() / p.delta_tau_.get_steps(), 0 );
@@ -218,10 +231,6 @@ nest::correlomatrix_detector::correlomatrix_detector()
   , P_()
   , S_()
 {
-  if ( not P_.delta_tau_.is_step() )
-  {
-    throw InvalidDefaultResolution( get_name(), names::delta_tau, P_.delta_tau_ );
-  }
 }
 
 nest::correlomatrix_detector::correlomatrix_detector( const correlomatrix_detector& n )
@@ -230,10 +239,6 @@ nest::correlomatrix_detector::correlomatrix_detector( const correlomatrix_detect
   , P_( n.P_ )
   , S_()
 {
-  if ( not P_.delta_tau_.is_step() )
-  {
-    throw InvalidTimeInModel( get_name(), names::delta_tau, P_.delta_tau_ );
-  }
 }
 
 
@@ -242,13 +247,9 @@ nest::correlomatrix_detector::correlomatrix_detector( const correlomatrix_detect
  * ---------------------------------------------------------------- */
 
 void
-nest::correlomatrix_detector::init_state_( const Node& proto )
+nest::correlomatrix_detector::init_state_()
 {
-  const correlomatrix_detector& pr = downcast< correlomatrix_detector >( proto );
-
-  device_.init_state( pr.device_ );
-  S_ = pr.S_;
-  set_buffers_initialized( false ); // force recreation of buffers
+  device_.init_state();
 }
 
 void
@@ -259,9 +260,9 @@ nest::correlomatrix_detector::init_buffers_()
 }
 
 void
-nest::correlomatrix_detector::calibrate()
+nest::correlomatrix_detector::pre_run_hook()
 {
-  device_.calibrate();
+  device_.pre_run_hook();
 }
 
 
@@ -279,11 +280,11 @@ nest::correlomatrix_detector::handle( SpikeEvent& e )
 {
   // The receiver port identifies the sending node in our
   // sender list.
-  const rport sender = e.get_rport();
+  const size_t sender = e.get_rport();
 
   // If this assertion breaks, the sender does not honor the
   // receiver port during connection or sending.
-  assert( 0 <= sender && sender <= P_.N_channels_ - 1 );
+  assert( sender <= P_.N_channels_ - 1 );
 
   // accept spikes only if detector was active when spike was emitted
   Time const stamp = e.get_stamp();
@@ -307,8 +308,8 @@ nest::correlomatrix_detector::handle( SpikeEvent& e )
 
     // throw away all spikes which are too old to
     // enter the correlation window
-    const delay min_delay = kernel().connection_manager.get_min_delay();
-    while ( not otherSpikes.empty() && ( spike_i - otherSpikes.front().timestep_ ) >= tau_edge + min_delay )
+    const long min_delay = kernel().connection_manager.get_min_delay();
+    while ( not otherSpikes.empty() and ( spike_i - otherSpikes.front().timestep_ ) >= tau_edge + min_delay )
     {
       otherSpikes.pop_front();
     }
@@ -319,18 +320,19 @@ nest::correlomatrix_detector::handle( SpikeEvent& e )
     // window [Tstart,
     // Tstop]
     // this is needed in order to prevent boundary effects
-    if ( P_.Tstart_ <= stamp && stamp <= P_.Tstop_ )
+    if ( P_.Tstart_ <= stamp and stamp <= P_.Tstop_ )
     {
       // calculate the effect of this spike immediately with respect to all
       // spikes in the past of the respectively other sources
 
-      S_.n_events_[ sender ]++; // count this spike
+      S_.n_events_[ sender ]++;  // count this spike
 
       for ( SpikelistType::const_iterator spike_j = otherSpikes.begin(); spike_j != otherSpikes.end(); ++spike_j )
       {
         size_t bin;
-        long other = spike_j->receptor_channel_;
-        long sender_ind, other_ind;
+        size_t other = spike_j->receptor_channel_;
+        size_t sender_ind = 0;
+        size_t other_ind = 0;
 
         if ( spike_i < spike_j->timestep_ )
         {
@@ -345,8 +347,9 @@ nest::correlomatrix_detector::handle( SpikeEvent& e )
 
         if ( sender_ind <= other_ind )
         {
-          bin = -1. * std::floor( ( 0.5 * P_.delta_tau_.get_steps() - std::abs( spike_i - spike_j->timestep_ ) )
-                        / P_.delta_tau_.get_steps() );
+          bin = -1.
+            * std::floor( ( 0.5 * P_.delta_tau_.get_steps() - std::abs( spike_i - spike_j->timestep_ ) )
+              / P_.delta_tau_.get_steps() );
         }
         else
         {
@@ -358,21 +361,41 @@ nest::correlomatrix_detector::handle( SpikeEvent& e )
         {
           // weighted histogram
           S_.covariance_[ sender_ind ][ other_ind ][ bin ] += e.get_multiplicity() * e.get_weight() * spike_j->weight_;
-          if ( bin == 0 && ( spike_i - spike_j->timestep_ != 0 || other != sender ) )
+          if ( bin == 0 and ( spike_i - spike_j->timestep_ != 0 or other != sender ) )
           {
             S_.covariance_[ other_ind ][ sender_ind ][ bin ] +=
               e.get_multiplicity() * e.get_weight() * spike_j->weight_;
           }
           // pure (unweighted) count histogram
           S_.count_covariance_[ sender_ind ][ other_ind ][ bin ] += e.get_multiplicity();
-          if ( bin == 0 && ( spike_i - spike_j->timestep_ != 0 || other != sender ) )
+          if ( bin == 0 and ( spike_i - spike_j->timestep_ != 0 or other != sender ) )
           {
             S_.count_covariance_[ other_ind ][ sender_ind ][ bin ] += e.get_multiplicity();
           }
         }
       }
 
-    } // t in [TStart, Tstop]
+    }  // t in [TStart, Tstop]
 
-  } // device active
+  }  // device active
+}
+
+void
+nest::correlomatrix_detector::calibrate_time( const TimeConverter& tc )
+{
+  if ( P_.delta_tau_.is_step() )
+  {
+    P_.delta_tau_ = tc.from_old_tics( P_.delta_tau_.get_tics() );
+  }
+  else
+  {
+    const double old = P_.delta_tau_.get_ms();
+    P_.delta_tau_ = P_.get_default_delta_tau();
+    std::string msg = String::compose( "Default for delta_tau changed from %1 to %2 ms", old, P_.delta_tau_.get_ms() );
+    LOG( VerbosityLevel::INFO, get_name(), msg );
+  }
+
+  P_.tau_max_ = tc.from_old_tics( P_.tau_max_.get_tics() );
+  P_.Tstart_ = tc.from_old_tics( P_.Tstart_.get_tics() );
+  P_.Tstop_ = tc.from_old_tics( P_.Tstop_.get_tics() );
 }

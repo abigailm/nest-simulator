@@ -22,80 +22,54 @@
 
 #include "conn_parameter.h"
 
-// Includes from librandom:
-#include "random_datums.h"
-#include "random_numbers.h"
-
 // Includes from nestkernel:
-#include "nest_names.h"
+#include "kernel_manager.h"
 
-// Includes from sli:
-#include "arraydatum.h"
-#include "doubledatum.h"
-#include "integerdatum.h"
-#include "tokenutils.h"
 
 nest::ConnParameter*
-nest::ConnParameter::create( const Token& t, const size_t nthreads )
+nest::ConnParameter::create( const any_type& value, const size_t nthreads )
 {
-  // Code grabbed from TopologyModule::create_parameter()
-  // See there for a more general solution
-
   // single double
-  DoubleDatum* dd = dynamic_cast< DoubleDatum* >( t.datum() );
-  if ( dd )
+  if ( std::holds_alternative< double >( value ) )
   {
-    return new ScalarDoubleParameter( *dd, nthreads );
-  }
-
-  // random deviate
-  DictionaryDatum* rdv_spec = dynamic_cast< DictionaryDatum* >( t.datum() );
-  if ( rdv_spec )
-  {
-    return new RandomParameter( *rdv_spec, nthreads );
+    return new ScalarDoubleParameter( std::get< double >( value ), nthreads );
   }
 
   // single integer
-  IntegerDatum* id = dynamic_cast< IntegerDatum* >( t.datum() );
-  if ( id )
+  if ( std::holds_alternative< long >( value ) )
   {
-    return new ScalarIntegerParameter( *id, nthreads );
+    return new ScalarIntegerParameter( std::get< long >( value ), nthreads );
   }
 
   // array of doubles
-  DoubleVectorDatum* dvd = dynamic_cast< DoubleVectorDatum* >( t.datum() );
-  if ( dvd )
+  if ( std::holds_alternative< std::vector< double > >( value ) )
   {
-    return new ArrayDoubleParameter( **dvd, nthreads );
+    return new ArrayDoubleParameter( std::get< std::vector< double > >( value ), nthreads );
   }
 
-  // array of integer
-  IntVectorDatum* ivd = dynamic_cast< IntVectorDatum* >( t.datum() );
-  if ( ivd )
+  // Parameter
+  if ( std::holds_alternative< std::shared_ptr< nest::Parameter > >( value ) )
   {
-    return new ArrayIntegerParameter( **ivd, nthreads );
+    return new ParameterConnParameterWrapper( std::get< ParameterPTR >( value ), nthreads );
   }
 
-  throw BadProperty( std::string( "Cannot handle parameter type. Received " ) + t.datum()->gettypename().toString() );
+  // array of longs
+  if ( std::holds_alternative< std::vector< long > >( value ) )
+  {
+    return new ArrayLongParameter( std::get< std::vector< long > >( value ), nthreads );
+  }
+
+  throw BadProperty( std::string( "Cannot handle parameter type. Received " ) + get_typename( value ) );
 }
 
-nest::RandomParameter::RandomParameter( const DictionaryDatum& rdv_spec, const size_t )
-  : rdv_( 0 )
+
+nest::ParameterConnParameterWrapper::ParameterConnParameterWrapper( ParameterPTR p, const size_t )
+  : parameter_( p )
 {
-  if ( not rdv_spec->known( names::distribution ) )
-  {
-    throw BadProperty( "Random distribution spec must contain distribution name." );
-  }
+}
 
-  const std::string rdv_name = ( *rdv_spec )[ names::distribution ];
-  if ( not RandomNumbers::get_rdvdict().known( rdv_name ) )
-  {
-    throw BadProperty( "Unknown random deviate: " + rdv_name );
-  }
-
-  librandom::RdvFactoryDatum factory =
-    getValue< librandom::RdvFactoryDatum >( RandomNumbers::get_rdvdict()[ rdv_name ] );
-
-  rdv_ = factory->create();
-  rdv_->set_status( rdv_spec );
+double
+nest::ParameterConnParameterWrapper::value_double( size_t, RngPtr rng, size_t, Node* target ) const
+{
+  return parameter_->value( rng, target );
 }
