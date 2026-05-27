@@ -251,6 +251,11 @@ public:
    * \param e The event to send
    */
   bool send( Event& e, size_t t, const STDPDopaCommonProperties& cp );
+    
+  void trigger_update_weight( size_t t,
+    const double trace,
+    double t_trig,
+    const STDPDopaCommonProperties& cp ) {};
 
   void trigger_update_weight( size_t t,
     const std::vector< spikecounter >& dopa_spikes,

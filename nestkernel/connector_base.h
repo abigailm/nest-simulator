@@ -161,6 +161,14 @@ public:
 
   virtual void
   send_weight_event( const size_t tid, const unsigned int lcid, Event& e, const CommonSynapseProperties& cp ) = 0;
+  /**
+   * Ported from Weidel repo by AM
+   */
+  virtual void trigger_update_weight( const long vt_gid,
+    const size_t tid,
+    const double trace,
+    const double t_trig,
+    const std::vector< ConnectorModel* >& cm ) = 0;
 
   /**
    * Update weights of dopamine modulated STDP connections.
@@ -436,7 +444,29 @@ public:
   // Implemented in connector_base_impl.h
   void
   send_weight_event( const size_t tid, const unsigned int lcid, Event& e, const CommonSynapseProperties& cp ) override;
-
+    
+  void
+  trigger_update_weight( const long vt_gid,
+      const size_t tid,
+      const double trace,
+      const double t_trig,
+      const std::vector< ConnectorModel* >& cm ) override
+    {
+      for ( size_t i = 0; i < C_.size(); ++i )
+      {
+        if ( static_cast< GenericConnectorModel< ConnectionT >* >( cm[ syn_id_ ] )
+               ->get_common_properties()
+               .get_vt_node_id() == vt_gid )
+        {
+          C_[ i ].trigger_update_weight( tid,
+            trace,
+            t_trig,
+            static_cast< GenericConnectorModel< ConnectionT >* >( cm[ syn_id_ ] )
+              ->get_common_properties() );
+        }
+      }
+    }
+    
   void
   trigger_update_weight( const long vt_node_id,
     const size_t tid,

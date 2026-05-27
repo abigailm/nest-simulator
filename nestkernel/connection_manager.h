@@ -283,6 +283,10 @@ public:
    * Triggeres updates for all connectors of dopamine synapses that
    * are registered with the volume transmitter with node_id vt_node_id.
    */
+  void trigger_update_weight( const long vt_gid,
+    const double trace,
+    const double t_trig );
+    
   void
   trigger_update_weight( const long vt_node_id, const std::vector< spikecounter >& dopa_spikes, const double t_trig );
 

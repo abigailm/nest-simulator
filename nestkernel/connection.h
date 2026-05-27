@@ -234,6 +234,12 @@ public:
     const std::vector< spikecounter >&,
     const double,
     const CommonSynapseProperties& );
+    
+  void trigger_update_weight( const size_t,
+    const double,
+    const double,
+    const CommonSynapseProperties& );
+
 
   Node*
   get_target( const size_t tid ) const
@@ -394,6 +400,19 @@ Connection< targetidentifierT >::trigger_update_weight( const size_t,
 {
   throw IllegalConnection( "Connection does not support updates that are triggered by a volume transmitter." );
 }
+
+template < typename targetidentifierT >
+inline void
+Connection< targetidentifierT >::trigger_update_weight( const size_t,
+  const double,
+  const double,
+  const CommonSynapseProperties& )
+{
+  throw IllegalConnection(
+    "Connection does not support updates that are triggered by the volume "
+    "transmitter." );
+}
+
 
 template < typename targetidentifierT >
 std::unique_ptr< SecondaryEvent >
